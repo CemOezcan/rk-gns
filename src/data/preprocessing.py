@@ -29,7 +29,6 @@ class Preprocessing():
             types = {}
             steps = meta['trajectory_length'] - 2
             for key, field in meta['features'].items():
-                print(key)
                 shapes[key] = field['shape']
                 dtypes[key] = field['dtype']
                 types[key] = field['type']
