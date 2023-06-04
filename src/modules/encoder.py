@@ -15,8 +15,9 @@ class Encoder(nn.Module):
         self._make_mlp = make_mlp
         self._latent_size = latent_size
 
-        self.node_model = nn.ModuleDict({name: self._make_mlp(latent_size) for name in node_sets})
+        self.node_models = nn.ModuleDict({name: self._make_mlp(latent_size) for name in node_sets})
         self.edge_models = nn.ModuleDict({name: self._make_mlp(latent_size) for name in edge_sets})
+        self.global_model = self._make_mlp(latent_size)
         self.hierarchical = hierarchical
 
         if hierarchical:
@@ -24,11 +25,13 @@ class Encoder(nn.Module):
 
     def forward(self, graph: HeteroData) -> HeteroData:
         for position, node_type in enumerate(graph.node_types):
-            graph.node_stores[position]["x"] = self.node_input_embeddings[node_type](
+            graph.node_stores[position]["x"] = self.node_models[node_type](
                 graph.node_stores[position]["x"])
 
         for position, edge_type in enumerate(graph.edge_types):
-            graph.edge_stores[position]["edge_attr"] = self.edge_input_embeddings[edge_type](
+            graph.edge_stores[position]["edge_attr"] = self.edge_models[edge_type](
                 graph.edge_stores[position]["edge_attr"])
+
+        graph.u = self.global_model(graph.u)
 
         return graph
