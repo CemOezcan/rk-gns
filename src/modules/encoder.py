@@ -29,7 +29,7 @@ class Encoder(nn.Module):
                 graph.node_stores[position]["x"])
 
         for position, edge_type in enumerate(graph.edge_types):
-            graph.edge_stores[position]["edge_attr"] = self.edge_models[edge_type](
+            graph.edge_stores[position]["edge_attr"] = self.edge_models[''.join(edge_type)](
                 graph.edge_stores[position]["edge_attr"])
 
         graph.u = self.global_model(graph.u)
