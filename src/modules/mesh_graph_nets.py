@@ -19,26 +19,28 @@ class MeshGraphNets(nn.Module):
     """Encode-Process-Decode GraphNet model."""
 
     def __init__(self, output_size: int, latent_size: int, num_layers: int, message_passing_aggregator: str,
-                 message_passing_steps: int, architecture: str, node_sets: List[str], edge_sets: List[str], dec: str):
+                 message_passing_steps: int, node_sets: List[str], edge_sets: List[str], dec: str,
+                 use_global: bool):
         super().__init__()
         self._latent_size = latent_size
         self._output_size = output_size
         self._num_layers = num_layers
         self._message_passing_steps = message_passing_steps
         self._message_passing_aggregator = message_passing_aggregator
-        graphnet_block, hierarchical = self.get_architecture(architecture)
+        graphnet_block = GraphNet
 
         self.encoder = Encoder(make_mlp=self._make_mlp,
                                latent_size=self._latent_size,
-                               hierarchical=hierarchical,
                                node_sets=node_sets,
-                               edge_sets=edge_sets)
+                               edge_sets=edge_sets,
+                               use_global=use_global)
         self.processor = Processor(make_mlp=self._make_mlp, output_size=self._latent_size,
                                    message_passing_steps=self._message_passing_steps,
                                    message_passing_aggregator=self._message_passing_aggregator,
                                    node_sets=node_sets,
                                    edge_sets=edge_sets,
-                                   graphnet_block=graphnet_block)
+                                   graphnet_block=graphnet_block,
+                                   use_global=use_global)
         self.decoder = Decoder(make_mlp=functools.partial(self._make_mlp, layer_norm=False),
                                output_size=self._output_size, node_type=dec)
 
@@ -56,24 +58,6 @@ class MeshGraphNets(nn.Module):
             network = nn.Sequential(
                 network, nn.LayerNorm(normalized_shape=widths[-1]))
         return network
-
-    @staticmethod
-    def get_architecture(architecture: str) -> Tuple[Type[GraphNet], bool]:
-        """
-        Returns the specified GNN architecture.
-
-        Parameters
-        ----------
-            architecture : str
-                The name of the architecture
-
-        Returns
-        -------
-            Tuple[Type[GraphNet], bool]
-                The GraphNet block and whether it is hierarchical or not
-
-        """
-        return GraphNet, False
 
 
 # TODO refactor into new file

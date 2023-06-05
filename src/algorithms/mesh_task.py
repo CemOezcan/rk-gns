@@ -14,12 +14,14 @@ from matplotlib import tri
 from src.algorithms.abstract_simulator import AbstractSimulator
 from src.algorithms.mesh_simulator import MeshSimulator
 from src.algorithms.get_simulator import get_simulator
-from src.data.get_data import get_directories, get_data
+from src.data.data_utils import transform_position_to_edges, convert_to_hetero_data
+from src.data.get_data import get_directories, get_data, add_noise_to_mesh_nodes, add_pointcloud_dropout, \
+    add_noise_to_pcd_points
 from src.algorithms.abstract_task import AbstractTask
 from tqdm import trange
 
 from src.util.types import ConfigDict, ScalarDict
-from src.util.util import get_from_nested_dict
+from src.util.util import get_from_nested_dict, device
 
 
 class MeshTask(AbstractTask):
@@ -93,7 +95,7 @@ class MeshTask(AbstractTask):
         """
         assert isinstance(self._algorithm, MeshSimulator), 'Need a classifier to train on a classification task'
         start_epoch = self._current_epoch
-        for e in trange(start_epoch, self._epochs, desc='Epochs'):
+        for e in trange(start_epoch, self._epochs, desc='Epochs', leave=True):
             task_name = f'{self._task_name}{e + 1}'
 
             self._algorithm.fit_iteration(train_dataloader=self.train_loader)

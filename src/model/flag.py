@@ -3,6 +3,8 @@ from typing import Dict, Tuple
 
 import torch
 import torch.nn.functional as F
+from torch_geometric.data import Data, Batch
+
 from src.util import util
 from src.modules.mesh_graph_nets import MeshGraphNets
 from src.modules.normalizer import Normalizer
@@ -42,15 +44,8 @@ class FlagModel(AbstractSystemModel):
         self._rmp_frequency = params.get('rmp').get('frequency')
         self._visualized = False
 
-        self._edge_sets = ['mesh_edges']
-        if self._balancer:
-            import src.graph_balancer.get_graph_balancer as graph_balancer
-            self._graph_balancer = graph_balancer.get_balancer(params)
-            self._edge_sets.append('balance')
-   #     if self._rmp:
-    #        self._remote_graph = rmp.get_rmp(params)
-     #       self._edge_sets += self._remote_graph.initialize(
-      #          self._intra_edge_normalizer, self._inter_edge_normalizer, self._hyper_node_normalizer)
+        self._edge_sets = [''.join(('mesh_nodes', 'mesh_edges', 'mesh_nodes'))]
+        self._node_sets = ['mesh_nodes']
 
         self.learned_model = MeshGraphNets(
             output_size=params.get('size'),
@@ -58,11 +53,13 @@ class FlagModel(AbstractSystemModel):
             num_layers=2,
             message_passing_steps=self.message_passing_steps,
             message_passing_aggregator=self.message_passing_aggregator,
-            architecture=self._architecture,
-            edge_sets=self._edge_sets
+            edge_sets=self._edge_sets,
+            node_sets=self._node_sets,
+            dec=self._node_sets[0],
+            use_global=True
         ).to(device)
 
-    def build_graph(self, inputs: Dict, is_training: bool) -> MultiGraph:
+    def build_graph(self, inputs: Dict, is_training: bool) -> Data:
         """Builds input graph."""
         world_pos = inputs['world_pos']
         prev_world_pos = inputs['prev|world_pos']
@@ -98,6 +95,13 @@ class FlagModel(AbstractSystemModel):
             senders=senders
         )
         graph = MultiGraph(node_features=[self._node_normalizer(node_features, is_training)], edge_sets=[mesh_edges])
+        edge_index = torch.stack((graph.edge_sets[0].senders, graph.edge_sets[0].receivers), dim=0)
+        node_features = graph.node_features[0]
+        loss_mask = torch.eq(node_type[:, 0], torch.tensor([NodeType.NORMAL.value], device=device).int())
+        graph = Data(x=node_features, edge_index=edge_index, edge_attr=graph.edge_sets[0].features,
+                     y=self.get_target(inputs, is_training), u=torch.Tensor([[0, 0, 0]]), mask=loss_mask,
+                     cur_pos=inputs['world_pos'], prev_pos=inputs['prev|world_pos'], next_pos=inputs['target|world_pos'])
+        graph = graph.to_heterogeneous(node_type_names=['mesh_nodes'], edge_type_names=[('mesh_nodes', 'mesh_edges', 'mesh_nodes')])
 
         return graph
 
@@ -106,10 +110,9 @@ class FlagModel(AbstractSystemModel):
 
     def training_step(self, graph, data_frame):
         network_output = self(graph)
-        target_normalized = self.get_target(data_frame)
+        target_normalized = graph['mesh_nodes'].y
 
-        node_type = data_frame['node_type']
-        loss_mask = torch.eq(node_type[:, 0], torch.tensor([NodeType.NORMAL.value], device=device).int())
+        loss_mask = graph['mesh_nodes'].mask
         loss = self.loss_fn(target_normalized[loss_mask], network_output[loss_mask])
 
         return loss
@@ -117,24 +120,23 @@ class FlagModel(AbstractSystemModel):
     @torch.no_grad()
     def validation_step(self, graph: MultiGraph, data_frame: Dict) -> Tuple[Tensor, Tensor]:
         prediction = self(graph)
-        target_normalized = self.get_target(data_frame, False)
+        target_normalized = graph['mesh_nodes'].y
 
-        node_type = data_frame['node_type']
-        loss_mask = torch.eq(node_type[:, 0], torch.tensor([NodeType.NORMAL.value], device=device).int())
+        loss_mask = graph['mesh_nodes'].mask
         acc_loss = self.loss_fn(target_normalized[loss_mask], prediction[loss_mask]).item()
 
-        predicted_position = self.update(data_frame, prediction)
-        pos_error = self.loss_fn(data_frame['target|world_pos'][loss_mask], predicted_position[loss_mask]).item()
+        predicted_position = self.update(graph, prediction)
+        pos_error = self.loss_fn(graph['mesh_nodes'].next_pos[loss_mask], predicted_position[loss_mask]).item()
 
         return acc_loss, pos_error
 
-    def update(self, inputs: Dict, per_node_network_output: Tensor) -> Tensor:
+    def update(self, inputs, per_node_network_output: Tensor) -> Tensor:
         """Integrate model outputs."""
         acceleration = self._output_normalizer.inverse(per_node_network_output)
 
         # integrate forward
-        cur_position = inputs['world_pos']
-        prev_position = inputs['prev|world_pos']
+        cur_position = inputs['mesh_nodes'].cur_pos
+        prev_position = inputs['mesh_nodes'].prev_pos
 
         # vel. = cur_pos - prev_pos
         position = 2 * cur_position + acceleration - prev_position
@@ -166,7 +168,6 @@ class FlagModel(AbstractSystemModel):
 
         pred_trajectory = list()
         for i in range(num_steps):
-            # TODO: clusters/balancers are reset when computing n_step loss
             prev_pos, cur_pos, pred_trajectory = \
                 self._step_fn(initial_state, prev_pos, cur_pos, pred_trajectory, mask, i)
 
@@ -191,8 +192,9 @@ class FlagModel(AbstractSystemModel):
         input = {**initial_state, 'prev|world_pos': prev_pos, 'world_pos': cur_pos}
 
         graph = self.build_graph(input, is_training=False)
+        graph = Batch.from_data_list([graph])
 
-        prediction = self.update(input, self(graph))
+        prediction = self.update(graph, self(graph))
         next_pos = torch.where(mask, torch.squeeze(prediction), torch.squeeze(cur_pos))
         trajectory.append(cur_pos)
 

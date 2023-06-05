@@ -10,18 +10,14 @@ from src.util.types import MultiGraph
 class Encoder(nn.Module):
     """Encodes node and edge features into latent features."""
 
-    def __init__(self, make_mlp: Callable, latent_size: int, node_sets: List[str], edge_sets: List[str], hierarchical=True):
+    def __init__(self, make_mlp: Callable, latent_size: int, node_sets: List[str], edge_sets: List[str], use_global: bool = True):
         super().__init__()
         self._make_mlp = make_mlp
         self._latent_size = latent_size
 
         self.node_models = nn.ModuleDict({name: self._make_mlp(latent_size) for name in node_sets})
         self.edge_models = nn.ModuleDict({name: self._make_mlp(latent_size) for name in edge_sets})
-        self.global_model = self._make_mlp(latent_size)
-        self.hierarchical = hierarchical
-
-        if hierarchical:
-            self.hyper_node_model = self._make_mlp(latent_size)
+        self.global_model = self._make_mlp(latent_size) if use_global else lambda x: x
 
     def forward(self, graph: HeteroData) -> HeteroData:
         for position, node_type in enumerate(graph.node_types):

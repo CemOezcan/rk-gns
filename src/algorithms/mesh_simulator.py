@@ -11,6 +11,7 @@ import pandas as pd
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
+import torch_geometric
 import wandb
 from pandas import DataFrame
 from torch import Tensor
@@ -128,20 +129,17 @@ class MeshSimulator(AbstractSimulator):
         """
         self._network.train()
 
-        for i, trajectory in enumerate(tqdm(train_dataloader, desc='Trajectories', leave=False, total=self._trajectories)):
+        for i, trajectory in enumerate(tqdm(train_dataloader, desc='Trajectories', leave=False, position=0, total=self._trajectories)):
             if i >= self._trajectories:
                 break
 
             start_trajectory = time.time()
             batches = self.fetch_data(trajectory, True)
-            batches = self._get_batched(batches, self._batch_size)
-            random.shuffle(batches)
+
             traj_loss = list()
-
-            for graph, data_frame in tqdm(batches, desc='Batches in trajectory', leave=False):
+            for j, graph in enumerate(batches):
                 start_instance = time.time()
-
-                loss = self._network.training_step(graph, data_frame)
+                loss = self._network.training_step(graph, j)
                 loss.backward()
 
                 self._optimizer.step()
@@ -256,7 +254,9 @@ class MeshSimulator(AbstractSimulator):
             graph = self._network.build_graph(data_frame, is_training)
             graphs.append(graph)
 
-        return list(zip(graphs, trajectory))
+        data = torch_geometric.data.DataLoader(graphs, shuffle=True, batch_size=self._batch_size)
+
+        return data
 
     @torch.no_grad()
     def one_step_evaluator(self, ds_loader: DataLoader, instances: int, task_name: str, logging=True) -> Optional[Dict]:
@@ -290,9 +290,9 @@ class MeshSimulator(AbstractSimulator):
 
             instance_loss = list()
             data = self.fetch_data(trajectory, False)
-            data = self._get_batched(data, self._batch_size)
-            for graph, data_frame in data:
-                loss, pos_error = self._network.validation_step(graph, data_frame)
+
+            for j, graph in enumerate(data):
+                loss, pos_error = self._network.validation_step(graph, j)
                 instance_loss.append([loss, pos_error])
 
             trajectory_loss.append(instance_loss)
