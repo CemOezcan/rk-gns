@@ -34,15 +34,8 @@ class FlagModel(AbstractSystemModel):
         self._hyper_node_normalizer = Normalizer(size=3, name='hyper_node_normalizer')
 
         self._model_type = 'flag'
-        self._rmp = params.get('rmp').get('clustering') != 'none' and params.get('rmp').get('connector') != 'none'
-        self._architecture = params.get('rmp').get('connector') if self._rmp else 'none'
-        self._multi = params.get('rmp').get('connector') == 'multigraph' and self._rmp
-        self._balancer = params.get('graph_balancer').get('algorithm') != 'none'
         self.message_passing_steps = params.get('message_passing_steps')
         self.message_passing_aggregator = params.get('aggregation')
-        self._balance_frequency = params.get('graph_balancer').get('frequency')
-        self._rmp_frequency = params.get('rmp').get('frequency')
-        self._visualized = False
 
         self._edge_sets = [''.join(('mesh_nodes', 'mesh_edges', 'mesh_nodes'))]
         self._node_sets = ['mesh_nodes']
@@ -171,7 +164,6 @@ class FlagModel(AbstractSystemModel):
             prev_pos, cur_pos, pred_trajectory = \
                 self._step_fn(initial_state, prev_pos, cur_pos, pred_trajectory, mask, i)
 
-        self._visualized = False
         predictions = torch.stack(pred_trajectory)
 
         traj_ops = {

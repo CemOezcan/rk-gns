@@ -99,7 +99,7 @@ class MeshSimulator(AbstractSimulator):
                     break
                 try:
                     b = x['epoch'] >= curr_epoch
-                except KeyError:
+                except (KeyError, TypeError):
                     b = False
                 wandb.log(x)
 

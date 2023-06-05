@@ -62,18 +62,18 @@ class MeshTask(AbstractTask):
         self._test_loader = get_data(config=config, split='valid', split_and_preprocess=False)
         self._valid_loader = get_data(config=config, split='valid')
 
-        cluster = get_from_nested_dict(config, ['model', 'rmp', 'clustering'])
-        connector = get_from_nested_dict(config, ['model', 'rmp', 'connector'])
-        num_clusters = get_from_nested_dict(config, ['model', 'rmp', 'num_clusters'])
-        balancer = get_from_nested_dict(config, ['model', 'graph_balancer', 'algorithm'])
         self._mp = get_from_nested_dict(config, ['model', 'message_passing_steps'])
-        self._task_name = f'{num_clusters}_cluster:{cluster}_connector:{connector}_balancer:{balancer}_mp:{self._mp}_epoch:'
+        aggr = get_from_nested_dict(config, ['model', 'aggregation'])
+        lr = get_from_nested_dict(config, ['model', 'learning_rate'])
+        use_global = get_from_nested_dict(config, ['model', 'use_global'])
+        heterogeneous = get_from_nested_dict(config, ['model', 'heterogeneous'])
+        self._task_name = f'{self._dataset_name}_aggr:{aggr}_lr:{lr}_global:{use_global}_hetero:{heterogeneous}_mp:{self._mp}_epoch:'
 
         retrain = config.get('retrain')
         epochs = list() if retrain else [
             int(file.split('_epoch:')[1][:-4])
             for file in os.listdir(self._out_dir)
-            if re.match(rf'model_{self._task_name}[0-9]+\.pkl', file)
+            if re.match(rf'model_{self._task_name}[0-9]+\.pkl', file) and 'final' not in self._task_name
         ]
 
         if epochs:
