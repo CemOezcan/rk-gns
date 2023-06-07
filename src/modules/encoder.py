@@ -14,10 +14,11 @@ class Encoder(nn.Module):
         super().__init__()
         self._make_mlp = make_mlp
         self._latent_size = latent_size
+        self._use_global = use_global
 
         self.node_models = nn.ModuleDict({name: self._make_mlp(latent_size) for name in node_sets})
         self.edge_models = nn.ModuleDict({name: self._make_mlp(latent_size) for name in edge_sets})
-        self.global_model = self._make_mlp(latent_size) if use_global else lambda x: x
+        self.global_model = self._make_mlp(latent_size) if use_global else None
 
     def forward(self, graph: HeteroData) -> HeteroData:
         for position, node_type in enumerate(graph.node_types):
@@ -28,6 +29,6 @@ class Encoder(nn.Module):
             graph.edge_stores[position]["edge_attr"] = self.edge_models[''.join(edge_type)](
                 graph.edge_stores[position]["edge_attr"])
 
-        graph.u = self.global_model(graph.u)
+        graph.u = self.global_model(graph.u) if self._use_global else graph.u
 
         return graph

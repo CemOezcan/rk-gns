@@ -19,8 +19,9 @@ class GraphNet(nn.Module):
 
         self.node_models = nn.ModuleDict({name: model_fn(output_size) for name in node_sets})
         self.edge_models = nn.ModuleDict({name: model_fn(output_size) for name in edge_sets})
-        self.global_model = model_fn(output_size) if use_global else lambda x: x
+        self.global_model = model_fn(output_size) if use_global else None
 
+        self._use_global = use_global
         self.message_passing_aggregator = message_passing_aggregator
 
     def _update_edges(self, graph: HeteroData):
@@ -39,9 +40,10 @@ class GraphNet(nn.Module):
             # concatenate everything
             aggregated_features = torch.cat([edge_source_nodes, edge_dest_nodes, edge_attr], 1)
             # global
-            indices = graph[source_node_type].batch
-            global_features = graph.u[indices[source_indices]]
-            aggregated_features = torch.cat([aggregated_features, global_features], 1)
+            if self._use_global:
+                indices = graph[source_node_type].batch
+                global_features = graph.u[indices[source_indices]]
+                aggregated_features = torch.cat([aggregated_features, global_features], 1)
 
             edge_store["edge_attr"] = torch.add(edge_attr, self.edge_models["".join(edge_type)](aggregated_features))
 
@@ -59,8 +61,9 @@ class GraphNet(nn.Module):
             node_features = node_store.get('x')
             aggregated_features = torch.cat([node_features, edge_features], 1)
             # global
-            batch = graph[node_type].batch
-            aggregated_features = torch.cat([aggregated_features, graph.u[batch]], 1)
+            if self._use_global:
+                batch = graph[node_type].batch
+                aggregated_features = torch.cat([aggregated_features, graph.u[batch]], 1)
             # update
             node_store["x"] = torch.add(node_features, self.node_models[node_type](aggregated_features))
 
@@ -102,7 +105,8 @@ class GraphNet(nn.Module):
 
         self._update_edges(graph)
         self._update_nodes(graph)
-        self._update_global(graph)
+        if self._use_global:
+            self._update_global(graph)
 
         return graph
 
