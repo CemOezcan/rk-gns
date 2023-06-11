@@ -11,7 +11,6 @@ from src.data.data_utils import *
 from src.data.graph_loader import GraphDataLoader
 from src.data.preprocessing import Preprocessing
 from src.data.trapez_preprocessing import TrapezPreprocessing
-from src.data.trapez_preprocessing_2 import TrapezPreprocessing
 from src.util.util import device
 from src.util.types import *
 
@@ -39,6 +38,7 @@ def get_data(config: ConfigDict, split='train', split_and_preprocess=True, add_t
     in_dir, _ = get_directories(dataset_name)
 
     if dataset_name == 'flag_minimal' or dataset_name == 'flag_simple':
+        split_and_preprocess = not raw
         pp = Preprocessing(config, split, split_and_preprocess, add_targets, in_dir=in_dir)
         tfrecord_path = os.path.join(in_dir, split + ".tfrecord")
         index_path = os.path.join(in_dir, split + ".idx")

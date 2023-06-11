@@ -99,13 +99,13 @@ class MeshTask(AbstractTask):
 
             self._algorithm.fit_iteration(train_dataloader=self.train_loader)
             one_step = self._algorithm.one_step_evaluator(self._valid_loader, self._num_val_trajectories, task_name)
-            # rollout = self._algorithm.rollout_evaluator(self._test_loader, self._num_val_rollouts, task_name)
+            rollout = self._algorithm.rollout_evaluator(self._test_loader, self._num_val_rollouts, task_name)
             #n_step = self._algorithm.n_step_evaluator(self._test_loader, task_name, n_steps=self._val_n_steps, n_traj=self._num_val_n_step_rollouts)
 
             dir_dict = self.select_plotting(task_name)
 
-            #animation = {f"video_{key}": wandb.Video(value, fps=5, format="gif") for key, value in dir_dict.items()}
-            data = {k: v for dictionary in [one_step] for k, v in dictionary.items()}
+            animation = {f"video_{key}": wandb.Video(value, fps=5, format="gif") for key, value in dir_dict.items()}
+            data = {k: v for dictionary in [one_step, rollout, animation] for k, v in dictionary.items()}
             data['epoch'] = e + 1
             self._algorithm.save(task_name)
             self._algorithm.log_epoch(data)
@@ -142,7 +142,7 @@ class MeshTask(AbstractTask):
             dir_2 = self._save_plot(a, w, f'{task_name}_pressure')
             return {'': dir_1, 'pressure': dir_2}
 
-        elif 'plate' in self._dataset_name:
+        elif 'plate' or 'trapez' in self._dataset_name:
             a, w = self.plot_2(task_name)
             dir_1 = self._save_plot(a, w, task_name)
 
@@ -224,59 +224,26 @@ class MeshTask(AbstractTask):
         with open(rollouts, 'rb') as fp:
             rollout_data = pickle.load(fp)
 
-        rollout_data = rollout_data[:self.n_viz]
+        rollout_data = rollout_data[0]
+        mask = rollout_data['mask']
 
-        fig = plt.figure(figsize=(19.2, 10.8))
-        ax_origin = fig.add_subplot(121, projection='3d')
-        ax_pred = fig.add_subplot(122, projection='3d')
-        skip = 10
-        num_steps = rollout_data[0]['pred_pos'].shape[0]
-        num_frames = math.floor(num_steps / skip)
+        fig, ax = plt.subplots()
+        scatter = ax.scatter([], [])
 
-        # compute bounds
-        bounds = []
-        for trajectory in rollout_data:
-            bb_min = torch.squeeze(trajectory['gt_pos'], dim=0).cpu().numpy().min(axis=(0, 1))
-            bb_max = torch.squeeze(trajectory['gt_pos'], dim=0).cpu().numpy().max(axis=(0, 1))
-            bounds.append((bb_min, bb_max))
+        def update(frame):
+            ax.cla()
+            pred_pos = rollout_data['pred_pos'][frame][mask]
+            gt_pos = rollout_data['gt_pos'][frame][mask]
 
-        def animate(frame):
-            step = (frame * skip) % num_steps
-            traj = (frame * skip) // num_steps
+            ax.scatter(pred_pos[:, 0], pred_pos[:, 1], label='Predicted Position', color='red', alpha=0.5)
+            ax.scatter(gt_pos[:, 0], gt_pos[:, 1], label='Ground Truth Position', color='blue')
+            ax.legend()
+            return scatter,
 
-            ax_origin.cla()
-            ax_pred.cla()
-            bound = bounds[traj]
+        anima = FuncAnimation(fig, update, frames=len(rollout_data['pred_pos']), blit=True)
 
-            ax_origin.set_xlim([bound[0][0], bound[1][0]])
-            ax_origin.set_ylim([bound[0][1], bound[1][1]])
-            ax_origin.set_zlim([bound[0][2], bound[1][2]])
-
-            ax_pred.set_xlim([bound[0][0], bound[1][0]])
-            ax_pred.set_ylim([bound[0][1], bound[1][1]])
-            ax_pred.set_zlim([bound[0][2], bound[1][2]])
-
-            mask = rollout_data[traj]['mask']
-            pos = torch.squeeze(rollout_data[traj]['pred_pos'], dim=0)[step].to('cpu')
-            original_pos = torch.squeeze(rollout_data[traj]['gt_pos'], dim=0)[step].to('cpu')
-            faces = torch.squeeze(rollout_data[traj]['faces'], dim=0)[step].to('cpu')
-
-            og, og_faces = self.obstacle(original_pos, faces, mask, True)
-            pred, pred_faces = self.obstacle(pos, faces, mask, True)
-            obst, obst_faces = self.obstacle(original_pos, faces, mask, False)
-
-            ax_origin.plot_trisurf(obst[:, 0], obst[:, 1], obst_faces, obst[:, 2], shade=True)
-            ax_origin.plot_trisurf(og[:, 0], og[:, 1], og_faces, og[:, 2], shade=True, alpha=0.3)
-
-            ax_pred.plot_trisurf(obst[:, 0], obst[:, 1], obst_faces, obst[:, 2], shade=True)
-            ax_pred.plot_trisurf(pred[:, 0], pred[:, 1], pred_faces, pred[:, 2], shade=True, alpha=0.3)
-
-            ax_origin.set_title('ORIGIN Trajectory %d Step %d' % (traj, step))
-            ax_pred.set_title('PRED Trajectory %d Step %d' % (traj, step))
-            return fig,
-
-        anima = FuncAnimation(fig, animate, frames=num_frames * len(rollout_data), interval=100)
         writergif = PillowWriter(fps=10)
+
         return anima, writergif
 
     def plot(self, task_name: str) -> Tuple[FuncAnimation, PillowWriter]:

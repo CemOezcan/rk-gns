@@ -143,15 +143,14 @@ class TrapezModel(AbstractSystemModel):
     @torch.no_grad()
     def rollout(self, trajectory: Dict[str, Tensor], num_steps: int) -> Tuple[Dict[str, Tensor], Tensor]:
         """Rolls out a model trajectory."""
-        num_steps = trajectory['cells'].shape[0] if num_steps is None else num_steps
+        num_steps = trajectory['cells'].shape[0] #if num_steps is None else num_steps
         initial_state = {k: torch.squeeze(v, 0)[0] for k, v in trajectory.items()}
 
         node_type = initial_state['node_type']
-        mask = torch.eq(node_type[:, 0], torch.tensor([NodeType.NORMAL.value], device=device))
-        mask = torch.stack((mask, mask, mask), dim=1)
+        mask = torch.where(node_type == 0)[0]
 
-        cur_pos = torch.squeeze(initial_state['world_pos'], 0)
-        target_pos = trajectory['target|world_pos']
+        cur_pos = torch.squeeze(initial_state['pos'], 0)
+        target_pos = trajectory['y']
         pred_trajectory = []
         cur_positions = []
         cur_velocities = []
@@ -168,7 +167,7 @@ class TrapezModel(AbstractSystemModel):
         faces_result = []
         for faces_step in faces:
             later = torch.cat((faces_step[:, 2:4], torch.unsqueeze(faces_step[:, 0], 1)), -1)
-            faces_step = torch.cat((faces_step[:, 0:3], later), 0)
+            faces_step = torch.cat((faces_step[:, 0:2], later), 0)
             faces_result.append(faces_step)
 
         faces_result = torch.stack(faces_result, 0)
@@ -176,35 +175,28 @@ class TrapezModel(AbstractSystemModel):
 
         traj_ops = {
             'faces': faces_result,
-            'mesh_pos': trajectory['mesh_pos'],
-            'mask': torch.eq(node_type[:, 0], torch.tensor([NodeType.OBSTACLE.value], device=device).int()),
-            'gt_pos': trajectory['world_pos'],
+            'mesh_pos': trajectory['init_pos'],
+            'mask': mask,
+            'gt_pos': trajectory['pos'],
             'pred_pos': prediction,
             'cur_positions': cur_positions,
             'cur_velocities': cur_velocities
         }
 
         mse_loss_fn = torch.nn.MSELoss(reduction='none')
-        mse_loss = mse_loss_fn(trajectory['world_pos'][:num_steps], prediction)
+        mse_loss = mse_loss_fn(trajectory['pos'][:num_steps], prediction)
         mse_loss = torch.mean(torch.mean(mse_loss, dim=-1), dim=-1).detach()
 
         return traj_ops, mse_loss
 
     @torch.no_grad()
     def _step_fn(self, initial_state, cur_pos, trajectory, cur_positions, cur_velocities, target_world_pos, step, mask, num_steps):
-        input = {**initial_state, 'world_pos': cur_pos, 'target|world_pos': target_world_pos}
-        graph = self.build_graph(input, is_training=False)
-        if not self._visualized:
-            coordinates = graph.target_feature.cpu().detach().numpy()
+        input = {**initial_state, 'pos': cur_pos, 'y': target_world_pos}
+        graph = self.build_graph(Data.from_dict(input), is_training=False)
 
-        graph = self.expand_graph(graph, step, num_steps, is_training=False)
-
-        if self._rmp and not self._visualized:
-            self._remote_graph.visualize_cluster(coordinates)
-            self._visualized = True
-
-        prediction, cur_position, cur_velocity = self.update(input, self(graph))
-        next_pos = torch.where(mask, torch.squeeze(prediction), torch.squeeze(target_world_pos))
+        prediction, cur_position, cur_velocity = self.update(Data.from_dict(input), self(graph)[mask])
+        next_pos = target_world_pos
+        next_pos[mask] = prediction
 
         trajectory.append(next_pos)
         cur_positions.append(cur_position)
