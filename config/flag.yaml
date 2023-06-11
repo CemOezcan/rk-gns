@@ -7,7 +7,7 @@ params:
     task: mesh
     dataset: flag_minimal
     rollout_split: valid
-    batch_size: 2
+    batch_size: 1
     epochs: 5
     n_timesteps: 16
     trajectories: 10

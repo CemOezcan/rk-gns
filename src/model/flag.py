@@ -49,7 +49,7 @@ class FlagModel(AbstractSystemModel):
             edge_sets=self._edge_sets,
             node_sets=self._node_sets,
             dec=self._node_sets[0],
-            use_global=True
+            use_global=False
         ).to(device)
 
     def build_graph(self, inputs: Dict, is_training: bool) -> Data:
