@@ -129,107 +129,19 @@ class MeshSimulator(AbstractSimulator):
         """
         self._network.train()
 
-        for i, trajectory in enumerate(tqdm(train_dataloader, desc='Trajectories', leave=False, position=0, total=self._trajectories)):
-            if i >= self._trajectories:
-                break
+        for i, trajectory in enumerate(tqdm(train_dataloader, desc='Trajectories', leave=False, position=0)):
+            batch = self._network.build_graph(trajectory, True)
 
-            start_trajectory = time.time()
-            batches = self.fetch_data(trajectory, True)
+            start_instance = time.time()
+            loss = self._network.training_step(batch, i)
+            loss.backward()
 
-            traj_loss = list()
-            for j, graph in enumerate(batches):
-                start_instance = time.time()
-                loss = self._network.training_step(graph, j)
-                loss.backward()
+            self._optimizer.step()
+            self._optimizer.zero_grad()
 
-                self._optimizer.step()
-                self._optimizer.zero_grad()
+            end_instance = time.time()
+            wandb.log({'loss': loss.detach(), 'training time per instance': end_instance - start_instance})
 
-                end_instance = time.time()
-                wandb.log({'loss': loss.detach(), 'training time per instance': end_instance - start_instance})
-                traj_loss.append(loss.detach().cpu())
-
-            end_trajectory = time.time()
-            wandb.log({'training time per trajectory': end_trajectory - start_trajectory}, commit=False)
-            wandb.log({'loss per trajectory': np.mean(traj_loss)}, commit=False)
-
-    @staticmethod
-    def _get_batched(data: List[Tuple[MultiGraph, Dict[str, Tensor]]], batch_size: int) -> List[Tuple[MultiGraph, Dict[str, Tensor]]]:
-        """
-        Minibatching within the trajectory. The graph representations of multiple instances within the given
-        trajectory are combined into a single graph for efficient processing by the graph neural network.
-
-        Parameters
-        ----------
-        data : List[Tuple[MultiGraph, Dict[str, Tensor]]]
-            System states and their respective graph representations of a trajectory
-
-        batch_size : int
-            The batch size, must be divisible by the length of the given trajectory
-
-        Returns
-        -------
-            List[Tuple[MultiGraph, Dict[str, Tensor]]]
-                The batched graphs
-
-        """
-        graph_amt = len(data)
-        # assert graph_amt % batch_size == 0, f'Graph amount {graph_amt} must be divisible by batch size {batch_size}.'
-        batches = [data[i: i + batch_size] for i in range(0, len(data), batch_size)]
-        graph = batches[0][0][0]
-        trajectory_attributes = batches[0][0][1].keys()
-
-        edge_names = [e.name for e in graph.edge_sets]
-
-        batched_data = list()
-        for batch in batches:
-            edge_dict = {name: {'snd': list(), 'rcv': list(), 'features': list()} for name in edge_names}
-            trajectory_dict = {key: list() for key in trajectory_attributes}
-
-            node_features = list()
-            for i, (graph, traj) in enumerate(batch):
-                # This fixes instance wise clustering
-                num_nodes = tuple(map(lambda x: x.shape[0], graph.node_features))
-                num_nodes, num_hyper_nodes = num_nodes if len(num_nodes) > 1 else (num_nodes[0], 0)
-                hyper_node_offset = batch_size * num_nodes
-
-                node_features.append(graph.node_features)
-                for key, value in traj.items():
-                    trajectory_dict[key].append(value)
-
-                for e in graph.edge_sets:
-                    edge_dict[e.name]['features'].append(e.features)
-
-                    senders = torch.tensor(
-                        [x + i * num_nodes
-                         if x < hyper_node_offset else x + (batch_size - 1) * num_nodes + i * num_hyper_nodes
-                         for x in e.senders.tolist()]
-                    )
-                    edge_dict[e.name]['snd'].append(senders)
-
-                    receivers = torch.tensor(
-                        [x + i * num_nodes
-                         if x < hyper_node_offset else x + (batch_size - 1) * num_nodes + i * num_hyper_nodes
-                         for x in e.receivers.tolist()]
-                    )
-                    edge_dict[e.name]['rcv'].append(receivers)
-
-            new_traj = {key: torch.cat(value, dim=0) for key, value in trajectory_dict.items()}
-
-            all_nodes = list(map(lambda x: torch.cat(x, dim=0), zip(*node_features)))
-            new_graph = MultiGraph(
-                node_features=all_nodes,
-                edge_sets=[
-                    EdgeSet(name=n,
-                            features=torch.cat(edge_dict[n]['features'], dim=0),
-                            senders=torch.cat(edge_dict[n]['snd'], dim=0),
-                            receivers=torch.cat(edge_dict[n]['rcv'], dim=0))
-                    for n in edge_dict.keys()
-                ]
-            )
-            batched_data.append((new_graph, new_traj))
-
-        return batched_data
 
     def fetch_data(self, trajectory: List[Dict[str, Tensor]], is_training: bool) -> List[Tuple[MultiGraph, Dict[str, Tensor]]]:
         """
@@ -285,17 +197,11 @@ class MeshSimulator(AbstractSimulator):
         """
         trajectory_loss = list()
         for i, trajectory in enumerate(ds_loader):
-            if i >= instances:
-                break
 
-            instance_loss = list()
-            data = self.fetch_data(trajectory, False)
+            batch = self._network.build_graph(trajectory, True)
+            instance_loss = self._network.validation_step(batch, i)
 
-            for j, graph in enumerate(data):
-                loss, pos_error = self._network.validation_step(graph, j)
-                instance_loss.append([loss, pos_error])
-
-            trajectory_loss.append(instance_loss)
+            trajectory_loss.append([instance_loss])
 
         mean = np.mean(trajectory_loss, axis=0)
         std = np.std(trajectory_loss, axis=0)

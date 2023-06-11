@@ -13,7 +13,7 @@ import torch
 warnings.filterwarnings('ignore')
 
 
-def main(config_name='flag'):
+def main(config_name='trapez'):
     config_file = read_yaml(config_name)
 
     params = config_file['params']

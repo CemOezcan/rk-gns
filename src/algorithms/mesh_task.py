@@ -15,8 +15,7 @@ from src.algorithms.abstract_simulator import AbstractSimulator
 from src.algorithms.mesh_simulator import MeshSimulator
 from src.algorithms.get_simulator import get_simulator
 from src.data.data_utils import transform_position_to_edges, convert_to_hetero_data
-from src.data.get_data import get_directories, get_data, add_noise_to_mesh_nodes, add_pointcloud_dropout, \
-    add_noise_to_pcd_points
+from src.data.get_data import get_directories, get_data
 from src.algorithms.abstract_task import AbstractTask
 from tqdm import trange
 
@@ -59,8 +58,8 @@ class MeshTask(AbstractTask):
         self.n_viz = self._config.get('task').get('validation').get('n_viz')
 
         self.train_loader = get_data(config=config)
-        self._test_loader = get_data(config=config, split='valid', split_and_preprocess=False)
-        self._valid_loader = get_data(config=config, split='valid')
+        self._test_loader = get_data(config=config, split='test', raw=True)
+        self._valid_loader = get_data(config=config, split='test')
 
         self._mp = get_from_nested_dict(config, ['model', 'message_passing_steps'])
         aggr = get_from_nested_dict(config, ['model', 'aggregation'])
@@ -100,13 +99,13 @@ class MeshTask(AbstractTask):
 
             self._algorithm.fit_iteration(train_dataloader=self.train_loader)
             one_step = self._algorithm.one_step_evaluator(self._valid_loader, self._num_val_trajectories, task_name)
-            rollout = self._algorithm.rollout_evaluator(self._test_loader, self._num_val_rollouts, task_name)
-            n_step = self._algorithm.n_step_evaluator(self._test_loader, task_name, n_steps=self._val_n_steps, n_traj=self._num_val_n_step_rollouts)
+            # rollout = self._algorithm.rollout_evaluator(self._test_loader, self._num_val_rollouts, task_name)
+            #n_step = self._algorithm.n_step_evaluator(self._test_loader, task_name, n_steps=self._val_n_steps, n_traj=self._num_val_n_step_rollouts)
 
             dir_dict = self.select_plotting(task_name)
 
-            animation = {f"video_{key}": wandb.Video(value, fps=5, format="gif") for key, value in dir_dict.items()}
-            data = {k: v for dictionary in [one_step, rollout, n_step, animation] for k, v in dictionary.items()}
+            #animation = {f"video_{key}": wandb.Video(value, fps=5, format="gif") for key, value in dir_dict.items()}
+            data = {k: v for dictionary in [one_step] for k, v in dictionary.items()}
             data['epoch'] = e + 1
             self._algorithm.save(task_name)
             self._algorithm.log_epoch(data)
