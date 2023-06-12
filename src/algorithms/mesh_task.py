@@ -10,6 +10,9 @@ import matplotlib.pyplot as plt
 import torch
 import wandb
 from matplotlib import tri
+from matplotlib.collections import PolyCollection
+from matplotlib.lines import Line2D
+from matplotlib.patches import Polygon
 
 from src.algorithms.abstract_simulator import AbstractSimulator
 from src.algorithms.mesh_simulator import MeshSimulator
@@ -20,7 +23,7 @@ from src.algorithms.abstract_task import AbstractTask
 from tqdm import trange
 
 from src.util.types import ConfigDict, ScalarDict
-from src.util.util import get_from_nested_dict, device
+from src.util.util import get_from_nested_dict, device, triangles_to_edges
 
 
 class MeshTask(AbstractTask):
@@ -129,122 +132,10 @@ class MeshTask(AbstractTask):
         self.select_plotting(task_name)
 
     def select_plotting(self, task_name):
-        if 'flag' in self._dataset_name:
-            a, w = self.plot(task_name)
-            dir = self._save_plot(a, w, task_name)
-            return {'': dir}
+        a, w = self.plot(task_name)
+        dir_1 = self._save_plot(a, w, task_name)
 
-        elif 'cylinder' in self._dataset_name:
-            a, w = self.plot_3(task_name, 'velocity', dpi=100)
-            dir_1 = self._save_plot(a, w, task_name)
-
-            a, w = self.plot_3(task_name, 'pressure', dpi=100)
-            dir_2 = self._save_plot(a, w, f'{task_name}_pressure')
-            return {'': dir_1, 'pressure': dir_2}
-
-        elif 'plate' or 'trapez' in self._dataset_name:
-            a, w = self.plot_2(task_name)
-            dir_1 = self._save_plot(a, w, task_name)
-
-            return {'': dir_1}
-
-    def plot_3(self, task_name, field_name, figsize=(12 * 2, 8 * 2), dpi=None):
-        rollouts = os.path.join(self._out_dir, f'{task_name}_rollouts.pkl')
-        # TODO: Vizualize pressure levels similarly to cfd
-        # TODO: Mask out obstacle nodes and edges
-
-        with open(rollouts, 'rb') as fp:
-            rollout_data = pickle.load(fp)
-
-        rollout_data = rollout_data[:self.n_viz]
-
-        fig = plt.figure(figsize=figsize, dpi=dpi)
-        if 'plate' in self._dataset_name:
-            ax_origin = fig.add_subplot(121)
-            ax_pred = fig.add_subplot(122)
-        else:
-            ax_origin = fig.add_subplot(211)
-            ax_pred = fig.add_subplot(212)
-
-        skip = 10
-        num_steps = rollout_data[0][f'pred_{field_name}'].shape[0]
-        num_frames = math.floor(num_steps / skip)
-
-        # compute bounds
-        bounds = []
-        for trajectory in rollout_data:
-            bb_min = torch.squeeze(trajectory[f'gt_{field_name}'], dim=0).cpu().numpy().min(axis=(0, 1))
-            bb_max = torch.squeeze(trajectory[f'gt_{field_name}'], dim=0).cpu().numpy().max(axis=(0, 1))
-            bounds.append((bb_min, bb_max))
-
-        def animate(num):
-            step = (num * skip) % num_steps
-            traj = (num * skip) // num_steps
-
-            ax_origin.cla()
-            ax_origin.set_aspect('equal')
-            ax_origin.set_axis_off()
-            ax_pred.cla()
-            ax_pred.set_aspect('equal')
-            ax_pred.set_axis_off()
-
-            vmin, vmax = bounds[traj]
-            pos = rollout_data[traj]['mesh_pos'][step]
-            faces = rollout_data[traj]['faces'][step]
-            pred_velocity = rollout_data[traj][f'pred_{field_name}'][step]
-            gt_velocity = rollout_data[traj][f'gt_{field_name}'][step]
-
-            if 'plate' in self._dataset_name:
-                mask = rollout_data[traj]['mask']
-                gt_velocity, _ = self.obstacle(gt_velocity, faces, mask, True)
-                pred_velocity, _ = self.obstacle(pred_velocity, faces, mask, True)
-                pos, faces = self.obstacle(pos, faces, mask, True)
-
-            triang = tri.Triangulation(pos[:, 0], pos[:, 1], faces)
-
-            ax_origin.tripcolor(triang, gt_velocity[:, 0], vmin=vmin[0], vmax=vmax[0])
-            ax_origin.triplot(triang, 'ko-', ms=0.5, lw=0.3)
-            ax_origin.set_title('ORIGIN trajectory %d Step %d' % (traj, step))
-
-            ax_pred.tripcolor(triang, pred_velocity[:, 0], vmin=vmin[0], vmax=vmax[0])
-            ax_pred.triplot(triang, 'ko-', ms=0.5, lw=0.3)
-            ax_pred.set_title('PRED trajectory %d Step %d' % (traj, step))
-
-            return fig,
-
-        anima = FuncAnimation(fig, animate, frames=num_frames * len(rollout_data), interval=100)
-        writergif = PillowWriter(fps=10)
-
-        return anima, writergif
-
-    def plot_2(self, task_name):
-        rollouts = os.path.join(self._out_dir, f'{task_name}_rollouts.pkl')
-        # TODO: Vizualize stress levels similarly to cfd
-
-        with open(rollouts, 'rb') as fp:
-            rollout_data = pickle.load(fp)
-
-        rollout_data = rollout_data[0]
-        mask = rollout_data['mask']
-
-        fig, ax = plt.subplots()
-        scatter = ax.scatter([], [])
-
-        def update(frame):
-            ax.cla()
-            pred_pos = rollout_data['pred_pos'][frame][mask]
-            gt_pos = rollout_data['gt_pos'][frame][mask]
-
-            ax.scatter(pred_pos[:, 0], pred_pos[:, 1], label='Predicted Position', color='red', alpha=0.5)
-            ax.scatter(gt_pos[:, 0], gt_pos[:, 1], label='Ground Truth Position', color='blue')
-            ax.legend()
-            return scatter,
-
-        anima = FuncAnimation(fig, update, frames=len(rollout_data['pred_pos']), blit=True)
-
-        writergif = PillowWriter(fps=10)
-
-        return anima, writergif
+        return {'': dir_1}
 
     def plot(self, task_name: str) -> Tuple[FuncAnimation, PillowWriter]:
         """
@@ -267,72 +158,41 @@ class MeshTask(AbstractTask):
         with open(rollouts, 'rb') as fp:
             rollout_data = pickle.load(fp)
 
-        rollout_data = rollout_data[:self.n_viz]
+        rollout_data = rollout_data[0]
+        mask = rollout_data['mask']
+        cell_mask = torch.where(rollout_data['cell_type'] == 0)[0]
 
-        fig = plt.figure(figsize=(19.2, 10.8))
-        ax = fig.add_subplot(111, projection='3d')
-        skip = 10
-        num_steps = rollout_data[0]['pred_pos'].shape[0]
-        num_frames = math.floor(num_steps / skip)
+        fig, ax = plt.subplots()
+        scatter = ax.scatter([], [])
 
-        # compute bounds
-        bounds = []
-        for trajectory in rollout_data:
-            bb_min = torch.squeeze(trajectory['gt_pos'], dim=0).cpu().numpy().min(axis=(0, 1))
-            bb_max = torch.squeeze(trajectory['gt_pos'], dim=0).cpu().numpy().max(axis=(0, 1))
-            bounds.append((bb_min, bb_max))
+        x_min, y_min = rollout_data['gt_pos'].numpy().min(axis=(0, 1))
+        x_max, y_max = rollout_data['gt_pos'].numpy().max(axis=(0, 1))
 
-        def animate(frame):
-            step = (frame * skip) % num_steps
-            traj = (frame * skip) // num_steps
-
+        def update(frame):
             ax.cla()
-            bound = bounds[traj]
+            ax.set_xlim(x_min * 1.1, x_max * 1.1)
+            ax.set_ylim(y_min * 1.1, y_max * 1.1)
+            pred_pos = rollout_data['pred_pos'][frame]
+            gt_pos = rollout_data['gt_pos'][frame]
+            faces = rollout_data['cells'][cell_mask]
 
-            ax.set_xlim([bound[0][0], bound[1][0]])
-            ax.set_ylim([bound[0][1], bound[1][1]])
-            ax.set_zlim([bound[0][2], bound[1][2]])
+            for face in gt_pos[faces]:
+                triangle = Polygon(face, closed=True, alpha=0.5, edgecolor='dimgrey', facecolor='yellow')
+                ax.add_patch(triangle)
 
-            pos = torch.squeeze(rollout_data[traj]['pred_pos'], dim=0)[step].to('cpu')
-            original_pos = torch.squeeze(rollout_data[traj]['gt_pos'], dim=0)[step].to('cpu')
-            faces = torch.squeeze(rollout_data[traj]['faces'], dim=0)[step].to('cpu')
-            ax.plot_trisurf(pos[:, 0], pos[:, 1], faces, pos[:, 2], shade=True)
-            ax.plot_trisurf(original_pos[:, 0], original_pos[:, 1], faces, original_pos[:, 2], shade=True, alpha=0.3)
-            ax.set_title('Trajectory %d Step %d' % (traj, step))
-            return fig,
+            for face in pred_pos[faces]:
+                triangle = Polygon(face, closed=True, alpha=0.3, edgecolor='dimgrey', facecolor='red')
+                ax.add_patch(triangle)
 
-        animation = FuncAnimation(fig, animate, frames=num_frames * len(rollout_data), interval=100)
+            ax.scatter(pred_pos[mask][:, 0], pred_pos[mask][:, 1], label='Predicted Position', color='red', alpha=0.3)
+            ax.scatter(gt_pos[mask][:, 0], gt_pos[mask][:, 1], label='Ground Truth Position', color='blue', alpha=0.5)
+
+            return scatter,
+
+        anima = FuncAnimation(fig, update, frames=len(rollout_data['pred_pos']), blit=True)
         writergif = PillowWriter(fps=10)
 
-        return animation, writergif
-
-    def obstacle(self, positions, faces, mask, keep):
-        if keep:
-            mask_2 = torch.logical_not(mask)
-        else:
-            mask_2 = mask
-
-        obst = positions[mask_2]
-
-        ctr = 0
-        index_map = {}
-        for i in range(len(positions)):
-            if mask_2[i]:
-                index_map[i] = ctr
-                ctr += 1
-
-        obst_faces = torch.tensor(
-            [
-                [
-                    index_map[int(x[0])],
-                    index_map[int(x[1])],
-                    index_map[int(x[2])]
-                ]
-                for x in faces
-                if mask_2[x[0]] and mask_2[x[1]] and mask_2[x[2]]]
-        )
-
-        return obst, obst_faces
+        return anima, writergif
 
     def _save_plot(self, animation: FuncAnimation, writervideo: PillowWriter, task_name: str) -> str:
         """

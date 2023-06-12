@@ -162,25 +162,12 @@ class TrapezModel(AbstractSystemModel):
         prediction, cur_positions, cur_velocities = \
             (torch.stack(pred_trajectory), torch.stack(cur_positions), torch.stack(cur_velocities))
 
-        # temp solution for visualization
-        faces = trajectory['cells']
-        faces_result = []
-        for faces_step in faces:
-            later = torch.cat((faces_step[:, 2:4], torch.unsqueeze(faces_step[:, 0], 1)), -1)
-            faces_step = torch.cat((faces_step[:, 0:2], later), 0)
-            faces_result.append(faces_step)
-
-        faces_result = torch.stack(faces_result, 0)
-        # trajectory_polygons = to_polygons(trajectory['cells'], trajectory['world_pos'])
-
         traj_ops = {
-            'faces': faces_result,
-            'mesh_pos': trajectory['init_pos'],
+            'cells': trajectory['cells'][0],
+            'cell_type': trajectory['cell_type'][0],
             'mask': mask,
             'gt_pos': trajectory['pos'],
-            'pred_pos': prediction,
-            'cur_positions': cur_positions,
-            'cur_velocities': cur_velocities
+            'pred_pos': prediction
         }
 
         mse_loss_fn = torch.nn.MSELoss(reduction='none')
