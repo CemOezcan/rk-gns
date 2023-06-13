@@ -1,0 +1,41 @@
+name: "DEFAULT"   # MUST BE DEFAULT
+import_path: "default.yaml"
+
+params:
+  retrain: True # Start training a new model if True. Continue training the most recent version of the model if False.
+  task:
+    task: mesh
+    dataset: trapez
+    rollout_split: valid
+    batch_size: 2
+    epochs: 15
+    n_timesteps: 160
+    trajectories: 10
+    mode: all
+    prefetch_factor: 1
+    test:
+      trajectories: 10 # Number of trajectories that are going to be used to compute the validation loss during evaluation
+      rollouts: 10 # Number of trajectories that are going to be used to compute the rollout loss during evaluation
+      n_step_rollouts: 1 # Number of trajectories that are going to be used to compute the n_step_loss during evaluation
+      n_steps: 10
+    validation:
+      trajectories: 10 # Number of trajectories that are going to be used to compute the validation loss during training
+      rollouts: 5 # Number of trajectories that are going to be used to compute the rollout loss during training
+      n_steps: 10
+      n_step_rollouts: 1
+      n_viz: 5
+  model:
+    field: world_pos
+    history: True
+    size: 2
+    noise: 0.003
+    gamma: 0.9
+    scheduler_epoch: 10
+    aggregation: pna
+    learning_rate: 1.0e-4
+    message_passing_steps: 1
+    use_global: False
+    heterogeneous: False
+  logging:
+    wandb_mode: online
+  random_seed: 0
