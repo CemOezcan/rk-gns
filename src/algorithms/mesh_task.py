@@ -23,7 +23,7 @@ from src.data.get_data import get_directories, get_data
 from src.algorithms.abstract_task import AbstractTask
 from tqdm import trange
 
-from src.util.types import ConfigDict, ScalarDict
+from src.util.types import ConfigDict, ScalarDict, NodeType
 from src.util.util import get_from_nested_dict, device, triangles_to_edges
 
 
@@ -158,9 +158,9 @@ class MeshTask(AbstractTask):
         with open(rollouts, 'rb') as fp:
             rollout_data = pickle.load(fp)[:self.n_viz]
 
-        mask = torch.where(rollout_data[0]['node_type'] == 0)[0]
-        cell_mask = torch.where(rollout_data[0]['cell_type'] == 0)[0]
-        obst_cell_mask = torch.where(rollout_data[0]['cell_type'] == 1)[0]
+        mask = torch.where(rollout_data[0]['node_type'] == NodeType.MESH)[0]
+        cell_mask = torch.where(rollout_data[0]['cell_type'] == NodeType.MESH)[0]
+        obst_cell_mask = torch.where(rollout_data[0]['cell_type'] == NodeType.COLLIDER)[0]
 
         faces = rollout_data[0]['cells'][cell_mask]
         obst_faces = rollout_data[0]['cells'][obst_cell_mask]

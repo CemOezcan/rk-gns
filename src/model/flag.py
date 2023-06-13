@@ -9,8 +9,8 @@ from src.util import util
 from src.modules.mesh_graph_nets import MeshGraphNets
 from src.modules.normalizer import Normalizer
 from src.model.abstract_system_model import AbstractSystemModel
-from src.util.util import NodeType, device
-from src.util.types import EdgeSet, MultiGraph
+from src.util.util import device
+from src.util.types import EdgeSet, MultiGraph, NodeType
 from torch import nn, Tensor
 
 from src.util.types import ConfigDict

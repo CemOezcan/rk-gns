@@ -12,8 +12,8 @@ from src.util import util
 from src.modules.mesh_graph_nets import MeshGraphNets
 from src.modules.normalizer import Normalizer
 from src.model.abstract_system_model import AbstractSystemModel
-from src.util.util import NodeType, device
-from src.util.types import EdgeSet, MultiGraph
+from src.util.util import device
+from src.util.types import NodeType, MultiGraph
 from torch import nn, Tensor
 
 from src.util.types import ConfigDict
@@ -101,7 +101,7 @@ class TrapezModel(AbstractSystemModel):
         return self.learned_model(graph)
 
     def training_step(self, graph, data_frame):
-        mask = torch.where(graph.node_type == 0)[0]
+        mask = torch.where(graph.node_type == NodeType.MESH)[0]
 
         pred_velocity = self(graph)[mask]
         target_velocity = graph.y[mask] - graph.pos[mask]
@@ -113,7 +113,7 @@ class TrapezModel(AbstractSystemModel):
 
     @torch.no_grad()
     def validation_step(self, graph: MultiGraph, data_frame: Dict) -> Tuple[Tensor, Tensor]:
-        mask = torch.where(graph.node_type == 0)[0]
+        mask = torch.where(graph.node_type == NodeType.MESH)[0]
 
         pred_velocity = self(graph)[mask]
         target_velocity = graph.y[mask] - graph.pos[mask]
@@ -129,7 +129,7 @@ class TrapezModel(AbstractSystemModel):
 
     def update(self, inputs, per_node_network_output: Tensor) -> Tensor:
         """Integrate model outputs."""
-        mask = torch.where(inputs.node_type == 0)[0]
+        mask = torch.where(inputs.node_type == NodeType.MESH)[0]
         velocity = self._output_normalizer.inverse(per_node_network_output)
 
         # integrate forward
@@ -147,7 +147,7 @@ class TrapezModel(AbstractSystemModel):
         initial_state = {k: torch.squeeze(v, 0)[0] for k, v in trajectory.items()}
 
         node_type = initial_state['node_type']
-        mask = torch.where(node_type == 0)[0]
+        mask = torch.where(node_type == NodeType.MESH)[0]
 
         cur_pos = torch.squeeze(initial_state['pos'], 0)
         target_pos = trajectory['y']
@@ -218,7 +218,7 @@ class TrapezModel(AbstractSystemModel):
 
         """
         if sigma > 0.0:
-            indices = torch.where(data.node_type == 0)[0]
+            indices = torch.where(data.node_type == NodeType.MESH)[0]
             num_noise_features = data.pos.shape[1]
             num_node_features = data.pos.shape[1]
             noise = (torch.randn(indices.shape[0], num_noise_features) * sigma).to(device)
@@ -241,7 +241,7 @@ class TrapezModel(AbstractSystemModel):
 
         """
         if sigma > 0.0:
-            indices = torch.where(data.node_type == 0)[0]
+            indices = torch.where(data.node_type == NodeType.MESH)[0]
             num_noise_features = data.pos.shape[1]
             num_node_features = data.pos.shape[1]
             noise = (torch.randn(indices.shape[0], num_noise_features) * sigma).to(device)

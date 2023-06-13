@@ -1,4 +1,5 @@
 import collections
+import enum
 from typing import Dict, Any, List, Union, Iterable, Callable, Optional, Tuple, Generator
 import numpy as np
 from torch import Tensor
@@ -24,3 +25,7 @@ EdgeSet = collections.namedtuple('EdgeSet', ['name', 'features', 'senders', 'rec
 MultiGraph = collections.namedtuple('MultiGraph', ['node_features', 'edge_sets'])
 AGGR_AGGR = "aggregation"
 CONCAT_AGGR = "concatenation"
+
+class NodeType(enum.IntEnum):
+    MESH = 0
+    COLLIDER = 1

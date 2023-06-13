@@ -3,8 +3,8 @@ import os
 
 import numpy as np
 import torch
-from src.util.util import device, NodeType
-from src.util.types import ConfigDict
+from src.util.util import device
+from src.util.types import ConfigDict, NodeType
 
 
 class Preprocessing():
