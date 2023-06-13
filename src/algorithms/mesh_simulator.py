@@ -20,7 +20,6 @@ from tqdm import tqdm
 from src.data.get_data import get_directories
 from src.algorithms.abstract_simulator import AbstractSimulator
 from src.model.abstract_system_model import AbstractSystemModel
-from src.model.flag import FlagModel
 from src.model.get_model import get_model
 from src.util.util import detach
 from torch.utils.data import DataLoader

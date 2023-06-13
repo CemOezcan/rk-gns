@@ -18,7 +18,6 @@ from matplotlib.patches import Polygon
 from src.algorithms.abstract_simulator import AbstractSimulator
 from src.algorithms.mesh_simulator import MeshSimulator
 from src.algorithms.get_simulator import get_simulator
-from src.data.data_utils import transform_position_to_edges, convert_to_hetero_data
 from src.data.get_data import get_directories, get_data
 from src.algorithms.abstract_task import AbstractTask
 from tqdm import trange

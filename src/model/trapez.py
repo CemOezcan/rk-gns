@@ -6,7 +6,6 @@ import torch
 import torch.nn.functional as F
 from torch_geometric.data import Data, Batch, HeteroData
 
-from src.data.graph_utils import build_type
 from src.data.trapez_preprocessing_2 import TrapezPreprocessing
 from src.util import util
 from src.modules.mesh_graph_nets import MeshGraphNets
