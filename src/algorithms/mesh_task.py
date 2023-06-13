@@ -155,31 +155,39 @@ class MeshTask(AbstractTask):
 
         """
         rollouts = os.path.join(self._out_dir, f'{task_name}_rollouts.pkl')
-
         with open(rollouts, 'rb') as fp:
-            rollout_data = pickle.load(fp)
+            rollout_data = pickle.load(fp)[:self.n_viz]
 
-        rollout_data = rollout_data[0]
-        mask = torch.where(rollout_data['node_type'] == 0)[0]
+        mask = torch.where(rollout_data[0]['node_type'] == 0)[0]
+        cell_mask = torch.where(rollout_data[0]['cell_type'] == 0)[0]
+        obst_cell_mask = torch.where(rollout_data[0]['cell_type'] == 1)[0]
 
-        cell_mask = torch.where(rollout_data['cell_type'] == 0)[0]
-        obst_cell_mask = torch.where(rollout_data['cell_type'] == 1)[0]
-        faces = rollout_data['cells'][cell_mask]
-        obst_faces = rollout_data['cells'][obst_cell_mask]
+        faces = rollout_data[0]['cells'][cell_mask]
+        obst_faces = rollout_data[0]['cells'][obst_cell_mask]
+
+        r, g, b = matplotlib.colors.to_rgb('dimgrey')
+        num_steps = rollout_data[0]['pred_pos'].shape[0]
+
+        bounds = list()
+        for trajectory in rollout_data:
+            x_min, y_min = trajectory['gt_pos'].numpy().min(axis=(0, 1))
+            x_max, y_max = trajectory['gt_pos'].numpy().max(axis=(0, 1))
+            bounds.append((x_min, y_min, x_max, y_max))
 
         fig, ax = plt.subplots()
         scatter = ax.scatter([], [])
-        r, g, b = matplotlib.colors.to_rgb('dimgrey')
-        x_min, y_min = rollout_data['gt_pos'].numpy().min(axis=(0, 1))
-        x_max, y_max = rollout_data['gt_pos'].numpy().max(axis=(0, 1))
 
         def update(frame):
+            step = frame % num_steps
+            traj = frame // num_steps
+            x_min, y_min, x_max, y_max = bounds[traj]
+
             ax.cla()
             ax.set_xlim(x_min * 1.1, x_max * 1.1)
             ax.set_ylim(y_min * 1.1, y_max * 1.1)
 
-            pred_pos = rollout_data['pred_pos'][frame]
-            gt_pos = rollout_data['gt_pos'][frame]
+            pred_pos = rollout_data[traj]['pred_pos'][step]
+            gt_pos = rollout_data[traj]['gt_pos'][step]
 
             obst_collection = [Polygon(face, closed=True) for face in gt_pos[obst_faces]]
             gt_collection = [Polygon(face, closed=True) for face in gt_pos[faces]]
@@ -200,7 +208,7 @@ class MeshTask(AbstractTask):
 
             return scatter,
 
-        anima = FuncAnimation(fig, update, frames=len(rollout_data['pred_pos']), blit=True)
+        anima = FuncAnimation(fig, update, frames=num_steps * len(rollout_data), blit=True)
         writergif = PillowWriter(fps=10)
 
         return anima, writergif
