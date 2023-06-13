@@ -165,7 +165,7 @@ class TrapezModel(AbstractSystemModel):
         traj_ops = {
             'cells': trajectory['cells'][0],
             'cell_type': trajectory['cell_type'][0],
-            'mask': mask,
+            'node_type': node_type,
             'gt_pos': trajectory['pos'],
             'pred_pos': prediction
         }

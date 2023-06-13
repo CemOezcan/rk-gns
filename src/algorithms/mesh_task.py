@@ -5,6 +5,7 @@ import pickle
 import re
 from typing import Tuple
 
+import matplotlib.colors
 from matplotlib.animation import PillowWriter, FuncAnimation
 import matplotlib.pyplot as plt
 import torch
@@ -159,12 +160,16 @@ class MeshTask(AbstractTask):
             rollout_data = pickle.load(fp)
 
         rollout_data = rollout_data[0]
-        mask = rollout_data['mask']
+        mask = torch.where(rollout_data['node_type'] == 0)[0]
+
         cell_mask = torch.where(rollout_data['cell_type'] == 0)[0]
+        obst_cell_mask = torch.where(rollout_data['cell_type'] == 1)[0]
+        faces = rollout_data['cells'][cell_mask]
+        obst_faces = rollout_data['cells'][obst_cell_mask]
 
         fig, ax = plt.subplots()
         scatter = ax.scatter([], [])
-
+        r, g, b = matplotlib.colors.to_rgb('dimgrey')
         x_min, y_min = rollout_data['gt_pos'].numpy().min(axis=(0, 1))
         x_max, y_max = rollout_data['gt_pos'].numpy().max(axis=(0, 1))
 
@@ -172,9 +177,13 @@ class MeshTask(AbstractTask):
             ax.cla()
             ax.set_xlim(x_min * 1.1, x_max * 1.1)
             ax.set_ylim(y_min * 1.1, y_max * 1.1)
+
             pred_pos = rollout_data['pred_pos'][frame]
             gt_pos = rollout_data['gt_pos'][frame]
-            faces = rollout_data['cells'][cell_mask]
+
+            for face in gt_pos[obst_faces]:
+                triangle = Polygon(face, closed=True, edgecolor=(r, g, b, 0.1), facecolor=(0, 0, 0, 0.5))
+                ax.add_patch(triangle)
 
             for face in gt_pos[faces]:
                 triangle = Polygon(face, closed=True, alpha=0.5, edgecolor='dimgrey', facecolor='yellow')
@@ -184,8 +193,8 @@ class MeshTask(AbstractTask):
                 triangle = Polygon(face, closed=True, alpha=0.3, edgecolor='dimgrey', facecolor='red')
                 ax.add_patch(triangle)
 
-            ax.scatter(pred_pos[mask][:, 0], pred_pos[mask][:, 1], label='Predicted Position', color='red', alpha=0.3)
-            ax.scatter(gt_pos[mask][:, 0], gt_pos[mask][:, 1], label='Ground Truth Position', color='blue', alpha=0.5)
+            ax.scatter(pred_pos[mask][:, 0], pred_pos[mask][:, 1], label='Predicted Position', color='red', alpha=0.3, s=5)
+            ax.scatter(gt_pos[mask][:, 0], gt_pos[mask][:, 1], label='Ground Truth Position', color='blue', alpha=0.5, s=5)
 
             return scatter,
 
