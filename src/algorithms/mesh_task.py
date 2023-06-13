@@ -181,31 +181,22 @@ class MeshTask(AbstractTask):
             pred_pos = rollout_data['pred_pos'][frame]
             gt_pos = rollout_data['gt_pos'][frame]
 
-            obst_collection = list()
-            for face in gt_pos[obst_faces]:
-                triangle = Polygon(face, closed=True, edgecolor=(r, g, b, 0.1), facecolor=(0, 0, 0, 0.5))
-                obst_collection.append(triangle)
+            obst_collection = [Polygon(face, closed=True) for face in gt_pos[obst_faces]]
+            gt_collection = [Polygon(face, closed=True) for face in gt_pos[faces]]
+            pred_collection = [Polygon(face, closed=True) for face in pred_pos[faces]]
 
-            gt_collection = list()
-            for face in gt_pos[faces]:
-                triangle = Polygon(face, closed=True, alpha=0.5, edgecolor='dimgrey', facecolor='yellow')
-                gt_collection.append(triangle)
-
-            pred_collection = list()
-            for face in pred_pos[faces]:
-                triangle = Polygon(face, closed=True, alpha=0.3, edgecolor='dimgrey', facecolor='red')
-                pred_collection.append(triangle)
-
-            obst_collection = PatchCollection(obst_collection, edgecolor=(r, g, b, 0.1), facecolor=(0, 0, 0, 0.5))
-            gt_collection = PatchCollection(gt_collection, alpha=0.5, edgecolor='dimgrey', facecolor='yellow')
-            pred_collection = PatchCollection(pred_collection, alpha=0.3, edgecolor='dimgrey', facecolor='red')
+            obst_collection = PatchCollection(obst_collection, ec=(r, g, b, 0.1), fc=(0, 0, 0, 0.5))
+            gt_collection = PatchCollection(gt_collection, alpha=0.5, ec='dimgrey', fc='yellow')
+            pred_collection = PatchCollection(pred_collection, alpha=0.3, ec='dimgrey', fc='red')
 
             ax.add_collection(obst_collection)
             ax.add_collection(gt_collection)
             ax.add_collection(pred_collection)
 
-            ax.scatter(pred_pos[mask][:, 0], pred_pos[mask][:, 1], label='Predicted Position', color='red', alpha=0.3, s=5)
-            ax.scatter(gt_pos[mask][:, 0], gt_pos[mask][:, 1], label='Ground Truth Position', color='blue', alpha=0.5, s=5)
+            ax.scatter(pred_pos[mask][:, 0], pred_pos[mask][:, 1], label='Predicted Position', c='red', alpha=0.3, s=5)
+            ax.scatter(gt_pos[mask][:, 0], gt_pos[mask][:, 1], label='Ground Truth Position', c='blue', alpha=0.5, s=5)
+
+            ax.legend()
 
             return scatter,
 
