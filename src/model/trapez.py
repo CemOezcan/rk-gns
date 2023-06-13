@@ -143,7 +143,7 @@ class TrapezModel(AbstractSystemModel):
     @torch.no_grad()
     def rollout(self, trajectory: Dict[str, Tensor], num_steps: int) -> Tuple[Dict[str, Tensor], Tensor]:
         """Rolls out a model trajectory."""
-        num_steps = trajectory['cells'].shape[0] #if num_steps is None else num_steps
+        num_steps = trajectory['cells'].shape[0] if num_steps is None else num_steps
         initial_state = {k: torch.squeeze(v, 0)[0] for k, v in trajectory.items()}
 
         node_type = initial_state['node_type']
