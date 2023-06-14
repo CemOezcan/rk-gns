@@ -2,12 +2,12 @@ name: "DEFAULT"   # MUST BE DEFAULT
 import_path: "default.yaml"
 
 params:
-  retrain: True # Start training a new model if True. Continue training the most recent version of the model if False.
+  retrain: False # Start training a new model if True. Continue training the most recent version of the model if False.
   task:
     task: mesh
-    dataset: trapez
+    dataset: deformable_plate
     rollout_split: valid
-    batch_size: 2
+    batch_size: 1
     epochs: 15
     n_timesteps: 50
     trajectories: 10
@@ -19,11 +19,11 @@ params:
       n_step_rollouts: 1 # Number of trajectories that are going to be used to compute the n_step_loss during evaluation
       n_steps: 10
     validation:
-      trajectories: 10 # Number of trajectories that are going to be used to compute the validation loss during training
-      rollouts: 5 # Number of trajectories that are going to be used to compute the rollout loss during training
+      trajectories: 135 # Number of trajectories that are going to be used to compute the validation loss during training
+      rollouts: 50 # Number of trajectories that are going to be used to compute the rollout loss during training
       n_steps: 10
-      n_step_rollouts: 1
-      n_viz: 5
+      n_step_rollouts: 50
+      n_viz: 10
   model:
     field: world_pos
     history: True

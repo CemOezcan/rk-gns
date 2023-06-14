@@ -26,20 +26,19 @@ class TrapezPreprocessing:
 
         # dataset parameters
         self.dataset = 'coarse_full_graph_t'
-        self.input_dataset = 'trapez_materials_contact_voxel'
+        self.input_dataset = 'deformable_plate'# 'trapez_materials_contact_voxel'
         self.use_color = False
         self.use_mesh_coordinates = True
 
     def build_dataset_for_split(self):
         print(f"Generating {self.split} data")
-        with open(os.path.join(self.path, "data/trapez/input", self.input_dataset + "_" + self.split + ".pkl"), "rb") as file:
+        #with open(os.path.join(self.path, "data/trapez/input", self.input_dataset + "_" + self.split + ".pkl"), "rb") as file:
+        with open(os.path.join(self.path, "data/deformable_plate/input", self.input_dataset + "_" + self.split + ".pkl"),
+                      "rb") as file:
             rollout_data = pickle.load(file)
         trajectory_list = []
 
         for index, trajectory in enumerate(tqdm(rollout_data)):
-            if index >= 10:
-                break
-
             rollout_length = len(trajectory["nodes_grid"])
             data_list = []
 
@@ -197,6 +196,47 @@ class TrapezPreprocessing:
                     data_list.append(Data.from_dict(data))
 
         return data_list
+
+    @staticmethod
+    def add_relative_mesh_positions(edge_attr: Tensor, edge_type: Tensor, input_mesh_edge_index: Tensor,
+                                    initial_mesh_positions: Tensor) -> Tensor:
+        """
+        Adds the relative mesh positions to the mesh edges (in contrast to the world edges) and zero anywhere else.
+        Refer to MGN by Pfaff et al. 2020 for more details.
+        Args:
+            edge_attr: Current edge features
+            edge_type: Tensor containing the edges types
+            input_mesh_edge_index: Mesh edge index tensor
+            initial_mesh_positions: Initial positions of the mesh nodes "mesh coordinates"
+
+        Returns:
+            edge_attr: updated edge features
+        """
+        indices = torch.where(edge_type == 0)[0]  # type 2: mesh edges
+        mesh_edge_index = input_mesh_edge_index
+        mesh_attr = TrapezPreprocessing.get_relative_mesh_positions(mesh_edge_index, initial_mesh_positions).float()
+        mesh_positions = torch.zeros(edge_attr.shape[0], mesh_attr.shape[1]).float()
+        mesh_positions[indices, :] = mesh_attr
+        edge_attr = torch.cat((edge_attr, mesh_positions), dim=1)
+        return edge_attr
+
+    @staticmethod
+    def get_relative_mesh_positions(mesh_edge_index: Tensor, mesh_positions: Tensor) -> Tensor:
+        """
+        Transform the positions of the mesh into a relative position encoding along with the Euclidean distance in the edges
+        Args:
+            mesh_edge_index: Tensor containing the mesh edge indices
+            mesh_positions: Tensor containing mesh positions
+
+        Returns:
+            edge_attr: Tensor containing the batched edge features
+        """
+        data = Data(pos=mesh_positions,
+                    edge_index=mesh_edge_index)
+        transforms = T.Compose([T.Cartesian(norm=False, cat=True), T.Distance(norm=False, cat=True)])
+        data = transforms(data)
+        return data.edge_attr
+
 
 
 

@@ -34,7 +34,7 @@ def get_data(config: ConfigDict, split='train', split_and_preprocess=True, add_t
     dataset_name = get_from_nested_dict(config, list_of_keys=["task", "dataset"], raise_error=True)
     in_dir, _ = get_directories(dataset_name)
 
-    if dataset_name == 'trapez':
+    if dataset_name == 'trapez' or dataset_name == 'deformable_plate':
         batch_size = get_from_nested_dict(config, list_of_keys=["task", "batch_size"], raise_error=True)
         pp = TrapezPreprocessing(split, ROOT_DIR, raw)
         train_data_list = pp.build_dataset_for_split()

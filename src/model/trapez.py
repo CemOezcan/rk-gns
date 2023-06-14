@@ -1,12 +1,14 @@
 import math
 from typing import Dict, Tuple
+
+import torch_cluster
 import torch_geometric.transforms as T
 import numpy as np
 import torch
 import torch.nn.functional as F
 from torch_geometric.data import Data, Batch, HeteroData
 
-from src.data.trapez_preprocessing_2 import TrapezPreprocessing
+from src.data.trapez_preprocessing import TrapezPreprocessing
 from src.util import util
 from src.modules.mesh_graph_nets import MeshGraphNets
 from src.modules.normalizer import Normalizer
@@ -30,7 +32,7 @@ class TrapezModel(AbstractSystemModel):
         self._output_normalizer = Normalizer(size=2, name='output_normalizer')
         self._node_normalizer = Normalizer(size=5, name='node_normalizer')
         self._node_dynamic_normalizer = Normalizer(size=1, name='node_dynamic_normalizer')
-        self._mesh_edge_normalizer = Normalizer(size=7, name='mesh_edge_normalizer')
+        self._mesh_edge_normalizer = Normalizer(size=10, name='mesh_edge_normalizer')
         self._intra_edge_normalizer = Normalizer(size=7, name='intra_edge_normalizer')
         self._inter_edge_normalizer = Normalizer(size=7, name='inter_edge_normalizer')
         self._hyper_node_normalizer = Normalizer(size=3, name='hyper_node_normalizer')
@@ -57,18 +59,47 @@ class TrapezModel(AbstractSystemModel):
         self.pointcloud_dropout = 1
         self.hetero = False
         self.use_world_edges = False
-        self.input_mesh_noise = 0.01
+        self.input_mesh_noise = 0.03
         self.input_pcd_noise = 0.01
         self.euclidian_distance = True
 
     def build_graph(self, data: Data, is_training: bool) -> Data:
         """Builds input graph."""
+        mask = torch.where(data.node_type == NodeType.MESH)[0]
+        obst_mask = torch.where(data.node_type == NodeType.COLLIDER)[0]
+
+        world_edges = torch_cluster.radius(data.y[mask], data.y[obst_mask], r=0.3, max_num_neighbors=100)
+
+        world_edges[0, :] += len(mask)
+        world_edges[1, :] += 0
+
+        data.edge_index = torch.cat([data.edge_index, world_edges], dim=1)
+        data.edge_type = torch.cat([data.edge_type, torch.tensor([2] * len(world_edges[0])).long()], dim=0)
+
+
+        ext_edges = torch_cluster.radius(data.y, data.y, r=0.3, max_num_neighbors=100)
+
+        data.edge_index = torch.cat([data.edge_index, ext_edges], dim=1)
+        data.edge_type = torch.cat([data.edge_type, torch.tensor([3] * len(ext_edges[0])).long()], dim=0)
+
+        values = [0] * 4
+        for key in data.edge_type:
+            values[int(key)] += 1
+
+        data.edge_attr = TrapezPreprocessing.build_one_hot_features(values)
+        mesh_edge_mask = torch.where(data.edge_type == 0)[0]
+        data.edge_attr = TrapezPreprocessing.add_relative_mesh_positions(data.edge_attr,
+                                                                         data.edge_type,
+                                                                         data.edge_index[:, mesh_edge_mask],
+                                                                         data.init_pos[mask])
+
         if is_training:
             #data = self.add_pointcloud_dropout(data, self.pointcloud_dropout, self.hetero, self.use_world_edges)
             #data.to(device)
             data = self.add_noise_to_mesh_nodes(data, self.input_mesh_noise, device)
         #data = self.add_noise_to_pcd_points(data, self.input_pcd_noise, device)
         data = self.transform_position_to_edges(data, self.euclidian_distance)
+        data.edge_attr = self._mesh_edge_normalizer(data.edge_attr, is_training)
 
         edge_index = data.edge_index
         edge_attr = data.edge_attr
