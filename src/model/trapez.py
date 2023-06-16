@@ -47,7 +47,7 @@ class TrapezModel(AbstractSystemModel):
         self.learned_model = MeshGraphNets(
             output_size=params.get('size'),
             latent_size=128,
-            num_layers=2,
+            num_layers=1,
             message_passing_steps=self.message_passing_steps,
             message_passing_aggregator=self.message_passing_aggregator,
             edge_sets=self._edge_sets,
