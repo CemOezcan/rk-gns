@@ -9,7 +9,7 @@ from torch import Tensor
 from torch_geometric.data import Data
 from tqdm import tqdm
 
-from src.util.types import ConfigDict
+from src.util.types import ConfigDict, NodeType
 from src.util.util import device
 
 
@@ -48,6 +48,9 @@ class TrapezPreprocessing:
 
                 # create nearest neighbor graph with the given radius dict
                 data = self.create_graph_from_raw(data_timestep)
+
+                if not self.raw:
+                    data = TrapezPreprocessing.postprocessing(Data.from_dict(data))
 
                 data_list.append(data)  # append object for timestep t to data_list
 
@@ -193,7 +196,7 @@ class TrapezPreprocessing:
         for trajectory in trajectory_list:
             for index, data in enumerate(trajectory):
                 if index >= start_index:
-                    data_list.append(Data.from_dict(data))
+                    data_list.append(data)
 
         return data_list
 
@@ -237,7 +240,69 @@ class TrapezPreprocessing:
         data = transforms(data)
         return data.edge_attr
 
+    @staticmethod
+    def postprocessing(data):
+        mask = torch.where(data.node_type == NodeType.MESH)[0]
+        obst_mask = torch.where(data.node_type == NodeType.COLLIDER)[0]
 
+        # Add world edges
+        world_edges = torch_cluster.radius(data.y[mask], data.y[obst_mask], r=0.3, max_num_neighbors=100)
+        row, col = world_edges[0], world_edges[1]
+        row, col = row[row != col], col[row != col]
+        world_edges = torch.stack([row, col], dim=0)
+        world_edges[0, :] += len(mask)
 
+        data.edge_index = torch.cat([data.edge_index, world_edges], dim=1)
+        data.edge_type = torch.cat([data.edge_type, torch.tensor([2] * len(world_edges[0])).long()], dim=0)
 
+        ext_edges = torch_cluster.radius(data.y[mask], data.y[mask], r=0.3, max_num_neighbors=100)
+        row, col = ext_edges[0], ext_edges[1]
+        row, col = row[row != col], col[row != col]
+        ext_edges = torch.stack([row, col], dim=0)
+        ext_edges = TrapezPreprocessing.remove_duplicates_with_mesh_edges(data.edge_index, ext_edges)
+        data.edge_index = torch.cat([data.edge_index, ext_edges], dim=1)
+        data.edge_type = torch.cat([data.edge_type, torch.tensor([3] * len(ext_edges[0])).long()], dim=0)
 
+        values = [0] * 4
+        for key in data.edge_type:
+            values[int(key)] += 1
+
+        data.edge_attr = TrapezPreprocessing.build_one_hot_features(values)
+        mesh_edge_mask = torch.where(data.edge_type == 0)[0]
+        data.edge_attr = TrapezPreprocessing.add_relative_mesh_positions(data.edge_attr,
+                                                                         data.edge_type,
+                                                                         data.edge_index[:, mesh_edge_mask],
+                                                                         data.init_pos[mask])
+
+        return data
+
+    @staticmethod
+    def remove_duplicates_with_mesh_edges(mesh_edges: Tensor, world_edges: Tensor) -> Tensor:
+        """
+        Removes the duplicates with the mesh edges have of the world edges that are created using a nearset neighbor search. (only MGN)
+        To speed this up the adjacency matrices are used
+        Args:
+            mesh_edges: edge list of the mesh edges
+            world_edges: edge list of the world edges
+
+        Returns:
+            new_world_edges: updated world edges without duplicates
+        """
+        import torch_geometric.utils as utils
+        adj_mesh = utils.to_dense_adj(mesh_edges)
+        if world_edges.shape[1] > 0:
+            adj_world = utils.to_dense_adj(world_edges)
+        else:
+            adj_world = torch.zeros_like(adj_mesh)
+        if adj_world.shape[1] < adj_mesh.shape[1]:
+            padding_size = adj_mesh.shape[1] - adj_world.shape[1]
+            padding_mask = torch.nn.ConstantPad2d((0, padding_size, 0, padding_size), 0)
+            adj_world = padding_mask(adj_world)
+        elif adj_world.shape[1] > adj_mesh.shape[1]:
+            padding_size = adj_world.shape[1] - adj_mesh.shape[1]
+            padding_mask = torch.nn.ConstantPad2d((0, padding_size, 0, padding_size), 0)
+            adj_mesh = padding_mask(adj_mesh)
+        new_adj = adj_world - adj_mesh
+        new_adj[new_adj < 0] = 0
+        new_world_edges = utils.dense_to_sparse(new_adj)[0]
+        return new_world_edges

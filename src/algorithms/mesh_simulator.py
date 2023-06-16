@@ -127,9 +127,10 @@ class MeshSimulator(AbstractSimulator):
 
         """
         self._network.train()
+        data = self.fetch_data(train_dataloader, True)
 
-        for i, trajectory in enumerate(tqdm(train_dataloader, desc='Trajectories', leave=False, position=0)):
-            batch = self._network.build_graph(trajectory, True)
+        for i, batch in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
+            #batch = self._network.build_graph(trajectory, True)
 
             start_instance = time.time()
             loss = self._network.training_step(batch, i)
@@ -159,9 +160,8 @@ class MeshSimulator(AbstractSimulator):
                 The instances of the trajectory and their respective graph representations
         """
         graphs = []
-        for i, data_frame in enumerate(trajectory):
-            if i >= self._time_steps:
-                break
+        # TODO: Parallelize
+        for i, data_frame in enumerate(tqdm(trajectory, desc='Building Graphs', leave=False, position=0)):
             graph = self._network.build_graph(data_frame, is_training)
             graphs.append(graph)
 
@@ -195,9 +195,9 @@ class MeshSimulator(AbstractSimulator):
 
         """
         trajectory_loss = list()
-        for i, trajectory in enumerate(ds_loader):
+        test_loader = self.fetch_data(ds_loader, is_training=False)
+        for i, batch in enumerate(tqdm(test_loader, desc='Validation', leave=True, position=0)):
 
-            batch = self._network.build_graph(trajectory, True)
             instance_loss = self._network.validation_step(batch, i)
 
             trajectory_loss.append([instance_loss])
@@ -262,7 +262,7 @@ class MeshSimulator(AbstractSimulator):
         """
         trajectories = []
         mse_losses = []
-        for i, trajectory in enumerate(ds_loader):
+        for i, trajectory in enumerate(tqdm(ds_loader, desc='Rollouts', leave=True, position=0)):
             if i >= rollouts:
                 break
             prediction_trajectory, mse_loss = self._network.rollout(trajectory, num_steps=self._time_steps)
@@ -316,7 +316,7 @@ class MeshSimulator(AbstractSimulator):
         # Take n_traj trajectories from valid set for n_step loss calculation
         means = list()
         lasts = list()
-        for i, trajectory in enumerate(ds_loader):
+        for i, trajectory in enumerate(tqdm(ds_loader, desc='N-Step', leave=True, position=0)):
             if i >= n_traj:
                 break
             mean_loss, last_loss = self._network.n_step_computation(trajectory, n_steps, self._time_steps)

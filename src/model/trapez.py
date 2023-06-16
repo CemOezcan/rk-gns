@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from torch_geometric.data import Data, Batch, HeteroData
 
 from src.data.trapez_preprocessing import TrapezPreprocessing
-from src.util import util
+from src.util import util, test
 from src.modules.mesh_graph_nets import MeshGraphNets
 from src.modules.normalizer import Normalizer
 from src.model.abstract_system_model import AbstractSystemModel
@@ -65,34 +65,6 @@ class TrapezModel(AbstractSystemModel):
 
     def build_graph(self, data: Data, is_training: bool) -> Data:
         """Builds input graph."""
-        mask = torch.where(data.node_type == NodeType.MESH)[0]
-        obst_mask = torch.where(data.node_type == NodeType.COLLIDER)[0]
-
-        world_edges = torch_cluster.radius(data.y[mask], data.y[obst_mask], r=0.3, max_num_neighbors=100)
-
-        world_edges[0, :] += len(mask)
-        world_edges[1, :] += 0
-
-        data.edge_index = torch.cat([data.edge_index, world_edges], dim=1)
-        data.edge_type = torch.cat([data.edge_type, torch.tensor([2] * len(world_edges[0])).long()], dim=0)
-
-
-        ext_edges = torch_cluster.radius(data.y, data.y, r=0.3, max_num_neighbors=100)
-
-        data.edge_index = torch.cat([data.edge_index, ext_edges], dim=1)
-        data.edge_type = torch.cat([data.edge_type, torch.tensor([3] * len(ext_edges[0])).long()], dim=0)
-
-        values = [0] * 4
-        for key in data.edge_type:
-            values[int(key)] += 1
-
-        data.edge_attr = TrapezPreprocessing.build_one_hot_features(values)
-        mesh_edge_mask = torch.where(data.edge_type == 0)[0]
-        data.edge_attr = TrapezPreprocessing.add_relative_mesh_positions(data.edge_attr,
-                                                                         data.edge_type,
-                                                                         data.edge_index[:, mesh_edge_mask],
-                                                                         data.init_pos[mask])
-
         if is_training:
             #data = self.add_pointcloud_dropout(data, self.pointcloud_dropout, self.hetero, self.use_world_edges)
             #data.to(device)
@@ -125,7 +97,6 @@ class TrapezModel(AbstractSystemModel):
         hetero_data.y = data.y
 
         return hetero_data
-
 
     def forward(self, graph):
         return self.learned_model(graph)
@@ -209,9 +180,10 @@ class TrapezModel(AbstractSystemModel):
     @torch.no_grad()
     def _step_fn(self, initial_state, cur_pos, trajectory, cur_positions, cur_velocities, target_world_pos, step, mask, num_steps):
         input = {**initial_state, 'pos': cur_pos, 'y': target_world_pos}
-        graph = self.build_graph(Data.from_dict(input), is_training=False)
+        data = TrapezPreprocessing.postprocessing(Data.from_dict(input))
+        graph = self.build_graph(data, is_training=False)
 
-        prediction, cur_position, cur_velocity = self.update(Data.from_dict(input), self(graph)[mask])
+        prediction, cur_position, cur_velocity = self.update(data, self(graph)[mask])
         next_pos = target_world_pos
         next_pos[mask] = prediction
 
