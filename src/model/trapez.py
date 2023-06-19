@@ -182,10 +182,10 @@ class TrapezModel(AbstractSystemModel):
     @torch.no_grad()
     def _step_fn(self, initial_state, cur_pos, trajectory, cur_positions, cur_velocities, target_world_pos, step, mask, num_steps):
         input = {**initial_state, 'pos': cur_pos, 'y': target_world_pos}
-        data = TrapezPreprocessing.postprocessing(Data.from_dict(input))
+        data = TrapezPreprocessing.postprocessing(Data.from_dict(input).cpu())
         graph = self.build_graph(data, is_training=False)
 
-        prediction, cur_position, cur_velocity = self.update(data, self(graph)[mask])
+        prediction, cur_position, cur_velocity = self.update(data.to(device), self(graph)[mask])
         next_pos = target_world_pos
         next_pos[mask] = prediction
 
