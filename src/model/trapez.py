@@ -152,8 +152,8 @@ class TrapezModel(AbstractSystemModel):
         node_type = initial_state['node_type']
         mask = torch.where(node_type == NodeType.MESH)[0].to(device)
 
-        cur_pos = torch.squeeze(initial_state['pos'], 0)
-        target_pos = trajectory['y']
+        cur_pos = torch.squeeze(initial_state['pos'], 0).to(device)
+        target_pos = trajectory['y'].to(device)
         pred_trajectory = []
         cur_positions = []
         cur_velocities = []
@@ -184,13 +184,8 @@ class TrapezModel(AbstractSystemModel):
         input = {**initial_state, 'pos': cur_pos, 'y': target_world_pos}
         data = TrapezPreprocessing.postprocessing(Data.from_dict(input))
         graph = self.build_graph(data, is_training=False)
-        print(data.get_device())
-        print(graph.get_device())
-        print(mask.get_device())
 
         prediction, cur_position, cur_velocity = self.update(data, self(graph)[mask])
-        print(prediction.get_device())
-        print(target_world_pos.get_device())
         next_pos = target_world_pos
         next_pos[mask] = prediction
 
