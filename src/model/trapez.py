@@ -123,10 +123,10 @@ class TrapezModel(AbstractSystemModel):
         # TODO: compute target with or without noise?
 
         target_velocity = self._output_normalizer(target_velocity, False)
-        error = self.loss_fn(target_velocity, pred_velocity)
+        error = self.loss_fn(target_velocity, pred_velocity).cpu()
 
         pred_position, _, _ = self.update(graph, pred_velocity)
-        pos_error = self.loss_fn(pred_position, graph.y[mask])
+        pos_error = self.loss_fn(pred_position, graph.y[mask]).cpu()
 
         return error, pos_error
 
@@ -174,7 +174,7 @@ class TrapezModel(AbstractSystemModel):
         }
 
         mse_loss_fn = torch.nn.MSELoss(reduction='none')
-        mse_loss = mse_loss_fn(trajectory['pos'][:num_steps], prediction)
+        mse_loss = mse_loss_fn(trajectory['pos'][:num_steps], prediction).cpu()
         mse_loss = torch.mean(torch.mean(mse_loss, dim=-1), dim=-1).detach()
 
         return traj_ops, mse_loss
