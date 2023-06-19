@@ -1,0 +1,10 @@
+numpy
+torch
+torch-geometric
+matplotlib
+PyYAML
+torch-cluster
+pandas
+tfrecord
+protobuf==3.20.0
+wandb
