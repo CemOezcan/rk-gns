@@ -174,7 +174,7 @@ class TrapezModel(AbstractSystemModel):
         }
 
         mse_loss_fn = torch.nn.MSELoss(reduction='none')
-        mse_loss = mse_loss_fn(trajectory['pos'][:num_steps], prediction).cpu()
+        mse_loss = mse_loss_fn(trajectory['pos'][:num_steps].cpu(), prediction.cpu()).cpu()
         mse_loss = torch.mean(torch.mean(mse_loss, dim=-1), dim=-1).detach()
 
         return traj_ops, mse_loss
