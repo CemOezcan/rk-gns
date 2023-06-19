@@ -8,7 +8,7 @@ import numpy as np
 from typing import Dict, Any, List, Union, Optional
 import numpy as np
 
-device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+device = torch.device('cpu')# torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 
 def detach(tensor: torch.Tensor) -> np.array:

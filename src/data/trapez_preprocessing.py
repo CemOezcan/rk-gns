@@ -246,7 +246,7 @@ class TrapezPreprocessing:
         obst_mask = torch.where(data.node_type == NodeType.COLLIDER)[0]
 
         # Add world edges
-        world_edges = torch_cluster.radius(data.y[mask], data.y[obst_mask], r=0.3, max_num_neighbors=100)
+        world_edges = torch_cluster.radius(data.pos[mask], data.pos[obst_mask], r=0.3, max_num_neighbors=100)
         row, col = world_edges[0], world_edges[1]
         row, col = row[row != col], col[row != col]
         world_edges = torch.stack([row, col], dim=0)
@@ -255,7 +255,7 @@ class TrapezPreprocessing:
         data.edge_index = torch.cat([data.edge_index, world_edges], dim=1)
         data.edge_type = torch.cat([data.edge_type, torch.tensor([2] * len(world_edges[0])).long()], dim=0)
 
-        ext_edges = torch_cluster.radius(data.y[mask], data.y[mask], r=0.3, max_num_neighbors=100)
+        ext_edges = torch_cluster.radius(data.pos[mask], data.pos[mask], r=0.3, max_num_neighbors=100)
         row, col = ext_edges[0], ext_edges[1]
         row, col = row[row != col], col[row != col]
         ext_edges = torch.stack([row, col], dim=0)
