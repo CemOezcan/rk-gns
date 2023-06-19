@@ -8,7 +8,7 @@ import torch
 import torch.nn.functional as F
 from torch_geometric.data import Data, Batch, HeteroData
 
-from src.data.trapez_preprocessing import TrapezPreprocessing
+from src.data.preprocessing import Preprocessing
 from src.util import util, test
 from src.modules.mesh_graph_nets import MeshGraphNets
 from src.modules.normalizer import Normalizer
@@ -30,14 +30,8 @@ class TrapezModel(AbstractSystemModel):
         self.loss_fn = torch.nn.MSELoss()
 
         self._output_normalizer = Normalizer(size=2, name='output_normalizer')
-        self._node_normalizer = Normalizer(size=5, name='node_normalizer')
-        self._node_dynamic_normalizer = Normalizer(size=1, name='node_dynamic_normalizer')
         self._mesh_edge_normalizer = Normalizer(size=10, name='mesh_edge_normalizer')
-        self._intra_edge_normalizer = Normalizer(size=7, name='intra_edge_normalizer')
-        self._inter_edge_normalizer = Normalizer(size=7, name='inter_edge_normalizer')
-        self._hyper_node_normalizer = Normalizer(size=3, name='hyper_node_normalizer')
 
-        self._model_type = 'flag'
         self.message_passing_steps = params.get('message_passing_steps')
         self.message_passing_aggregator = params.get('aggregation')
 
@@ -182,7 +176,7 @@ class TrapezModel(AbstractSystemModel):
     @torch.no_grad()
     def _step_fn(self, initial_state, cur_pos, trajectory, cur_positions, cur_velocities, target_world_pos, step, mask, num_steps):
         input = {**initial_state, 'pos': cur_pos, 'y': target_world_pos}
-        data = TrapezPreprocessing.postprocessing(Data.from_dict(input).cpu())
+        data = Preprocessing.postprocessing(Data.from_dict(input).cpu())
         graph = self.build_graph(data, is_training=False)
 
         prediction, cur_position, cur_velocity = self.update(data.to(device), self(graph)[mask])

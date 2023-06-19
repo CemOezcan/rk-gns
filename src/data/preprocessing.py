@@ -1,115 +1,301 @@
-import json
 import os
+import pickle
+from typing import Dict
+import torch_geometric.transforms as T
 
-import numpy as np
 import torch
-from src.util.util import device
-from src.util.types import ConfigDict, NodeType
+import torch_cluster
+from torch import Tensor
+from torch_geometric.data import Data
+from tqdm import tqdm
+
+from src.util.types import NodeType
 
 
-class Preprocessing():
+class Preprocessing:
 
-    def __init__(self, config: ConfigDict, split='train', split_and_preprocess=True, add_targets=True, in_dir=None):
-        self._split_and_preprocess_b = split_and_preprocess
-        self._add_targets_b = add_targets
-        self._add_noise_b = split == 'train'
-        self._network_config = config.get("model")
-        self._dataset_dir = in_dir
+    def __init__(self, split, path, raw):
+        self.euclidian_distance = True
 
-    def preprocess(self, raw_trajectory):
-        trajectory = self._process_trajectory(raw_trajectory)
-        return trajectory
+        self.hetero = False
+        self.use_poisson = False
+        self.split = split
+        self.path = path
+        self.raw = raw
 
-    def _load_model(self):
-        try:
-            with open(os.path.join(self._dataset_dir, 'meta.json'), 'r') as fp:
-                meta = json.loads(fp.read())
-            shapes = {}
-            dtypes = {}
-            types = {}
-            steps = meta['trajectory_length'] - 2
-            for key, field in meta['features'].items():
-                shapes[key] = field['shape']
-                dtypes[key] = field['dtype']
-                types[key] = field['type']
-        except FileNotFoundError as e:
-            print(e)
-            quit()
+        # dataset parameters
+        self.input_dataset = 'deformable_plate'
+        self.directory = os.path.join(self.path, self.input_dataset + '_' + self.split + '.pkl')
 
-        return shapes, dtypes, types, steps, meta
 
-    def _process_trajectory(self, trajectory_data):
-        shapes, dtypes, types, steps, meta = self._load_model()
-        trajectory = {}
+    def build_dataset_for_split(self):
+        print(f'Generating {self.split} data')
+        with open(self.directory, 'rb') as file:
+            rollout_data = pickle.load(file)
 
-        # decode bytes into corresponding dtypes
-        for key, value in trajectory_data.items():
-            raw_data = value#.tobytes()
-            mature_data = np.frombuffer(
-                raw_data, dtype=getattr(np, dtypes[key]))
-            mature_data = torch.from_numpy(mature_data).to(device)
-            reshaped_data = torch.reshape(mature_data, shapes[key])
+        trajectory_list = []
+        for index, trajectory in enumerate(tqdm(rollout_data)):
+            rollout_length = len(trajectory['nodes_grid'])
+            data_list = []
 
-            if types[key] == 'static':
-                reshaped_data = torch.tile(reshaped_data, (meta['trajectory_length'], 1, 1))
-            elif types[key] == 'dynamic_varlen':
-                pass
-            elif types[key] != 'dynamic':
-                raise ValueError('invalid data format')
-            trajectory[key] = reshaped_data
+            for timestep in range(rollout_length - 2):
+                data_timestep = self.prepare_data_for_trajectory(trajectory, timestep)
+                data = self.create_graph_from_raw(data_timestep)
 
-        if self._add_targets_b:
-            trajectory = self._add_targets(steps)(trajectory)
-        if self._split_and_preprocess_b:
-            trajectory = self._split_and_preprocess(steps)(trajectory)
-        return trajectory
+                if not self.raw:
+                    data = Preprocessing.postprocessing(Data.from_dict(data))
 
-    def _split_and_preprocess(self, steps):
-        noise_field = self._network_config['field']
-        noise_scale = self._network_config['noise']
-        noise_gamma = self._network_config['gamma']
+                data_list.append(data)
 
-        def element_operation(trajectory):
-            trajectory_steps = []
-            for i in range(steps):
-                trajectory_step = {}
-                for key, value in trajectory.items():
-                    trajectory_step[key] = value[i]
-                if self._add_noise_b:
-                    trajectory_step = Preprocessing._add_noise(trajectory_step, noise_field, noise_scale, noise_gamma)
-                trajectory_steps.append(trajectory_step)
-            return trajectory_steps
+            trajectory_list.append(data_list)
 
-        return element_operation
+        trajectory_list = self.squash_data(trajectory_list) if self.raw else self.split_data(trajectory_list)
+
+        return trajectory_list
+
+    def prepare_data_for_trajectory(self, data: Dict, timestep: int) -> Dict:
+        # Transpose: edge list to sender, receiver list
+        instance = dict()
+        instance['pcd_pos'] = torch.tensor(data["pcd_points"][timestep])
+        instance['target_pcd_pos'] = torch.tensor(data["pcd_points"][timestep + 1]).long()
+
+        instance['mesh_pos'] = torch.tensor(data["nodes_grid"][timestep])
+        instance['target_mesh_pos'] = torch.tensor(data["nodes_grid"][timestep + 1])
+        instance['init_mesh_pos'] = torch.tensor(data["nodes_grid"][0])
+        instance['mesh_edge_index'] = torch.tensor(data["edge_index_grid"].T).long()
+        instance['mesh_cells'] = torch.tensor(data["triangles_grid"]).long()
+
+        instance['target_collider_pos'] = torch.tensor(data["nodes_collider"][timestep + 1])
+        instance['collider_pos'] = torch.tensor(data["nodes_collider"][timestep])
+        instance['init_collider_pos'] = torch.tensor(data["nodes_collider"][0])
+        instance['collider_edge_index'] = torch.tensor(data["edge_index_collider"].T).long()
+        instance['collider_cells'] = torch.tensor(data["triangles_collider"]).long()
+
+        return instance
+
+    def create_graph_from_raw(self, input_data) -> Data:
+
+        # dictionary for positions
+        pos_dict = {'mesh': input_data['mesh_pos'], 'collider': input_data['collider_pos']}
+        init_pos_dict = {'mesh': input_data['init_mesh_pos'], 'collider': input_data['init_collider_pos']}
+        target_dict = {'mesh': input_data['target_mesh_pos'], 'collider': input_data['target_collider_pos']}
+
+        # build nodes features (one hot)
+        num_nodes = [values.shape[0] for values in pos_dict.values()]
+        x = self.build_one_hot_features(num_nodes)
+        node_type = self.build_type(num_nodes)
+
+        # # used if poisson ratio needed as input feature, but atm incompatible with Imputation training
+        poisson_ratio = torch.tensor([1.0])
+
+        # index shift dict for edge index matrix
+        index_shift_dict = {'mesh': 0, 'collider': num_nodes[0]}
+        mesh_edges = torch.cat((input_data['mesh_edge_index'], input_data['mesh_edge_index'][[1, 0]]), dim=1)
+        mesh_edges[:, :] += index_shift_dict['mesh']
+
+        collider_edges = torch.cat((input_data['collider_edge_index'], input_data['collider_edge_index'][[1, 0]]), dim=1)
+        collider_edges[:, :] += index_shift_dict['collider']
+
+        edge_index_dict = {('mesh', 0, 'mesh'): mesh_edges, ('collider', 1, 'collider'): collider_edges}
+
+        num_edges = [value.shape[1] for value in edge_index_dict.values()]
+        edge_attr = self.build_one_hot_features(num_edges)
+        edge_type = self.build_type(num_edges)
+
+        mesh_cells = input_data['mesh_cells'][:, :] + index_shift_dict['mesh']
+        collider_cells = input_data['collider_cells'][:, :] + index_shift_dict['collider']
+        cells_dict = {'mesh': mesh_cells, 'collider': collider_cells}
+
+        num_cells = [value.shape[0] for value in cells_dict.values()]
+        cell_type = self.build_type(num_cells)
+
+        # create node positions tensor and edge_index from dicts
+        pos = torch.cat(tuple(pos_dict.values()), dim=0)
+        init_pos = torch.cat(tuple(init_pos_dict.values()), dim=0)
+        target = torch.cat(tuple(target_dict.values()), dim=0)
+        edge_index = torch.cat(tuple(edge_index_dict.values()), dim=1)
+        cells = torch.cat(tuple(cells_dict.values()), dim=0)
+
+        # create data object for torch
+        data = {'x': x.float(),
+                'u': poisson_ratio,
+                'pos': pos.float(),
+                'init_pos': init_pos,
+                'edge_index': edge_index.long(),
+                'edge_attr': edge_attr.float(),
+                'cells': cells.long(),
+                'y': target.float(),
+                'y_old': input_data['mesh_pos'].float(),
+                'node_type': node_type,
+                'edge_type': edge_type,
+                'cell_type': cell_type}
+
+        return data
+
+    def squash_data(self, trajectories):
+        squashed_trajectories = list()
+        for trajectory in trajectories:
+            data_dict = dict()
+            for key in trajectory[0].keys():
+                data_dict[key] = torch.stack([data[key] for data in trajectory], dim=0)
+            squashed_trajectories.append(data_dict)
+
+        return squashed_trajectories
+
 
     @staticmethod
-    def _add_noise(frame, noise_field, noise_scale, noise_gamma):
-        zero_size = torch.zeros(
-            frame[noise_field].size(), dtype=torch.float32).to(device)
-        noise = torch.normal(zero_size, std=noise_scale).to(device)
-        other = torch.Tensor([NodeType.NORMAL.value]).to(device)
-        mask = torch.eq(frame['node_type'], other.int())[:, 0]
-        mask_sequence = []
-        for _ in range(noise.shape[1]):
-            mask_sequence.append(mask)
-        mask = torch.stack(mask_sequence, dim=1)
-        noise = torch.where(mask, noise, torch.zeros_like(noise))
-        frame[noise_field] += noise
-        frame['target|' + noise_field] += (1.0 - noise_gamma) * noise
-        return frame
+    def build_one_hot_features(num_per_type: list) -> Tensor:
+        """
+        Builds one-hot feature tensor indicating the edge/node type from numbers per type
+        Args:
+            num_per_type: List of numbers of nodes per type
 
-    def _add_targets(self, steps):
-        fields = self._network_config['field']
-        add_history = self._network_config['history']
+        Returns:
+            features: One-hot features Tensor
+        """
+        total_num = sum(num_per_type)
+        features = torch.zeros(total_num, len(num_per_type))
+        for typ in range(len(num_per_type)):
+            features[sum(num_per_type[0:typ]): sum(num_per_type[0:typ + 1]), typ] = 1
+        return features
 
-        def fn(trajectory):
-            out = {}
-            for key, val in trajectory.items():
-                out[key] = val[1:-1]
-                if key in fields:
-                    if add_history:
-                        out['prev|' + key] = val[0:-2]
-                    out['target|' + key] = val[2:]
-            return out
+    @staticmethod
+    def build_type(num_per_type: list) -> Tensor:
+        """
+        Build node or edge type tensor from list of numbers per type
+        Args:
+            num_per_type: list of numbers per type
 
-        return fn
+        Returns:
+            features: Tensor containing the type as number
+        """
+        total_num = sum(num_per_type)
+        features = torch.zeros(total_num)
+        for typ in range(len(num_per_type)):
+            features[sum(num_per_type[0:typ]): sum(num_per_type[0:typ + 1])] = typ
+        return features
+
+    @staticmethod
+    def split_data(trajectory_list: list, start_index=0) -> list:
+        """
+        Converts a list of trajectories (list of time step data) to a single sequential list of all time steps
+        Args:
+            trajectory_list: List of trajectories
+            start_index: Where to start a trajectory default: 0, at the beginning
+        Returns:
+            data_list: One list of all time steps
+        """
+        data_list = []
+        for trajectory in trajectory_list:
+            for index, data in enumerate(trajectory):
+                if index >= start_index:
+                    data_list.append(data)
+
+        return data_list
+
+    @staticmethod
+    def add_relative_mesh_positions(edge_attr: Tensor, edge_type: Tensor, input_mesh_edge_index: Tensor,
+                                    initial_mesh_positions: Tensor) -> Tensor:
+        """
+        Adds the relative mesh positions to the mesh edges (in contrast to the world edges) and zero anywhere else.
+        Refer to MGN by Pfaff et al. 2020 for more details.
+        Args:
+            edge_attr: Current edge features
+            edge_type: Tensor containing the edges types
+            input_mesh_edge_index: Mesh edge index tensor
+            initial_mesh_positions: Initial positions of the mesh nodes "mesh coordinates"
+
+        Returns:
+            edge_attr: updated edge features
+        """
+        indices = torch.where(edge_type == 0)[0]  # type 2: mesh edges
+        mesh_edge_index = input_mesh_edge_index
+        mesh_attr = Preprocessing.get_relative_mesh_positions(mesh_edge_index, initial_mesh_positions).float()
+        mesh_positions = torch.zeros(edge_attr.shape[0], mesh_attr.shape[1]).float()
+        mesh_positions[indices, :] = mesh_attr
+        edge_attr = torch.cat((edge_attr, mesh_positions), dim=1)
+        return edge_attr
+
+    @staticmethod
+    def get_relative_mesh_positions(mesh_edge_index: Tensor, mesh_positions: Tensor) -> Tensor:
+        """
+        Transform the positions of the mesh into a relative position encoding along with the Euclidean distance in the edges
+        Args:
+            mesh_edge_index: Tensor containing the mesh edge indices
+            mesh_positions: Tensor containing mesh positions
+
+        Returns:
+            edge_attr: Tensor containing the batched edge features
+        """
+        data = Data(pos=mesh_positions,
+                    edge_index=mesh_edge_index)
+        transforms = T.Compose([T.Cartesian(norm=False, cat=True), T.Distance(norm=False, cat=True)])
+        data = transforms(data)
+        return data.edge_attr
+
+    @staticmethod
+    def postprocessing(data):
+        mask = torch.where(data.node_type == NodeType.MESH)[0]
+        obst_mask = torch.where(data.node_type == NodeType.COLLIDER)[0]
+
+        # Add world edges
+        world_edges = torch_cluster.radius(data.pos[mask], data.pos[obst_mask], r=0.3, max_num_neighbors=100)
+        row, col = world_edges[0], world_edges[1]
+        row, col = row[row != col], col[row != col]
+        world_edges = torch.stack([row, col], dim=0)
+        world_edges[0, :] += len(mask)
+
+        data.edge_index = torch.cat([data.edge_index, world_edges], dim=1)
+        data.edge_type = torch.cat([data.edge_type, torch.tensor([2] * len(world_edges[0])).long()], dim=0)
+
+        ext_edges = torch_cluster.radius(data.pos[mask], data.pos[mask], r=0.3, max_num_neighbors=100)
+        row, col = ext_edges[0], ext_edges[1]
+        row, col = row[row != col], col[row != col]
+        ext_edges = torch.stack([row, col], dim=0)
+        ext_edges = Preprocessing.remove_duplicates_with_mesh_edges(data.edge_index, ext_edges)
+        data.edge_index = torch.cat([data.edge_index, ext_edges], dim=1)
+        data.edge_type = torch.cat([data.edge_type, torch.tensor([3] * len(ext_edges[0])).long()], dim=0)
+
+        values = [0] * 4
+        for key in data.edge_type:
+            values[int(key)] += 1
+
+        data.edge_attr = Preprocessing.build_one_hot_features(values)
+        mesh_edge_mask = torch.where(data.edge_type == 0)[0]
+        data.edge_attr = Preprocessing.add_relative_mesh_positions(data.edge_attr,
+                                                                   data.edge_type,
+                                                                         data.edge_index[:, mesh_edge_mask],
+                                                                   data.init_pos[mask])
+
+        return data
+
+    @staticmethod
+    def remove_duplicates_with_mesh_edges(mesh_edges: Tensor, world_edges: Tensor) -> Tensor:
+        """
+        Removes the duplicates with the mesh edges have of the world edges that are created using a nearset neighbor search. (only MGN)
+        To speed this up the adjacency matrices are used
+        Args:
+            mesh_edges: edge list of the mesh edges
+            world_edges: edge list of the world edges
+
+        Returns:
+            new_world_edges: updated world edges without duplicates
+        """
+        import torch_geometric.utils as utils
+        adj_mesh = utils.to_dense_adj(mesh_edges)
+        if world_edges.shape[1] > 0:
+            adj_world = utils.to_dense_adj(world_edges)
+        else:
+            adj_world = torch.zeros_like(adj_mesh)
+        if adj_world.shape[1] < adj_mesh.shape[1]:
+            padding_size = adj_mesh.shape[1] - adj_world.shape[1]
+            padding_mask = torch.nn.ConstantPad2d((0, padding_size, 0, padding_size), 0)
+            adj_world = padding_mask(adj_world)
+        elif adj_world.shape[1] > adj_mesh.shape[1]:
+            padding_size = adj_world.shape[1] - adj_mesh.shape[1]
+            padding_mask = torch.nn.ConstantPad2d((0, padding_size, 0, padding_size), 0)
+            adj_mesh = padding_mask(adj_mesh)
+        new_adj = adj_world - adj_mesh
+        new_adj[new_adj < 0] = 0
+        new_world_edges = utils.dense_to_sparse(new_adj)[0]
+        return new_world_edges

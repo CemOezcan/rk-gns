@@ -23,8 +23,8 @@ InputBatch = Union[Dict[Key, Tensor], Tensor, Batch, Data, HeteroData, None]
 OutputTensorDict = Dict[Key, Tensor]
 EdgeSet = collections.namedtuple('EdgeSet', ['name', 'features', 'senders', 'receivers'])
 MultiGraph = collections.namedtuple('MultiGraph', ['node_features', 'edge_sets'])
-AGGR_AGGR = "aggregation"
-CONCAT_AGGR = "concatenation"
+AGGR_AGGR = 'aggregation'
+CONCAT_AGGR = 'concatenation'
 
 class NodeType(enum.IntEnum):
     MESH = 0

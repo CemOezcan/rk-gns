@@ -26,16 +26,16 @@ class GraphNet(nn.Module):
 
     def _update_edges(self, graph: HeteroData):
         for position, (edge_type, edge_store) in enumerate(zip(graph.edge_types, graph.edge_stores)):
-            edge_attr = edge_store.get("edge_attr")
-            edge_indices = edge_store.get("edge_index")
+            edge_attr = edge_store.get('edge_attr')
+            edge_indices = edge_store.get('edge_index')
             source_indices, dest_indices = edge_indices
 
             source_node_type, _, dest_node_type = edge_type
             source_node_index = graph.node_types.index(source_node_type)
             dest_node_index = graph.node_types.index(dest_node_type)
 
-            edge_source_nodes = graph.node_stores[source_node_index]["x"][source_indices]
-            edge_dest_nodes = graph.node_stores[dest_node_index]["x"][dest_indices]
+            edge_source_nodes = graph.node_stores[source_node_index]['x'][source_indices]
+            edge_dest_nodes = graph.node_stores[dest_node_index]['x'][dest_indices]
 
             # concatenate everything
             aggregated_features = torch.cat([edge_source_nodes, edge_dest_nodes, edge_attr], 1)
@@ -45,7 +45,7 @@ class GraphNet(nn.Module):
                 global_features = graph.u[indices[source_indices]]
                 aggregated_features = torch.cat([aggregated_features, global_features], 1)
 
-            edge_store["edge_attr"] = torch.add(edge_attr, self.edge_models["".join(edge_type)](aggregated_features))
+            edge_store['edge_attr'] = torch.add(edge_attr, self.edge_models["".join(edge_type)](aggregated_features))
 
     def _update_nodes(self, graph: HeteroData):
         node_features = graph.node_stores[0].get('x')
@@ -71,14 +71,14 @@ class GraphNet(nn.Module):
         edge_feature_list = []
         node_feature_list = []
         for edge_type, edge_store in zip(graph.edge_types, graph.edge_stores):
-            edge_attr = edge_store.get("edge_attr")
-            source_indices, _ = edge_store.get("edge_index")
+            edge_attr = edge_store.get('edge_attr')
+            source_indices, _ = edge_store.get('edge_index')
             source_node_type, _, _ = edge_type
             indices = graph[source_node_type].batch
             edge_feature_list.append(self.aggregation(edge_attr, indices[source_indices], graph.u.shape[0]))
 
         for node_type, node_store in zip(graph.node_types, graph.node_stores):
-            node_attr = node_store.get("x")
+            node_attr = node_store.get('x')
             node_feature_list.append(self.aggregation(node_attr, graph[node_type].batch, graph.u.shape[0]))
 
         aggregated_edge_features = torch.cat(edge_feature_list, 1)

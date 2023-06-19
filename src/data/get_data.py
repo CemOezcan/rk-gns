@@ -1,13 +1,7 @@
 import os
-from typing import Tuple
-
-from tfrecord.torch import TFRecordDataset
-
 from torch_geometric.data import DataLoader
 
-from src.data.graph_loader import GraphDataLoader
 from src.data.preprocessing import Preprocessing
-from src.data.trapez_preprocessing import TrapezPreprocessing
 from src.util.util import device
 from src.util.types import *
 
@@ -31,15 +25,16 @@ def get_directories(dataset_name):
 
 
 def get_data(config: ConfigDict, split='train', split_and_preprocess=True, add_targets=True, raw=False):
-    dataset_name = get_from_nested_dict(config, list_of_keys=["task", "dataset"], raise_error=True)
+    dataset_name = get_from_nested_dict(config, list_of_keys=['task', 'dataset'], raise_error=True)
     in_dir, _ = get_directories(dataset_name)
 
     if dataset_name == 'trapez' or dataset_name == 'deformable_plate':
-        batch_size = get_from_nested_dict(config, list_of_keys=["task", "batch_size"], raise_error=True)
-        pp = TrapezPreprocessing(split, ROOT_DIR, raw)
+        directory, _ = get_directories(dataset_name)
+
+        pp = Preprocessing(split, directory, raw)
         train_data_list = pp.build_dataset_for_split()
         # TODO: shuffle
         trainloader = train_data_list if raw else DataLoader(train_data_list, shuffle=True, batch_size=1)
         return trainloader
     else:
-        raise NotImplementedError("Implement your data loading here!")
+        raise NotImplementedError('Implement your data loading here!')

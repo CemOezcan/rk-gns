@@ -355,8 +355,8 @@ class MeshSimulator(AbstractSimulator):
         """
         table = wandb.Table(dataframe=data_frame)
         wandb.log({name: table})
-        artifact = wandb.Artifact(f"{name}_artifact", type="dataset")
-        artifact.add(table, f"{name}_table")
+        artifact = wandb.Artifact(f'{name}_artifact', type='dataset')
+        artifact.add(table, f'{name}_table')
         artifact.add_file(path)
         wandb.log_artifact(artifact)
 
