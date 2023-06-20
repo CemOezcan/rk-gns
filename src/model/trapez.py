@@ -156,8 +156,8 @@ class TrapezModel(AbstractSystemModel):
                 self._step_fn(initial_state, cur_pos, pred_trajectory, cur_positions,
                               cur_velocities, target_pos[step], step, mask, num_steps)
 
-        prediction = torch.stack([x[:point_index].cpu() for x in pred_trajectory][:num_steps]).cpu()
-        gt_pos = torch.stack([t['pos'][:point_index].cpu() for t in trajectory][:num_steps]).cpu()
+        prediction = torch.stack([x[:point_index] for x in pred_trajectory][:num_steps]).cpu()
+        gt_pos = torch.stack([t['pos'][:point_index] for t in trajectory][:num_steps]).cpu()
 
         traj_ops = {
             'cells': trajectory[0]['cells'],
@@ -166,9 +166,10 @@ class TrapezModel(AbstractSystemModel):
             'gt_pos': gt_pos,
             'pred_pos': prediction
         }
+        mask = mask.cpu()
 
         mse_loss_fn = torch.nn.MSELoss(reduction='none')
-        mse_loss = mse_loss_fn(gt_pos[:, mask].cpu(), prediction[:, mask].cpu())
+        mse_loss = mse_loss_fn(gt_pos[:, mask], prediction[:, mask]).cpu()
         mse_loss = torch.mean(torch.mean(mse_loss, dim=-1), dim=-1).detach()
 
         return traj_ops, mse_loss
