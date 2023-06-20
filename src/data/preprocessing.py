@@ -2,7 +2,7 @@ import os
 import pickle
 from typing import Dict
 import torch_geometric.transforms as T
-
+import torch.nn.functional as F
 import torch
 import torch_cluster
 from torch import Tensor
@@ -49,7 +49,7 @@ class Preprocessing:
 
             trajectory_list.append(data_list)
 
-        trajectory_list = self.squash_data(trajectory_list) if self.raw else self.split_data(trajectory_list)
+        trajectory_list = trajectory_list if self.raw else self.split_data(trajectory_list)
 
         return trajectory_list
 
@@ -57,7 +57,13 @@ class Preprocessing:
         # Transpose: edge list to sender, receiver list
         instance = dict()
         instance['pcd_pos'] = torch.tensor(data["pcd_points"][timestep])
-        instance['target_pcd_pos'] = torch.tensor(data["pcd_points"][timestep + 1]).long()
+        instance['target_pcd_pos'] = torch.tensor(data["pcd_points"][timestep + 1])
+
+        index = instance['pcd_pos'].shape[0] - instance['target_pcd_pos'].shape[0]
+        if index > 0:
+            instance['target_pcd_pos'] = F.pad(instance['target_pcd_pos'], (0, 0, 0, index))
+        else:
+            instance['target_pcd_pos'] = instance['target_pcd_pos'][:instance['pcd_pos'].shape[0]]
 
         instance['mesh_pos'] = torch.tensor(data["nodes_grid"][timestep])
         instance['target_mesh_pos'] = torch.tensor(data["nodes_grid"][timestep + 1])
@@ -76,9 +82,9 @@ class Preprocessing:
     def create_graph_from_raw(self, input_data) -> Data:
 
         # dictionary for positions
-        pos_dict = {'mesh': input_data['mesh_pos'], 'collider': input_data['collider_pos']}
+        pos_dict = {'mesh': input_data['mesh_pos'], 'collider': input_data['collider_pos'], 'point': input_data['pcd_pos']}
         init_pos_dict = {'mesh': input_data['init_mesh_pos'], 'collider': input_data['init_collider_pos']}
-        target_dict = {'mesh': input_data['target_mesh_pos'], 'collider': input_data['target_collider_pos']}
+        target_dict = {'mesh': input_data['target_mesh_pos'], 'collider': input_data['target_collider_pos'], 'point': input_data['target_pcd_pos']}
 
         # build nodes features (one hot)
         num_nodes = [values.shape[0] for values in pos_dict.values()]
@@ -89,7 +95,7 @@ class Preprocessing:
         poisson_ratio = torch.tensor([1.0])
 
         # index shift dict for edge index matrix
-        index_shift_dict = {'mesh': 0, 'collider': num_nodes[0]}
+        index_shift_dict = {'mesh': 0, 'collider': num_nodes[0], 'point': num_nodes[0] + num_nodes[1]}
         mesh_edges = torch.cat((input_data['mesh_edge_index'], input_data['mesh_edge_index'][[1, 0]]), dim=1)
         mesh_edges[:, :] += index_shift_dict['mesh']
 
@@ -120,6 +126,7 @@ class Preprocessing:
         data = {'x': x.float(),
                 'u': poisson_ratio,
                 'pos': pos.float(),
+                'point_index': num_nodes[0] + num_nodes[1],
                 'init_pos': init_pos,
                 'edge_index': edge_index.long(),
                 'edge_attr': edge_attr.float(),
@@ -131,17 +138,6 @@ class Preprocessing:
                 'cell_type': cell_type}
 
         return data
-
-    def squash_data(self, trajectories):
-        squashed_trajectories = list()
-        for trajectory in trajectories:
-            data_dict = dict()
-            for key in trajectory[0].keys():
-                data_dict[key] = torch.stack([data[key] for data in trajectory], dim=0)
-            squashed_trajectories.append(data_dict)
-
-        return squashed_trajectories
-
 
     @staticmethod
     def build_one_hot_features(num_per_type: list) -> Tensor:
@@ -237,6 +233,7 @@ class Preprocessing:
     def postprocessing(data):
         mask = torch.where(data.node_type == NodeType.MESH)[0]
         obst_mask = torch.where(data.node_type == NodeType.COLLIDER)[0]
+        point_index = data.point_index
 
         # Add world edges
         world_edges = torch_cluster.radius(data.pos[mask], data.pos[obst_mask], r=0.3, max_num_neighbors=100)
@@ -256,7 +253,25 @@ class Preprocessing:
         data.edge_index = torch.cat([data.edge_index, ext_edges], dim=1)
         data.edge_type = torch.cat([data.edge_type, torch.tensor([3] * len(ext_edges[0])).long()], dim=0)
 
-        values = [0] * 4
+        world_edges = torch_cluster.radius(data.pos[point_index:], data.pos[obst_mask], r=0.08, max_num_neighbors=100)
+        row, col = world_edges[0], world_edges[1]
+        row, col = row[row != col], col[row != col]
+        world_edges = torch.stack([row, col], dim=0)
+        world_edges[0, :] += len(mask)
+        world_edges[1, :] += point_index
+
+        data.edge_index = torch.cat([data.edge_index, world_edges], dim=1)
+        data.edge_type = torch.cat([data.edge_type, torch.tensor([4] * len(world_edges[0])).long()], dim=0)
+
+        grounding_edges = torch_cluster.radius(data.pos[mask], data.pos[point_index:], r=0.08, max_num_neighbors=100)
+        row, col = grounding_edges[0], grounding_edges[1]
+        row, col = row[row != col], col[row != col]
+        grounding_edges = torch.stack([row, col], dim=0)
+        grounding_edges[0, :] += point_index
+        data.edge_index = torch.cat([data.edge_index, grounding_edges], dim=1)
+        data.edge_type = torch.cat([data.edge_type, torch.tensor([5] * len(grounding_edges[0])).long()], dim=0)
+
+        values = [0] * 6
         for key in data.edge_type:
             values[int(key)] += 1
 

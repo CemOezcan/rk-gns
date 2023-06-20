@@ -88,7 +88,6 @@ class TrapezModel(AbstractSystemModel):
 
         hetero_data.u = data.u
         hetero_data.pos = data.pos
-        hetero_data.batch = data.batch
         hetero_data.y = data.y
         hetero_data.to(device)
 
@@ -140,14 +139,15 @@ class TrapezModel(AbstractSystemModel):
     @torch.no_grad()
     def rollout(self, trajectory: Dict[str, Tensor], num_steps: int) -> Tuple[Dict[str, Tensor], Tensor]:
         """Rolls out a model trajectory."""
-        num_steps = trajectory['cells'].shape[0] if num_steps is None else num_steps
-        initial_state = {k: torch.squeeze(v, 0)[0] for k, v in trajectory.items()}
+        num_steps = len(trajectory) if num_steps is None else num_steps
+        initial_state = trajectory[0] # {k: torch.squeeze(v, 0)[0] for k, v in trajectory.items()}
 
         node_type = initial_state['node_type']
         mask = torch.where(node_type == NodeType.MESH)[0].to(device)
+        point_index = initial_state['point_index']
 
         cur_pos = torch.squeeze(initial_state['pos'], 0).to(device)
-        target_pos = trajectory['y'].to(device)
+        target_pos = [t['y'].to(device) for t in trajectory]
         pred_trajectory = []
         cur_positions = []
         cur_velocities = []
@@ -156,19 +156,19 @@ class TrapezModel(AbstractSystemModel):
                 self._step_fn(initial_state, cur_pos, pred_trajectory, cur_positions,
                               cur_velocities, target_pos[step], step, mask, num_steps)
 
-        prediction, cur_positions, cur_velocities = \
-            (torch.stack(pred_trajectory), torch.stack(cur_positions), torch.stack(cur_velocities))
+        prediction = torch.stack([x[:point_index] for x in pred_trajectory][:num_steps]).cpu()
+        gt_pos = torch.stack([t['pos'][:point_index] for t in trajectory][:num_steps]).cpu()
 
         traj_ops = {
-            'cells': trajectory['cells'][0],
-            'cell_type': trajectory['cell_type'][0],
+            'cells': trajectory[0]['cells'],
+            'cell_type': trajectory[0]['cell_type'],
             'node_type': node_type,
-            'gt_pos': trajectory['pos'],
+            'gt_pos': gt_pos,
             'pred_pos': prediction
         }
 
         mse_loss_fn = torch.nn.MSELoss(reduction='none')
-        mse_loss = mse_loss_fn(trajectory['pos'][:num_steps].cpu(), prediction.cpu()).cpu()
+        mse_loss = mse_loss_fn(gt_pos[:, mask], prediction[:, mask]).cpu()
         mse_loss = torch.mean(torch.mean(mse_loss, dim=-1), dim=-1).detach()
 
         return traj_ops, mse_loss
@@ -192,10 +192,10 @@ class TrapezModel(AbstractSystemModel):
     def n_step_computation(self, trajectory: Dict[str, Tensor], n_step: int, num_timesteps=None) -> Tuple[Tensor, Tensor]:
         mse_losses = list()
         last_losses = list()
-        num_timesteps = trajectory['cells'].shape[0] if num_timesteps is None else num_timesteps
+        num_timesteps = len(trajectory) if num_timesteps is None else num_timesteps
         for step in range(num_timesteps - n_step):
             # TODO: clusters/balancers are reset when computing n_step loss
-            eval_traj = {k: v[step: step + n_step + 1] for k, v in trajectory.items()}
+            eval_traj = trajectory[step: step + n_step + 1]
             prediction_trajectory, mse_loss = self.rollout(eval_traj, n_step + 1)
             mse_losses.append(torch.mean(mse_loss).cpu())
             last_losses.append(mse_loss.cpu()[-1])
