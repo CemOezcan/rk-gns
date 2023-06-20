@@ -99,19 +99,21 @@ class MeshTask(AbstractTask):
         start_epoch = self._current_epoch
         for e in trange(start_epoch, self._epochs, desc='Epochs', leave=True):
             task_name = f'{self._task_name}{e + 1}'
-
             self._algorithm.fit_iteration(train_dataloader=self.train_loader)
-            one_step = self._algorithm.one_step_evaluator(self._valid_loader, self._num_val_trajectories, task_name)
-            rollout = self._algorithm.rollout_evaluator(self._test_loader, self._num_val_rollouts, task_name)
-            n_step = self._algorithm.n_step_evaluator(self._test_loader, task_name, n_steps=self._val_n_steps, n_traj=self._num_val_n_step_rollouts)
 
-            dir_dict = self.select_plotting(task_name)
+            if (e + 1) % 10 == 0:
+                one_step = self._algorithm.one_step_evaluator(self._valid_loader, self._num_val_trajectories, task_name)
+                rollout = self._algorithm.rollout_evaluator(self._test_loader, self._num_val_rollouts, task_name)
+                n_step = self._algorithm.n_step_evaluator(self._test_loader, task_name, n_steps=self._val_n_steps, n_traj=self._num_val_n_step_rollouts)
 
-            animation = {f"video_{key}": wandb.Video(value, fps=5, format="gif") for key, value in dir_dict.items()}
-            data = {k: v for dictionary in [one_step, rollout, n_step, animation] for k, v in dictionary.items()}
-            data['epoch'] = e + 1
-            self._algorithm.save(task_name)
-            self._algorithm.log_epoch(data)
+                dir_dict = self.select_plotting(task_name)
+
+                animation = {f"video_{key}": wandb.Video(value, fps=5, format="gif") for key, value in dir_dict.items()}
+                data = {k: v for dictionary in [one_step, rollout, n_step, animation] for k, v in dictionary.items()}
+                data['epoch'] = e + 1
+                self._algorithm.save(task_name)
+                self._algorithm.log_epoch(data)
+
             self._current_epoch = e + 1
 
     def get_scalars(self) -> None:
