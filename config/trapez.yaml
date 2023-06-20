@@ -33,7 +33,7 @@ params:
     scheduler_epoch: 10
     aggregation: pna
     learning_rate: 1.0e-4
-    message_passing_steps: 2
+    message_passing_steps: 5
     use_global: False
     heterogeneous: False
   logging:
