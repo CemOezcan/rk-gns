@@ -59,11 +59,12 @@ class Preprocessing:
         instance['pcd_pos'] = torch.tensor(data["pcd_points"][timestep])
         instance['target_pcd_pos'] = torch.tensor(data["pcd_points"][timestep + 1])
 
-        index = instance['pcd_pos'].shape[0] - instance['target_pcd_pos'].shape[0]
-        if index > 0:
-            instance['target_pcd_pos'] = F.pad(instance['target_pcd_pos'], (0, 0, 0, index))
-        else:
-            instance['target_pcd_pos'] = instance['target_pcd_pos'][:instance['pcd_pos'].shape[0]]
+        if not self.raw:
+            index = instance['pcd_pos'].shape[0] - instance['target_pcd_pos'].shape[0]
+            if index > 0:
+                instance['target_pcd_pos'] = F.pad(instance['target_pcd_pos'], (0, 0, 0, index))
+            else:
+                instance['target_pcd_pos'] = instance['target_pcd_pos'][:instance['pcd_pos'].shape[0]]
 
         instance['mesh_pos'] = torch.tensor(data["nodes_grid"][timestep])
         instance['target_mesh_pos'] = torch.tensor(data["nodes_grid"][timestep + 1])
