@@ -38,6 +38,9 @@ class Preprocessing:
             rollout_length = len(trajectory['nodes_grid'])
             data_list = []
 
+            if index > 10:
+                break
+
             for timestep in range(rollout_length - 2):
                 data_timestep = self.prepare_data_for_trajectory(trajectory, timestep)
                 data = self.create_graph_from_raw(data_timestep)

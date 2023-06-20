@@ -142,8 +142,6 @@ class TrapezModel(AbstractSystemModel):
         num_steps = len(trajectory) if num_steps is None else num_steps
         initial_state = trajectory[0] # {k: torch.squeeze(v, 0)[0] for k, v in trajectory.items()}
 
-        node_type = initial_state['node_type']
-        mask = torch.where(node_type == NodeType.MESH)[0].to(device)
         point_index = initial_state['point_index']
 
         cur_pos = torch.squeeze(initial_state['pos'], 0).to(device)
@@ -152,6 +150,8 @@ class TrapezModel(AbstractSystemModel):
         cur_positions = []
         cur_velocities = []
         for step in range(num_steps):
+            node_type = trajectory[step]['node_type']
+            mask = torch.where(node_type == NodeType.MESH)[0].to(device)
             cur_pos,  pred_trajectory, cur_positions, cur_velocities = \
                 self._step_fn(initial_state, cur_pos, pred_trajectory, cur_positions,
                               cur_velocities, target_pos[step], step, mask, num_steps)
@@ -177,11 +177,17 @@ class TrapezModel(AbstractSystemModel):
     @torch.no_grad()
     def _step_fn(self, initial_state, cur_pos, trajectory, cur_positions, cur_velocities, target_world_pos, step, mask, num_steps):
         input = {**initial_state, 'pos': cur_pos, 'y': target_world_pos}
+        index = input['pos'].shape[0] - input['y'].shape[0]
+        if index > 0:
+            input['y'] = F.pad(input['y'], (0, 0, 0, index))
+        else:
+            input['y'] = input['y'][:input['pos'].shape[0]]
+
         data = Preprocessing.postprocessing(Data.from_dict(input).cpu())
         graph = self.build_graph(data, is_training=False)
 
         prediction, cur_position, cur_velocity = self.update(data.to(device), self(graph)[mask])
-        next_pos = target_world_pos
+        next_pos = graph.y
         next_pos[mask] = prediction
 
         trajectory.append(next_pos)
