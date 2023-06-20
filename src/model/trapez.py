@@ -147,6 +147,7 @@ class TrapezModel(AbstractSystemModel):
 
         cur_pos = torch.squeeze(initial_state['pos'], 0).to(device)
         target_pos = [t['y'].to(device) for t in trajectory]
+        features = [t['x'].to(device) for t in trajectory]
         pred_trajectory = []
         cur_positions = []
         cur_velocities = []
@@ -155,7 +156,7 @@ class TrapezModel(AbstractSystemModel):
             mask = torch.where(node_type == NodeType.MESH)[0].to(device)
             cur_pos,  pred_trajectory, cur_positions, cur_velocities = \
                 self._step_fn(initial_state, cur_pos, pred_trajectory, cur_positions,
-                              cur_velocities, target_pos[step], step, mask, num_steps)
+                              cur_velocities, target_pos[step], features[step], mask, num_steps)
 
         prediction = torch.stack([x[:point_index] for x in pred_trajectory][:num_steps]).cpu()
         gt_pos = torch.stack([t['pos'][:point_index] for t in trajectory][:num_steps]).cpu()
@@ -176,14 +177,14 @@ class TrapezModel(AbstractSystemModel):
         return traj_ops, mse_loss
 
     @torch.no_grad()
-    def _step_fn(self, initial_state, cur_pos, trajectory, cur_positions, cur_velocities, target_world_pos, step, mask, num_steps):
-        next_pos = target_world_pos
-        input = {**initial_state, 'pos': cur_pos, 'y': target_world_pos}
-        index = input['pos'].shape[0] - input['y'].shape[0]
-        if index > 0:
-            input['y'] = F.pad(input['y'], (0, 0, 0, index))
-        else:
-            input['y'] = input['y'][:input['pos'].shape[0]]
+    def _step_fn(self, initial_state, cur_pos, trajectory, cur_positions, cur_velocities, target_world_pos, x, mask, num_steps):
+        next_pos = copy.deepcopy(target_world_pos)
+        input = {**initial_state, 'x': x, 'pos': cur_pos, 'y': target_world_pos}
+        #index = input['pos'].shape[0] - input['y'].shape[0]
+        #if index > 0:
+        #    input['y'] = F.pad(input['y'], (0, 0, 0, index))
+        #else:
+        #    input['y'] = input['y'][:input['pos'].shape[0]]
 
         data = Preprocessing.postprocessing(Data.from_dict(input).cpu())
         graph = self.build_graph(data, is_training=False)
