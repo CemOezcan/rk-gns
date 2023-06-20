@@ -123,9 +123,6 @@ class GraphNet(nn.Module):
         assert all([i in data.shape for i in segment_ids.shape]
                    ), "segment_ids.shape should be a prefix of data.shape"
 
-        shape = [num_segments] + list(data.shape[1:])
-        result = torch.zeros(*shape).to(device)
-
         if operation == 'sum':
             result = scatter(data.float(), segment_ids, dim=0, dim_size=num_segments, reduce='add')
         elif operation == 'max':
