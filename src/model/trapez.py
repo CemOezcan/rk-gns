@@ -59,14 +59,13 @@ class TrapezModel(AbstractSystemModel):
 
     def build_graph(self, data: Data, is_training: bool) -> Data:
         """Builds input graph."""
-        data.cpu()# to(device)
+        data.to(device)
         if is_training:
             #data = self.add_pointcloud_dropout(data, self.pointcloud_dropout, self.hetero, self.use_world_edges)
             #data.to(device)
             data = self.add_noise_to_mesh_nodes(data, self.input_mesh_noise, device)
         data = self.add_noise_to_pcd_points(data, self.input_pcd_noise, device)
         data = self.transform_position_to_edges(data, self.euclidian_distance)
-        data.to(device)
         data.edge_attr = self._mesh_edge_normalizer(data.edge_attr, is_training)
 
         edge_index = data.edge_index
@@ -227,7 +226,7 @@ class TrapezModel(AbstractSystemModel):
             indices = torch.where(data.node_type == NodeType.MESH)[0]
             num_noise_features = data.pos.shape[1]
             num_node_features = data.pos.shape[1]
-            noise = (torch.randn(indices.shape[0], num_noise_features) * sigma)# .to(device)
+            noise = (torch.randn(indices.shape[0], num_noise_features) * sigma).to(device)
             data.pos[indices, num_node_features - num_noise_features:num_node_features] = \
                 data.pos[indices, num_node_features - num_noise_features:num_node_features] + noise
 
@@ -250,7 +249,7 @@ class TrapezModel(AbstractSystemModel):
             indices = torch.where(data.node_type == NodeType.MESH)[0]
             num_noise_features = data.pos.shape[1]
             num_node_features = data.pos.shape[1]
-            noise = (torch.randn(indices.shape[0], num_noise_features) * sigma)# .to(device)
+            noise = (torch.randn(indices.shape[0], num_noise_features) * sigma).to(device)
             data.pos[indices, num_node_features - num_noise_features:num_node_features] = data.pos[indices,
                                                                                           num_node_features - num_noise_features:num_node_features] + noise
         return data
