@@ -54,7 +54,7 @@ class TrapezModel(AbstractSystemModel):
         self.hetero = False
         self.use_world_edges = False
         self.input_mesh_noise = 0.03
-        self.input_pcd_noise = 0.03
+        self.input_pcd_noise = 0.01
         self.euclidian_distance = True
 
     def build_graph(self, data: Data, is_training: bool) -> Data:
@@ -64,7 +64,7 @@ class TrapezModel(AbstractSystemModel):
             #data = self.add_pointcloud_dropout(data, self.pointcloud_dropout, self.hetero, self.use_world_edges)
             #data.to(device)
             data = self.add_noise_to_mesh_nodes(data, self.input_mesh_noise, device)
-        #data = self.add_noise_to_pcd_points(data, self.input_pcd_noise, device)
+        data = self.add_noise_to_pcd_points(data, self.input_pcd_noise, device)
         data = self.transform_position_to_edges(data, self.euclidian_distance)
         data.edge_attr = self._mesh_edge_normalizer(data.edge_attr, is_training)
 
