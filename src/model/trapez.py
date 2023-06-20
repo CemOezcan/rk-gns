@@ -66,6 +66,7 @@ class TrapezModel(AbstractSystemModel):
             data = self.add_noise_to_mesh_nodes(data, self.input_mesh_noise, device)
         data = self.add_noise_to_pcd_points(data, self.input_pcd_noise, device)
         data = self.transform_position_to_edges(data, self.euclidian_distance)
+        data.to(device)
         data.edge_attr = self._mesh_edge_normalizer(data.edge_attr, is_training)
 
         edge_index = data.edge_index
