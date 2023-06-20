@@ -226,7 +226,7 @@ class TrapezModel(AbstractSystemModel):
             indices = torch.where(data.node_type == NodeType.MESH)[0]
             num_noise_features = data.pos.shape[1]
             num_node_features = data.pos.shape[1]
-            noise = (torch.randn(indices.shape[0], num_noise_features) * sigma).to(device)
+            noise = (torch.randn(indices.shape[0], num_noise_features) * sigma)# .to(device)
             data.pos[indices, num_node_features - num_noise_features:num_node_features] = \
                 data.pos[indices, num_node_features - num_noise_features:num_node_features] + noise
 
@@ -249,7 +249,7 @@ class TrapezModel(AbstractSystemModel):
             indices = torch.where(data.node_type == NodeType.MESH)[0]
             num_noise_features = data.pos.shape[1]
             num_node_features = data.pos.shape[1]
-            noise = (torch.randn(indices.shape[0], num_noise_features) * sigma).to(device)
+            noise = (torch.randn(indices.shape[0], num_noise_features) * sigma)# .to(device)
             data.pos[indices, num_node_features - num_noise_features:num_node_features] = data.pos[indices,
                                                                                           num_node_features - num_noise_features:num_node_features] + noise
         return data
