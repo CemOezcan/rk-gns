@@ -54,7 +54,7 @@ class TrapezModel(AbstractSystemModel):
         self.hetero = False
         self.use_world_edges = False
         self.input_mesh_noise = 0.03
-        self.input_pcd_noise = 0.01
+        self.input_pcd_noise = 0.03
         self.euclidian_distance = True
 
     def build_graph(self, data: Data, is_training: bool) -> Data:
