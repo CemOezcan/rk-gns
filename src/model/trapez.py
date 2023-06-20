@@ -59,7 +59,7 @@ class TrapezModel(AbstractSystemModel):
 
     def build_graph(self, data: Data, is_training: bool) -> Data:
         """Builds input graph."""
-        data.to(device)
+        data.cpu()# to(device)
         if is_training:
             #data = self.add_pointcloud_dropout(data, self.pointcloud_dropout, self.hetero, self.use_world_edges)
             #data.to(device)
