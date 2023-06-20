@@ -2,7 +2,7 @@ name: "DEFAULT"   # MUST BE DEFAULT
 import_path: "default.yaml"
 
 params:
-  retrain: False # Start training a new model if True. Continue training the most recent version of the model if False.
+  retrain: True # Start training a new model if True. Continue training the most recent version of the model if False.
   task:
     task: mesh
     dataset: deformable_plate
