@@ -90,6 +90,7 @@ class TrapezModel(AbstractSystemModel):
         hetero_data.u = data.u
         hetero_data.pos = data.pos
         hetero_data.y = data.y
+        hetero_data.next_pos = data.next_pos
         hetero_data.to(device)
 
         return hetero_data
@@ -101,7 +102,7 @@ class TrapezModel(AbstractSystemModel):
         mask = torch.where(graph.node_type == NodeType.MESH)[0]
 
         pred_velocity = self(graph)[mask]
-        target_velocity = graph.y[mask] - graph.pos[mask]
+        target_velocity = graph.y - graph.pos[mask]
 
         target_velocity = self._output_normalizer(target_velocity, True)
         loss = self.loss_fn(target_velocity, pred_velocity)
@@ -113,14 +114,14 @@ class TrapezModel(AbstractSystemModel):
         mask = torch.where(graph.node_type == NodeType.MESH)[0]
 
         pred_velocity = self(graph)[mask]
-        target_velocity = graph.y[mask] - graph.pos[mask]
+        target_velocity = graph.y - graph.pos[mask]
         # TODO: compute target with or without noise?
 
         target_velocity = self._output_normalizer(target_velocity, False)
         error = self.loss_fn(target_velocity, pred_velocity).cpu()
 
         pred_position, _, _ = self.update(graph, pred_velocity)
-        pos_error = self.loss_fn(pred_position, graph.y[mask]).cpu()
+        pos_error = self.loss_fn(pred_position, graph.y).cpu()
 
         return error, pos_error
 
@@ -146,7 +147,7 @@ class TrapezModel(AbstractSystemModel):
         point_index = initial_state['point_index']
 
         cur_pos = torch.squeeze(initial_state['pos'], 0).to(device)
-        target_pos = [t['y'].to(device) for t in trajectory]
+        target_pos = [t['next_pos'].to(device) for t in trajectory]
         features = [t['x'].to(device) for t in trajectory]
         pred_trajectory = []
         cur_positions = []
@@ -179,12 +180,7 @@ class TrapezModel(AbstractSystemModel):
     @torch.no_grad()
     def _step_fn(self, initial_state, cur_pos, trajectory, cur_positions, cur_velocities, target_world_pos, x, mask, num_steps):
         next_pos = copy.deepcopy(target_world_pos)
-        input = {**initial_state, 'x': x, 'pos': cur_pos, 'y': target_world_pos}
-        #index = input['pos'].shape[0] - input['y'].shape[0]
-        #if index > 0:
-        #    input['y'] = F.pad(input['y'], (0, 0, 0, index))
-        #else:
-        #    input['y'] = input['y'][:input['pos'].shape[0]]
+        input = {**initial_state, 'x': x, 'pos': cur_pos, 'next_pos': target_world_pos, 'y': target_world_pos[mask]}
 
         data = Preprocessing.postprocessing(Data.from_dict(input).cpu())
         graph = self.build_graph(data, is_training=False)

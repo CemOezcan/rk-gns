@@ -59,13 +59,6 @@ class Preprocessing:
         instance['pcd_pos'] = torch.tensor(data["pcd_points"][timestep])
         instance['target_pcd_pos'] = torch.tensor(data["pcd_points"][timestep + 1])
 
-        if not self.raw:
-            index = instance['pcd_pos'].shape[0] - instance['target_pcd_pos'].shape[0]
-            if index > 0:
-                instance['target_pcd_pos'] = F.pad(instance['target_pcd_pos'], (0, 0, 0, index))
-            else:
-                instance['target_pcd_pos'] = instance['target_pcd_pos'][:instance['pcd_pos'].shape[0]]
-
         instance['mesh_pos'] = torch.tensor(data["nodes_grid"][timestep])
         instance['target_mesh_pos'] = torch.tensor(data["nodes_grid"][timestep + 1])
         instance['init_mesh_pos'] = torch.tensor(data["nodes_grid"][0])
@@ -127,12 +120,13 @@ class Preprocessing:
         data = {'x': x.float(),
                 'u': poisson_ratio,
                 'pos': pos.float(),
+                'next_pos': target.float(),
                 'point_index': num_nodes[0] + num_nodes[1],
                 'init_pos': init_pos,
                 'edge_index': edge_index.long(),
                 'edge_attr': edge_attr.float(),
                 'cells': cells.long(),
-                'y': target.float(),
+                'y': target[:index_shift_dict['collider']].float(),
                 'y_old': input_data['mesh_pos'].float(),
                 'node_type': node_type,
                 'edge_type': edge_type,
