@@ -1,3 +1,4 @@
+import copy
 import os
 import pickle
 from typing import Dict
@@ -248,6 +249,9 @@ class Preprocessing:
         data.edge_index = torch.cat([data.edge_index, ext_edges], dim=1)
         data.edge_type = torch.cat([data.edge_type, torch.tensor([3] * len(ext_edges[0])).long()], dim=0)
 
+        data_mgn = copy.deepcopy(data)
+        old_edges = data_mgn.edge_type.shape[0]
+
         world_edges = torch_cluster.radius(data.pos[point_index:], data.pos[obst_mask], r=0.08, max_num_neighbors=100)
         row, col = world_edges[0], world_edges[1]
         row, col = row[row != col], col[row != col]
@@ -276,8 +280,9 @@ class Preprocessing:
                                                                    data.edge_type,
                                                                          data.edge_index[:, mesh_edge_mask],
                                                                    data.init_pos[mask])
+        data_mgn.edge_attr = data.edge_attr[:old_edges]
 
-        return data
+        return data, data_mgn
 
     @staticmethod
     def remove_duplicates_with_mesh_edges(mesh_edges: Tensor, world_edges: Tensor) -> Tensor:

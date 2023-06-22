@@ -1,6 +1,6 @@
 import copy
 import math
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Union
 
 import torch_cluster
 import torch_geometric.transforms as T
@@ -58,8 +58,16 @@ class TrapezModel(AbstractSystemModel):
         self.input_pcd_noise = 0.01
         self.euclidian_distance = True
 
-    def build_graph(self, data: Data, is_training: bool) -> Data:
+    def build_graph(self, data: Data, is_training: bool, keep_point_cloud: Union[bool, None] = None) -> Data:
         """Builds input graph."""
+        if keep_point_cloud is None:
+            x = np.random.rand(1)
+            data = data[0] if x < 0.2 else data[1]
+        elif keep_point_cloud:
+            data = data[0]
+        else:
+            data = data[1]
+
         data.to(device)
         if is_training:
             #data = self.add_pointcloud_dropout(data, self.pointcloud_dropout, self.hetero, self.use_world_edges)
@@ -157,7 +165,7 @@ class TrapezModel(AbstractSystemModel):
             mask = torch.where(node_type == NodeType.MESH)[0].to(device)
             cur_pos,  pred_trajectory, cur_positions, cur_velocities = \
                 self._step_fn(initial_state, cur_pos, pred_trajectory, cur_positions,
-                              cur_velocities, target_pos[step], features[step], mask, num_steps)
+                              cur_velocities, target_pos[step], features[step], mask, step)
 
         prediction = torch.stack([x[:point_index] for x in pred_trajectory][:num_steps]).cpu()
         gt_pos = torch.stack([t['pos'][:point_index] for t in trajectory][:num_steps]).cpu()
@@ -178,12 +186,14 @@ class TrapezModel(AbstractSystemModel):
         return traj_ops, mse_loss
 
     @torch.no_grad()
-    def _step_fn(self, initial_state, cur_pos, trajectory, cur_positions, cur_velocities, target_world_pos, x, mask, num_steps):
+    def _step_fn(self, initial_state, cur_pos, trajectory, cur_positions, cur_velocities, target_world_pos, x, mask, step):
         next_pos = copy.deepcopy(target_world_pos)
         input = {**initial_state, 'x': x, 'pos': cur_pos, 'next_pos': target_world_pos, 'y': target_world_pos[mask]}
 
         data = Preprocessing.postprocessing(Data.from_dict(input).cpu())
-        graph = self.build_graph(data, is_training=False)
+        keep_pc = step % 5 == 0
+        graph = self.build_graph(data, is_training=False, keep_point_cloud=keep_pc)
+        data = data[0] if keep_pc else data[1]
 
         prediction, cur_position, cur_velocity = self.update(data.to(device), self(graph)[mask])
         next_pos[mask] = prediction
