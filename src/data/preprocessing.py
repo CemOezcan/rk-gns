@@ -15,11 +15,10 @@ from src.util.types import NodeType
 
 class Preprocessing:
 
-    def __init__(self, split, path, raw):
-        self.euclidian_distance = True
+    def __init__(self, split, path, raw, config):
 
-        self.hetero = False
-        self.use_poisson = False
+        self.hetero = config.get('model').get('heterogeneous')
+        self.use_poisson = config.get('model').get('poisson_ratio')
         self.split = split
         self.path = path
         self.raw = raw
@@ -89,7 +88,7 @@ class Preprocessing:
         node_type = self.build_type(num_nodes)
 
         # # used if poisson ratio needed as input feature, but atm incompatible with Imputation training
-        poisson_ratio = input_data['poisson_ratio']
+        poisson_ratio = input_data['poisson_ratio'] if self.use_poisson else torch.tensor([0.0]).reshape(-1, 1)
 
         # index shift dict for edge index matrix
         index_shift_dict = {'mesh': 0, 'collider': num_nodes[0], 'point': num_nodes[0] + num_nodes[1]}

@@ -48,21 +48,22 @@ class TrapezModel(AbstractSystemModel):
             edge_sets=self._edge_sets,
             node_sets=self._node_sets,
             dec=self._node_sets[0],
-            use_global=True
+            use_global=params.get('use_global')
         ).to(device)
 
-        self.pointcloud_dropout = 1
-        self.hetero = False
-        self.use_world_edges = False
-        self.input_mesh_noise = 0.03
-        self.input_pcd_noise = 0.01
-        self.euclidian_distance = True
+        self.pc_frequency = params.get('pc_frequency')
+        self.mgn = params.get('mgn')
+        self.hetero = params.get('heterogeneous')
+        self.input_mesh_noise = params.get('noise')
+        self.input_pcd_noise = params.get('pc_noise')
 
     def build_graph(self, data: Data, is_training: bool, keep_point_cloud: Union[bool, None] = None) -> Data:
         """Builds input graph."""
-        if keep_point_cloud is None:
+        if self.mgn:
+            data = data[1]
+        elif keep_point_cloud is None:
             x = np.random.rand(1)
-            data = data[0] if x < 0.2 else data[1]
+            data = data[0] if x < self.pc_frequency else data[1]
         elif keep_point_cloud:
             data = data[0]
         else:
@@ -70,8 +71,6 @@ class TrapezModel(AbstractSystemModel):
 
         data.to(device)
         if is_training:
-            #data = self.add_pointcloud_dropout(data, self.pointcloud_dropout, self.hetero, self.use_world_edges)
-            #data.to(device)
             data = self.add_noise_to_mesh_nodes(data, self.input_mesh_noise, device)
         data = self.add_noise_to_pcd_points(data, self.input_pcd_noise, device)
         data = self.transform_position_to_edges(data, self.euclidian_distance)
@@ -191,7 +190,7 @@ class TrapezModel(AbstractSystemModel):
         input = {**initial_state, 'x': x, 'pos': cur_pos, 'next_pos': target_world_pos, 'y': target_world_pos[mask]}
 
         data = Preprocessing.postprocessing(Data.from_dict(input).cpu())
-        keep_pc = step % 5 == 0
+        keep_pc = False if self.mgn else step % self.pc_frequency == 0
         graph = Batch.from_data_list([self.build_graph(data, is_training=False, keep_point_cloud=keep_pc)])
         data = data[0] if keep_pc else data[1]
 
