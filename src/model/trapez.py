@@ -51,6 +51,7 @@ class TrapezModel(AbstractSystemModel):
             use_global=params.get('use_global')
         ).to(device)
 
+        self.euclidian_distance = True
         self.pc_frequency = params.get('pc_frequency')
         self.mgn = params.get('mgn')
         self.hetero = params.get('heterogeneous')
