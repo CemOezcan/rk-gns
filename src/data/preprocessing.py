@@ -38,6 +38,8 @@ class Preprocessing:
         for index, trajectory in enumerate(tqdm(rollout_data)):
             rollout_length = len(trajectory['nodes_grid'])
             data_list = []
+            if index > 5:
+                break
 
             for timestep in range(rollout_length - 2):
                 data_timestep = self.prepare_data_for_trajectory(trajectory, timestep)
@@ -57,20 +59,22 @@ class Preprocessing:
     def prepare_data_for_trajectory(self, data: Dict, timestep: int) -> Dict:
         # Transpose: edge list to sender, receiver list
         instance = dict()
-        instance['pcd_pos'] = torch.tensor(data["pcd_points"][timestep])
-        instance['target_pcd_pos'] = torch.tensor(data["pcd_points"][timestep + 1])
+        instance['poisson_ratio'] = torch.tensor(data['poisson_ratio']).reshape(-1, 1)
 
-        instance['mesh_pos'] = torch.tensor(data["nodes_grid"][timestep])
-        instance['target_mesh_pos'] = torch.tensor(data["nodes_grid"][timestep + 1])
-        instance['init_mesh_pos'] = torch.tensor(data["nodes_grid"][0])
-        instance['mesh_edge_index'] = torch.tensor(data["edge_index_grid"].T).long()
-        instance['mesh_cells'] = torch.tensor(data["triangles_grid"]).long()
+        instance['pcd_pos'] = torch.tensor(data['pcd_points'][timestep])
+        instance['target_pcd_pos'] = torch.tensor(data['pcd_points'][timestep + 1])
 
-        instance['target_collider_pos'] = torch.tensor(data["nodes_collider"][timestep + 1])
-        instance['collider_pos'] = torch.tensor(data["nodes_collider"][timestep])
-        instance['init_collider_pos'] = torch.tensor(data["nodes_collider"][0])
-        instance['collider_edge_index'] = torch.tensor(data["edge_index_collider"].T).long()
-        instance['collider_cells'] = torch.tensor(data["triangles_collider"]).long()
+        instance['mesh_pos'] = torch.tensor(data['nodes_grid'][timestep])
+        instance['target_mesh_pos'] = torch.tensor(data['nodes_grid'][timestep + 1])
+        instance['init_mesh_pos'] = torch.tensor(data['nodes_grid'][0])
+        instance['mesh_edge_index'] = torch.tensor(data['edge_index_grid'].T).long()
+        instance['mesh_cells'] = torch.tensor(data['triangles_grid']).long()
+
+        instance['target_collider_pos'] = torch.tensor(data['nodes_collider'][timestep + 1])
+        instance['collider_pos'] = torch.tensor(data['nodes_collider'][timestep])
+        instance['init_collider_pos'] = torch.tensor(data['nodes_collider'][0])
+        instance['collider_edge_index'] = torch.tensor(data['edge_index_collider'].T).long()
+        instance['collider_cells'] = torch.tensor(data['triangles_collider']).long()
 
         return instance
 
@@ -87,7 +91,7 @@ class Preprocessing:
         node_type = self.build_type(num_nodes)
 
         # # used if poisson ratio needed as input feature, but atm incompatible with Imputation training
-        poisson_ratio = torch.tensor([1.0])
+        poisson_ratio = input_data['poisson_ratio']
 
         # index shift dict for edge index matrix
         index_shift_dict = {'mesh': 0, 'collider': num_nodes[0], 'point': num_nodes[0] + num_nodes[1]}
@@ -119,7 +123,7 @@ class Preprocessing:
 
         # create data object for torch
         data = {'x': x.float(),
-                'u': poisson_ratio,
+                'u': poisson_ratio.float(),
                 'pos': pos.float(),
                 'next_pos': target.float(),
                 'point_index': num_nodes[0] + num_nodes[1],

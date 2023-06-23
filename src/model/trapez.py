@@ -48,7 +48,7 @@ class TrapezModel(AbstractSystemModel):
             edge_sets=self._edge_sets,
             node_sets=self._node_sets,
             dec=self._node_sets[0],
-            use_global=False
+            use_global=True
         ).to(device)
 
         self.pointcloud_dropout = 1
@@ -192,7 +192,7 @@ class TrapezModel(AbstractSystemModel):
 
         data = Preprocessing.postprocessing(Data.from_dict(input).cpu())
         keep_pc = step % 5 == 0
-        graph = self.build_graph(data, is_training=False, keep_point_cloud=keep_pc)
+        graph = Batch.from_data_list([self.build_graph(data, is_training=False, keep_point_cloud=keep_pc)])
         data = data[0] if keep_pc else data[1]
 
         prediction, cur_position, cur_velocity = self.update(data.to(device), self(graph)[mask])
@@ -260,90 +260,6 @@ class TrapezModel(AbstractSystemModel):
             noise = (torch.randn(indices.shape[0], num_noise_features) * sigma).to(device)
             data.pos[indices, num_node_features - num_noise_features:num_node_features] = data.pos[indices,
                                                                                           num_node_features - num_noise_features:num_node_features] + noise
-        return data
-
-    @staticmethod
-    def add_pointcloud_dropout(data: Data, pointcloud_dropout: float, hetero: bool, use_world_edges=False) -> Data:
-        """
-        Randomly drops the pointcloud (with nodes and edges) for the input batch. A bit hacky
-        data.batch and data.ptr are used
-        Args:
-            data: PyG data element containing (a batch of) heterogeneous or homogeneous graph(s)
-            pointcloud_dropout: Probability of dropping the point cloud for a batch
-            hetero: Use hetero data
-            use_world_edges: Use world edges
-
-        Returns:
-            data: updated data element
-        """
-        x = np.random.rand(1)
-        if x < pointcloud_dropout:
-            # node and edge types to keep
-            node_types = [1, 2]
-            if use_world_edges:
-                edge_types = [1, 2, 5, 8, 9]
-            else:
-                edge_types = [1, 2, 5, 8]
-
-            # extract correct edge indices
-            edge_indices = []
-            for edge_type in edge_types:
-                edge_indices.append(torch.where(data.edge_type == edge_type)[0])
-            edge_indices = torch.cat(edge_indices, dim=0)
-
-            # create index shift lists for edge index
-            num_node_type = []
-            num_node_type_0 = []
-            graph_pointer = []
-            for batch in range(int(torch.max(data.batch) + 1)):
-                batch_data = data.node_type[data.batch == batch]
-                num_node_type_0.append(len(batch_data[batch_data == 0]))
-                graph_pointer.append(len(batch_data[batch_data == 1]) + len(batch_data[batch_data == 2]))
-                num_node_type.append(len(batch_data))
-
-            num_node_type_0 = list(np.cumsum(num_node_type_0))
-            num_node_type = list(np.cumsum(num_node_type))
-            num_node_type = [0] + num_node_type
-            graph_pointer = [0] + list(np.cumsum(graph_pointer))
-
-            # extract correct node indices (in batch order)
-            # therefore the index shift list num_node_type is needed
-            # to_heterogeneous does not care about batch indices, so to make this work, we need to keep the order of the batch when extracting the mesh only data
-            node_indices = []
-            for batch in range(int(torch.max(data.batch) + 1)):
-                batch_data = data.node_type[data.batch == batch]
-                for node_type in node_types:
-                    node_indices.append(torch.where(batch_data == node_type)[0] + num_node_type[batch])
-            node_indices = torch.cat(node_indices, dim=0)
-
-            # create updated tensors
-            new_pos = data.pos[node_indices]
-            new_x = data.x[node_indices]
-            new_batch = data.batch[node_indices]
-            new_node_type = data.node_type[node_indices]
-            new_edge_index = data.edge_index[:, edge_indices]
-            new_edge_type = data.edge_type[edge_indices]
-
-            # shift indices for updated edge_index tensor:
-            for index in range(len(num_node_type_0)):
-                new_edge_index = torch.where(
-                    torch.logical_and(new_edge_index > num_node_type[index], new_edge_index < num_node_type[index + 1]),
-                    new_edge_index - num_node_type_0[index], new_edge_index)
-
-            # update data object
-            data.pos = new_pos
-            data.x = new_x
-            data.batch = new_batch
-            data.node_type = new_node_type
-            data.edge_index = new_edge_index
-            data.edge_type = new_edge_type
-            data.ptr = torch.tensor(graph_pointer)
-
-            # edge_attr are only used for homogeneous graphs at this stage
-            if not hetero:
-                new_edge_attr = data.edge_attr[edge_indices]
-                data.edge_attr = new_edge_attr
-
         return data
 
     @staticmethod
