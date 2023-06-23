@@ -48,23 +48,23 @@ class GraphNet(nn.Module):
             edge_store['edge_attr'] = torch.add(edge_attr, self.edge_models["".join(edge_type)](aggregated_features))
 
     def _update_nodes(self, graph: HeteroData):
-        node_features = graph.node_stores[0].get('x')
-        num_nodes = node_features.shape[0]
+        num_nodes = sum([node_store.x.shape[0] for node_store in graph.node_stores])
 
         edge_features = list()
         for edge_type, edge_store in zip(graph.edge_types, graph.edge_stores):
-            edge_features.append(self.aggregation(edge_store.get('edge_attr'), edge_store.get('edge_index')[1], num_nodes))
+            edge_features.append(
+                self.aggregation(edge_store.get('edge_attr'), edge_store.get('edge_index')[1], num_nodes))
 
         edge_features = torch.cat(edge_features, dim=-1)
 
         for position, (node_type, node_store) in enumerate(zip(graph.node_types, graph.node_stores)):
             node_features = node_store.get('x')
             aggregated_features = torch.cat([node_features, edge_features], 1)
-            # global
+
             if self._use_global:
                 batch = graph[node_type].batch
                 aggregated_features = torch.cat([aggregated_features, graph.u[batch]], 1)
-            # update
+
             node_store["x"] = torch.add(node_features, self.node_models[node_type](aggregated_features))
 
     def _update_global(self, graph: HeteroData):
@@ -131,7 +131,7 @@ class GraphNet(nn.Module):
             result = scatter(data.float(), segment_ids, dim=0, dim_size=num_segments, reduce='mean')
         elif operation == 'min':
             result = scatter(data.float(), segment_ids, dim=0, dim_size=num_segments, reduce='min')
-        elif operation == 'std':
+        elif operation == 'mul':
             result = scatter(data.float(), segment_ids, dim=0, dim_size=num_segments, reduce='mul')
         else:
             raise Exception('Invalid operation type!')

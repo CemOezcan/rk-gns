@@ -245,6 +245,7 @@ class Preprocessing:
         row, col = ext_edges[0], ext_edges[1]
         row, col = row[row != col], col[row != col]
         ext_edges = torch.stack([row, col], dim=0)
+        # TODO: Remove duplicates with transforms.remove_duplicated_edges
         ext_edges = Preprocessing.remove_duplicates_with_mesh_edges(data.edge_index, ext_edges)
         data.edge_index = torch.cat([data.edge_index, ext_edges], dim=1)
         data.edge_type = torch.cat([data.edge_type, torch.tensor([3] * len(ext_edges[0])).long()], dim=0)
