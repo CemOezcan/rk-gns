@@ -64,7 +64,7 @@ class TrapezModel(AbstractSystemModel):
             data = data[1]
         elif keep_point_cloud is None:
             x = np.random.rand(1)
-            data = data[0] if x < self.pc_frequency else data[1]
+            data = data[0] if x < (1 / self.pc_frequency) else data[1]
         elif keep_point_cloud:
             data = data[0]
         else:

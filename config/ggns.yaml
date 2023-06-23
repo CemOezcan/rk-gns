@@ -1,0 +1,42 @@
+name: "DEFAULT"   # MUST BE DEFAULT
+import_path: "default.yaml"
+
+params:
+  retrain: False # Start training a new model if True. Continue training the most recent version of the model if False.
+  task:
+    task: mesh
+    dataset: deformable_plate
+    rollout_split: valid
+    batch_size: 32
+    epochs: 150
+    n_timesteps: 50
+    trajectories: 100000000
+    mode: all
+    prefetch_factor: 1
+    test:
+      trajectories: 10 # Number of trajectories that are going to be used to compute the validation loss during evaluation
+      rollouts: 10 # Number of trajectories that are going to be used to compute the rollout loss during evaluation
+      n_step_rollouts: 1 # Number of trajectories that are going to be used to compute the n_step_loss during evaluation
+      n_steps: 10
+    validation:
+      trajectories: 135 # Number of trajectories that are going to be used to compute the validation loss during training
+      rollouts: 100 # Number of trajectories that are going to be used to compute the rollout loss during training
+      n_steps: 10
+      n_step_rollouts: 50
+      n_viz: 5
+  model:
+    size: 2
+    noise: 0.01
+    pc_noise: 0.0
+    pc_frequency: 5
+    mgn: False
+    poisson_ratio: False
+    scheduler_epoch: 10
+    aggregation: pna
+    learning_rate: 5.0e-4
+    message_passing_steps: 5
+    use_global: True
+    heterogeneous: False
+  logging:
+    wandb_mode: online
+  random_seed: 0
