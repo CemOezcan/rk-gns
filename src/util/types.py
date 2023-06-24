@@ -21,8 +21,6 @@ Result = Union[List, int, float, np.ndarray]
 
 InputBatch = Union[Dict[Key, Tensor], Tensor, Batch, Data, HeteroData, None]
 OutputTensorDict = Dict[Key, Tensor]
-EdgeSet = collections.namedtuple('EdgeSet', ['name', 'features', 'senders', 'receivers'])
-MultiGraph = collections.namedtuple('MultiGraph', ['node_features', 'edge_sets'])
 AGGR_AGGR = 'aggregation'
 CONCAT_AGGR = 'concatenation'
 

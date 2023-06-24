@@ -1,6 +1,6 @@
 from typing import Optional
 
-from torch.utils.data import DataLoader
+from torch_geometric.data import DataLoader
 
 from src.util.types import *
 from abc import ABC, abstractmethod

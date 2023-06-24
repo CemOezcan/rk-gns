@@ -1,6 +1,6 @@
 import copy
 import math
-from typing import Dict, Tuple, Union
+from typing import Dict, Tuple, Union, List
 
 import torch_cluster
 import torch_geometric.transforms as T
@@ -15,7 +15,7 @@ from src.modules.mesh_graph_nets import MeshGraphNets
 from src.modules.normalizer import Normalizer
 from src.model.abstract_system_model import AbstractSystemModel
 from src.util.util import device
-from src.util.types import NodeType, MultiGraph
+from src.util.types import NodeType
 from torch import nn, Tensor
 
 from src.util.types import ConfigDict
@@ -58,7 +58,7 @@ class TrapezModel(AbstractSystemModel):
         self.input_mesh_noise = params.get('noise')
         self.input_pcd_noise = params.get('pc_noise')
 
-    def build_graph(self, data: Data, is_training: bool, keep_point_cloud: Union[bool, None] = None) -> Data:
+    def build_graph(self, data: Tuple[Data, Data], is_training: bool, keep_point_cloud: Union[bool, None] = None) -> HeteroData:
         """Builds input graph."""
         if self.mgn:
             data = data[1]
@@ -106,7 +106,7 @@ class TrapezModel(AbstractSystemModel):
     def forward(self, graph):
         return self.learned_model(graph)
 
-    def training_step(self, graph, data_frame):
+    def training_step(self, graph: Batch):
         mask = torch.where(graph.node_type == NodeType.MESH)[0]
 
         pred_velocity = self(graph)[mask]
@@ -118,7 +118,7 @@ class TrapezModel(AbstractSystemModel):
         return loss
 
     @torch.no_grad()
-    def validation_step(self, graph: MultiGraph, data_frame: Dict) -> Tuple[Tensor, Tensor]:
+    def validation_step(self, graph: Batch, data_frame: Dict) -> Tuple[Tensor, Tensor]:
         mask = torch.where(graph.node_type == NodeType.MESH)[0]
 
         pred_velocity = self(graph)[mask]
@@ -133,7 +133,7 @@ class TrapezModel(AbstractSystemModel):
 
         return error, pos_error
 
-    def update(self, inputs, per_node_network_output: Tensor) -> Tensor:
+    def update(self, inputs: Batch, per_node_network_output: Tensor) -> Tensor:
         """Integrate model outputs."""
         mask = torch.where(inputs.node_type == NodeType.MESH)[0]
         velocity = self._output_normalizer.inverse(per_node_network_output)
@@ -147,7 +147,7 @@ class TrapezModel(AbstractSystemModel):
         return (position, cur_position, velocity)
 
     @torch.no_grad()
-    def rollout(self, trajectory: Dict[str, Tensor], num_steps: int) -> Tuple[Dict[str, Tensor], Tensor]:
+    def rollout(self, trajectory: List[Dict[str, Tensor]], num_steps: int) -> Tuple[Dict[str, Tensor], Tensor]:
         """Rolls out a model trajectory."""
         num_steps = len(trajectory) if num_steps is None else num_steps
         initial_state = trajectory[0] # {k: torch.squeeze(v, 0)[0] for k, v in trajectory.items()}
@@ -204,7 +204,7 @@ class TrapezModel(AbstractSystemModel):
         return next_pos, trajectory, cur_positions, cur_velocities
 
     @torch.no_grad()
-    def n_step_computation(self, trajectory: Dict[str, Tensor], n_step: int, num_timesteps=None) -> Tuple[Tensor, Tensor]:
+    def n_step_computation(self, trajectory: List[Dict[str, Tensor]], n_step: int, num_timesteps=None) -> Tuple[Tensor, Tensor]:
         mse_losses = list()
         last_losses = list()
         num_timesteps = len(trajectory) if num_timesteps is None else num_timesteps

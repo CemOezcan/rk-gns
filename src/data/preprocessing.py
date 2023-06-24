@@ -1,7 +1,7 @@
 import copy
 import os
 import pickle
-from typing import Dict
+from typing import Dict, Tuple
 import torch_geometric.transforms as T
 import torch.nn.functional as F
 import torch
@@ -38,9 +38,12 @@ class Preprocessing:
             rollout_length = len(trajectory['nodes_grid'])
             data_list = []
 
+            if index > 2:
+                break
+
             for timestep in range(rollout_length - 2):
-                data_timestep = self.prepare_data_for_trajectory(trajectory, timestep)
-                data = self.create_graph_from_raw(data_timestep)
+                data_timestep = self.extract_system_parameters(trajectory, timestep)
+                data = self.create_graph(data_timestep)
 
                 if not self.raw:
                     data = Preprocessing.postprocessing(Data.from_dict(data))
@@ -53,7 +56,25 @@ class Preprocessing:
 
         return trajectory_list
 
-    def prepare_data_for_trajectory(self, data: Dict, timestep: int) -> Dict:
+    @staticmethod
+    def extract_system_parameters(data: Dict, timestep: int) -> Dict:
+        """
+        Extract relevant parameters regarding the system State for a given instance.
+
+        Parameters
+        ----------
+            data : Dict
+                An entire trajectory of system states
+
+            timestep :
+                The desired timestep within the given trajectory
+
+        Returns
+        -------
+            Dict
+                The system parameters of the desired time step.
+
+        """
         # Transpose: edge list to sender, receiver list
         instance = dict()
         instance['poisson_ratio'] = torch.tensor(data['poisson_ratio']).reshape(-1, 1)
@@ -75,7 +96,21 @@ class Preprocessing:
 
         return instance
 
-    def create_graph_from_raw(self, input_data) -> Data:
+    def create_graph(self, input_data: Dict) -> Dict:
+        """
+        Convert system state parameters into a graph.
+
+        Parameters
+        ----------
+            input_data: Dict
+                Defines the state of a system at a particular time step.
+
+        Returns
+        -------
+            Dict
+                A graph with mesh edges.
+
+        """
 
         # dictionary for positions
         pos_dict = {'mesh': input_data['mesh_pos'], 'collider': input_data['collider_pos'], 'point': input_data['pcd_pos']}
@@ -227,7 +262,22 @@ class Preprocessing:
         return data.edge_attr
 
     @staticmethod
-    def postprocessing(data):
+    def postprocessing(data: Data) -> Tuple[Data, Data]:
+        """
+        Task specific expansion of the given input graph. Adds different edge types based on neighborhood graphs.
+        Convert the resulting graph into a Data object.
+
+        Parameters
+        ----------
+            data: Data
+                Basic graph without additional edge types
+
+        Returns
+        -------
+            Tuple[Data, Data]
+                Tuple containing the basic graph and the expanded graph.
+
+        """
         mask = torch.where(data.node_type == NodeType.MESH)[0]
         obst_mask = torch.where(data.node_type == NodeType.COLLIDER)[0]
         point_index = data.point_index

@@ -1,9 +1,7 @@
 from typing import Callable
 
 from torch import nn, Tensor
-from torch_geometric.data import Data, HeteroData
-
-from src.util.types import MultiGraph
+from torch_geometric.data import Batch
 
 
 class Decoder(nn.Module):
@@ -14,5 +12,5 @@ class Decoder(nn.Module):
         self.model = make_mlp(output_size)
         self.node_type = node_type
 
-    def forward(self, graph: HeteroData) -> Tensor:
+    def forward(self, graph: Batch) -> Tensor:
         return self.model(graph[self.node_type].x)

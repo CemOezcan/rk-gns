@@ -1,5 +1,3 @@
-
-import math
 import os
 import pickle
 import re
@@ -10,20 +8,17 @@ from matplotlib.animation import PillowWriter, FuncAnimation
 import matplotlib.pyplot as plt
 import torch
 import wandb
-from matplotlib import tri
-from matplotlib.collections import PolyCollection, PatchCollection
-from matplotlib.lines import Line2D
+from matplotlib.collections import PatchCollection
 from matplotlib.patches import Polygon
 
-from src.algorithms.abstract_simulator import AbstractSimulator
 from src.algorithms.mesh_simulator import MeshSimulator
 from src.algorithms.get_simulator import get_simulator
 from src.data.get_data import get_directories, get_data
 from src.algorithms.abstract_task import AbstractTask
 from tqdm import trange
 
-from src.util.types import ConfigDict, ScalarDict, NodeType
-from src.util.util import get_from_nested_dict, device, triangles_to_edges
+from src.util.types import ConfigDict, NodeType
+from src.util.util import get_from_nested_dict
 
 
 class MeshTask(AbstractTask):
@@ -49,6 +44,7 @@ class MeshTask(AbstractTask):
         self._dataset_name = config.get('task').get('dataset')
         _, self._out_dir = get_directories(self._dataset_name)
 
+        self._validation_interval = get_from_nested_dict(config, ['task', 'validation', 'interval'])
         self._num_val_trajectories = config.get('task').get('validation').get('trajectories')
         self._num_val_rollouts = self._config.get('task').get('validation').get('rollouts')
         self._num_val_n_step_rollouts = self._config.get('task').get('validation').get('n_step_rollouts')
@@ -61,8 +57,12 @@ class MeshTask(AbstractTask):
         self.n_viz = self._config.get('task').get('validation').get('n_viz')
 
         self.train_loader = get_data(config=config)
-        self._test_loader = get_data(config=config, split='test', raw=True)
-        self._valid_loader = get_data(config=config, split='test')
+
+        self._rollout_loader = get_data(config=config, split='eval', raw=True)
+        self._valid_loader = get_data(config=config, split='eval')
+
+        self._test_rollout_loader = get_data(config=config, split='test', raw=True)
+        self._test_loader = get_data(config=config, split='test')
 
         self._mp = get_from_nested_dict(config, ['model', 'message_passing_steps'])
         aggr = get_from_nested_dict(config, ['model', 'aggregation'])
@@ -103,10 +103,10 @@ class MeshTask(AbstractTask):
             task_name = f'{self._task_name}{e + 1}'
             self._algorithm.fit_iteration(train_dataloader=self.train_loader)
 
-            if (e + 1) % 10 == 0:
+            if (e + 1) % self._validation_interval == 0:
                 one_step = self._algorithm.one_step_evaluator(self._valid_loader, self._num_val_trajectories, task_name)
-                rollout = self._algorithm.rollout_evaluator(self._test_loader, self._num_val_rollouts, task_name)
-                n_step = self._algorithm.n_step_evaluator(self._test_loader, task_name, n_steps=self._val_n_steps, n_traj=self._num_val_n_step_rollouts)
+                rollout = self._algorithm.rollout_evaluator(self._rollout_loader, self._num_val_rollouts, task_name)
+                n_step = self._algorithm.n_step_evaluator(self._rollout_loader, task_name, n_steps=self._val_n_steps, n_traj=self._num_val_n_step_rollouts)
 
                 dir_dict = self.select_plotting(task_name)
 
@@ -129,13 +129,13 @@ class MeshTask(AbstractTask):
         assert isinstance(self._algorithm, MeshSimulator)
         task_name = f'{self._task_name}final'
 
-        self._algorithm.one_step_evaluator(self._valid_loader, self._num_test_trajectories, task_name, logging=False)
-        self._algorithm.rollout_evaluator(self._test_loader, self._num_test_rollouts, task_name, logging=False)
-        self._algorithm.n_step_evaluator(self._test_loader, task_name, n_steps=self._n_steps, n_traj=self._num_n_step_rollouts, logging=False)
+        self._algorithm.one_step_evaluator(self._test_loader, self._num_test_trajectories, task_name, logging=False)
+        self._algorithm.rollout_evaluator(self._test_rollout_loader, self._num_test_rollouts, task_name, logging=False)
+        self._algorithm.n_step_evaluator(self._test_rollout_loader, task_name, n_steps=self._n_steps, n_traj=self._num_n_step_rollouts, logging=False)
 
         self.select_plotting(task_name)
 
-    def select_plotting(self, task_name):
+    def select_plotting(self, task_name: str):
         a, w = self.plot(task_name)
         dir_1 = self._save_plot(a, w, task_name)
 

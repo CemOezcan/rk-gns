@@ -2,9 +2,7 @@ from typing import Callable, List, Tuple
 
 import torch
 from torch import nn
-from torch_geometric.data import HeteroData
-
-from src.util.types import MultiGraph
+from torch_geometric.data import Batch
 
 
 class Encoder(nn.Module):
@@ -20,7 +18,7 @@ class Encoder(nn.Module):
         self.edge_models = nn.ModuleDict({name: self._make_mlp(latent_size) for name in edge_sets})
         self.global_model = self._make_mlp(latent_size) if use_global else None
 
-    def forward(self, graph: HeteroData) -> HeteroData:
+    def forward(self, graph: Batch) -> Batch:
         for position, node_type in enumerate(graph.node_types):
             graph.node_stores[position]['x'] = self.node_models[node_type](
                 graph.node_stores[position]['x'])

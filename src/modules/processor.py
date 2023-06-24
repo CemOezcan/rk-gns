@@ -1,10 +1,9 @@
 from typing import Callable, List, Type
 
 from torch import nn
-from torch_geometric.data import HeteroData
+from torch_geometric.data import Batch
 
 from src.modules.graphnet import GraphNet
-from src.util.types import MultiGraph
 
 
 class Processor(nn.Module):
@@ -25,5 +24,5 @@ class Processor(nn.Module):
             )
         self.graphnet_blocks = nn.Sequential(*blocks)
 
-    def forward(self, latent_graph: HeteroData) -> HeteroData:
+    def forward(self, latent_graph: Batch) -> Batch:
         return self.graphnet_blocks(latent_graph)

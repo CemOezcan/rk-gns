@@ -1,7 +1,5 @@
-import math
 import os
 import pickle
-import random
 import time
 from typing import Optional, Dict, List, Tuple, Any
 
@@ -21,9 +19,8 @@ from src.data.get_data import get_directories
 from src.algorithms.abstract_simulator import AbstractSimulator
 from src.model.abstract_system_model import AbstractSystemModel
 from src.model.get_model import get_model
-from src.util.util import detach
-from torch.utils.data import DataLoader
-from src.util.types import ConfigDict, ScalarDict, Union, EdgeSet, MultiGraph
+from torch_geometric.data import DataLoader
+from src.util.types import ConfigDict
 
 
 class MeshSimulator(AbstractSimulator):
@@ -130,10 +127,8 @@ class MeshSimulator(AbstractSimulator):
         data = self.fetch_data(train_dataloader, True)
 
         for i, batch in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
-            #batch = self._network.build_graph(trajectory, True)
-
             start_instance = time.time()
-            loss = self._network.training_step(batch, i)
+            loss = self._network.training_step(batch)
             loss.backward()
 
             self._optimizer.step()
@@ -142,22 +137,21 @@ class MeshSimulator(AbstractSimulator):
             end_instance = time.time()
             wandb.log({'loss': loss.detach(), 'training time per instance': end_instance - start_instance})
 
-
-    def fetch_data(self, trajectory: List[Dict[str, Tensor]], is_training: bool) -> List[Tuple[MultiGraph, Dict[str, Tensor]]]:
+    def fetch_data(self, trajectory: DataLoader, is_training: bool) -> DataLoader:
         """
-        Transform an entire trajectory of system states into a trajectory of graphs.
+        Transform a collection of system states into batched graphs.
 
         Parameters
         ----------
-            trajectory : List[Dict[str, Tensor]]
-                A trajectory of system states
+            trajectory : DataLoader
+                A collection of system states
             is_training : bool
-                Whether this is a training or a test/validation trajectory
+                Whether this is a training or a test/validation run
 
         Returns
         -------
-            List[Tuple[MultiGraph, Dict[str, Tensor]]]
-                The instances of the trajectory and their respective graph representations
+            DataLoader
+                Collection of batched graphs.
         """
         graphs = []
         # TODO: Parallelize
@@ -197,7 +191,6 @@ class MeshSimulator(AbstractSimulator):
         trajectory_loss = list()
         test_loader = self.fetch_data(ds_loader, is_training=False)
         for i, batch in enumerate(tqdm(test_loader, desc='Validation', leave=True, position=0)):
-
             instance_loss = self._network.validation_step(batch, i)
 
             trajectory_loss.append([instance_loss])
@@ -293,7 +286,8 @@ class MeshSimulator(AbstractSimulator):
         else:
             self._publish_csv(data_frame, f'rollout_losses', path)
 
-    def n_step_evaluator(self, ds_loader: DataLoader, task_name: str, n_steps=60, n_traj=2, logging=True) -> Optional[Dict]:
+    def n_step_evaluator(self, ds_loader: DataLoader, task_name: str, n_steps: int = 60, n_traj: int = 2,
+                         logging: bool = True) -> Optional[Dict]:
         """
         Predict the system state after n time steps. N step predictions are performed recursively within trajectories.
         Evaluate the predictions over the test data.
@@ -306,8 +300,8 @@ class MeshSimulator(AbstractSimulator):
             task_name : str
                 Name of the task
 
-            n_step_list : List[int]
-                Different values for n, with which to estimate the n-step loss
+            n_steps: int
+                Evaluation interval.
 
             n_traj : int
                 Number of trajectories used to estimate the n-step loss
