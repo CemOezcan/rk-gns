@@ -355,6 +355,11 @@ class Preprocessing:
                                                                          data.edge_index[:, mesh_edge_mask],
                                                                    data.init_pos[mask])
         data_mgn.edge_attr = data.edge_attr[:old_edges]
+        data_mgn.edge_type = data.edge_type[:old_edges]
+        data_mgn.x = data_mgn.x[:point_index]
+        data_mgn.pos = data_mgn.pos[:point_index]
+        data_mgn.next_pos = data_mgn.next_pos[:point_index]
+        data_mgn.node_type = data_mgn.node_type[:point_index]
 
         return data, data_mgn
 
