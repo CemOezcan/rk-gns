@@ -10,7 +10,7 @@ params:
     batch_size: 32
     epochs: 150
     n_timesteps: 50
-    trajectories: 100000000
+    trajectories: None
     mode: all
     prefetch_factor: 1
     test:

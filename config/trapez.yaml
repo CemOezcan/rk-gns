@@ -10,7 +10,7 @@ params:
     batch_size: 32
     epochs: 150
     n_timesteps: 50
-    trajectories: 100000000
+    trajectories: 2
     mode: all
     prefetch_factor: 1
     test:
@@ -39,5 +39,5 @@ params:
     use_global: False
     heterogeneous: False
   logging:
-    wandb_mode: offline
+    wandb_mode: online
   random_seed: 0

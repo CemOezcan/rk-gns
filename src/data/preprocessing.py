@@ -1,4 +1,5 @@
 import copy
+import math
 import os
 import pickle
 from typing import Dict, Tuple
@@ -11,6 +12,7 @@ from torch_geometric.data import Data
 from tqdm import tqdm
 
 from src.util.types import NodeType
+from src.util.util import get_from_nested_dict
 
 
 class Preprocessing:
@@ -22,6 +24,8 @@ class Preprocessing:
         self.split = split
         self.path = path
         self.raw = raw
+        self.trajectories = config.get('task').get('trajectories')
+        self.trajectories = math.inf if isinstance(self.trajectories, str) else self.trajectories
 
         # dataset parameters
         self.input_dataset = 'deformable_plate'
@@ -38,7 +42,7 @@ class Preprocessing:
             rollout_length = len(trajectory['nodes_grid'])
             data_list = []
 
-            if index > 2:
+            if index >= self.trajectories:
                 break
 
             for timestep in range(rollout_length - 2):
