@@ -308,7 +308,7 @@ class Preprocessing:
         data_mgn = copy.deepcopy(data)
         old_edges = data_mgn.edge_type.shape[0]
 
-        world_edges = torch_cluster.radius(data.pos[point_index:], data.pos[obst_mask], r=0.08, max_num_neighbors=100)
+        world_edges = torch_cluster.radius(data.pos[point_index:], data.pos[obst_mask], r=0.1, max_num_neighbors=100)
         row, col = world_edges[0], world_edges[1]
         row, col = row[row != col], col[row != col]
         world_edges = torch.stack([row, col], dim=0)
@@ -318,7 +318,7 @@ class Preprocessing:
         data.edge_index = torch.cat([data.edge_index, world_edges, world_edges[[1, 0]]], dim=1)
         data.edge_type = torch.cat([data.edge_type, torch.tensor([4] * (len(world_edges[0]) * 2)).long()], dim=0)
 
-        grounding_edges = torch_cluster.radius(data.pos[mask], data.pos[point_index:], r=0.08, max_num_neighbors=100)
+        grounding_edges = torch_cluster.radius(data.pos[mask], data.pos[point_index:], r=0.3, max_num_neighbors=100)
         row, col = grounding_edges[0], grounding_edges[1]
         row, col = row[row != col], col[row != col]
         grounding_edges = torch.stack([row, col], dim=0)
@@ -326,7 +326,7 @@ class Preprocessing:
         data.edge_index = torch.cat([data.edge_index, grounding_edges, grounding_edges[[1, 0]]], dim=1)
         data.edge_type = torch.cat([data.edge_type, torch.tensor([5] * (len(grounding_edges[0]) * 2)).long()], dim=0)
 
-        pc_edges = torch_cluster.radius(data.pos[point_index:], data.pos[point_index:], r=0.08, max_num_neighbors=100)
+        pc_edges = torch_cluster.radius(data.pos[point_index:], data.pos[point_index:], r=0.1, max_num_neighbors=100)
         row, col = pc_edges[0], pc_edges[1]
         row, col = row[row != col], col[row != col]
         pc_edges = torch.stack([row, col], dim=0)
@@ -334,17 +334,10 @@ class Preprocessing:
         data.edge_index = torch.cat([data.edge_index, pc_edges], dim=1)
         data.edge_type = torch.cat([data.edge_type, torch.tensor([6] * len(pc_edges[0])).long()], dim=0)
 
-        world_edges = torch_cluster.radius(data.pos[point_index:], data.pos[obst_mask], r=0.08, max_num_neighbors=100)
-        row, col = world_edges[0], world_edges[1]
-        row, col = row[row != col], col[row != col]
-        world_edges = torch.stack([row, col], dim=0)
-        world_edges[0, :] += len(mask)
-        world_edges[1, :] += point_index
-
         data.edge_index = torch.cat([data.edge_index, world_edges, world_edges[[1, 0]]], dim=1)
         data.edge_type = torch.cat([data.edge_type, torch.tensor([7] * (len(world_edges[0]) * 2)).long()], dim=0)
 
-        values = [0] * 8
+        values = [0] * 7
         for key in data.edge_type:
             values[int(key)] += 1
 
