@@ -337,7 +337,7 @@ class Preprocessing:
         data.edge_index = torch.cat([data.edge_index, world_edges, world_edges[[1, 0]]], dim=1)
         data.edge_type = torch.cat([data.edge_type, torch.tensor([7] * (len(world_edges[0]) * 2)).long()], dim=0)
 
-        values = [0] * 7
+        values = [0] * 8
         for key in data.edge_type:
             values[int(key)] += 1
 
