@@ -7,7 +7,7 @@ params:
     task: mesh
     dataset: deformable_plate
     rollout_split: valid
-    batch_size: 32
+    batch_size: 1
     epochs: 150
     n_timesteps: 50
     trajectories: None
@@ -34,9 +34,9 @@ params:
     poisson_ratio: False
     scheduler_epoch: 10
     aggregation: pna
-    learning_rate: 5.0e-4
+    learning_rate: 1.0e-4
     message_passing_steps: 5
-    use_global: False
+    use_global: True
     heterogeneous: False
   logging:
     wandb_mode: online
