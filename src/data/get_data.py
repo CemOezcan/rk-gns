@@ -34,7 +34,7 @@ def get_data(config: ConfigDict, split='train', split_and_preprocess=True, add_t
         pp = Preprocessing(split, directory, raw, config)
         train_data_list = pp.build_dataset_for_split()
         # TODO: shuffle
-        trainloader = train_data_list if raw else DataLoader(train_data_list, shuffle=True, batch_size=1)
+        trainloader = train_data_list if raw else DataLoader(train_data_list, shuffle=False, batch_size=1)
         return trainloader
     else:
         raise NotImplementedError('Implement your data loading here!')

@@ -27,6 +27,7 @@ class Encoder(nn.Module):
             graph.edge_stores[position]['edge_attr'] = self.edge_models[''.join(edge_type)](
                 graph.edge_stores[position]['edge_attr'])
 
-        graph.u = self.global_model(graph.u) if self._use_global else graph.u
+        if self._use_global:
+            graph.u = self.global_model(graph.u) if graph.u.shape[-1] != self._latent_size else graph.u
 
         return graph

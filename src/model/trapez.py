@@ -35,6 +35,7 @@ class TrapezModel(AbstractSystemModel):
 
         self.message_passing_steps = params.get('message_passing_steps')
         self.message_passing_aggregator = params.get('aggregation')
+        self.recurrence = True
 
         self._edge_sets = [''.join(('mesh', '0', 'mesh'))]
         self._node_sets = ['mesh']
@@ -48,7 +49,7 @@ class TrapezModel(AbstractSystemModel):
             edge_sets=self._edge_sets,
             node_sets=self._node_sets,
             dec=self._node_sets[0],
-            use_global=params.get('use_global')
+            use_global=params.get('use_global'), recurrence=self.recurrence
         ).to(device)
 
         self.euclidian_distance = True
@@ -96,6 +97,8 @@ class TrapezModel(AbstractSystemModel):
         hetero_data.edge_type = edge_type
 
         hetero_data.u = data.u
+        hetero_data.h = data.h
+        hetero_data.c = data.c
         hetero_data.pos = data.pos
         hetero_data.y = data.y
         hetero_data.next_pos = data.next_pos
@@ -109,19 +112,21 @@ class TrapezModel(AbstractSystemModel):
     def training_step(self, graph: Batch):
         mask = torch.where(graph.node_type == NodeType.MESH)[0]
 
-        pred_velocity = self(graph)[mask]
+        output = self(graph)
+
+        pred_velocity = output[0][mask]
         target_velocity = graph.y - graph.pos[mask]
 
         target_velocity = self._output_normalizer(target_velocity, True)
         loss = self.loss_fn(target_velocity, pred_velocity)
 
-        return loss
+        return loss, output[1]
 
     @torch.no_grad()
     def validation_step(self, graph: Batch, data_frame: Dict) -> Tuple[Tensor, Tensor]:
         mask = torch.where(graph.node_type == NodeType.MESH)[0]
 
-        pred_velocity = self(graph)[mask]
+        pred_velocity = self(graph)[0][mask]
         target_velocity = graph.y - graph.pos[mask]
         # TODO: compute target with or without noise?
 
@@ -158,14 +163,12 @@ class TrapezModel(AbstractSystemModel):
         target_pos = [t['next_pos'].to(device) for t in trajectory]
         features = [t['x'].to(device) for t in trajectory]
         pred_trajectory = []
-        cur_positions = []
-        cur_velocities = []
+        hidden = (initial_state['u'], (initial_state['h'], initial_state['c']))
         for step in range(num_steps):
             node_type = trajectory[step]['node_type']
             mask = torch.where(node_type == NodeType.MESH)[0].to(device)
-            cur_pos,  pred_trajectory, cur_positions, cur_velocities = \
-                self._step_fn(initial_state, cur_pos, pred_trajectory, cur_positions,
-                              cur_velocities, target_pos[step], features[step], mask, step)
+            cur_pos, pred_trajectory, hidden = self._step_fn(initial_state, cur_pos, pred_trajectory,
+                                                             target_pos[step], features[step], mask, step, hidden)
 
         prediction = torch.stack([x[:point_index] for x in pred_trajectory][:num_steps]).cpu()
         gt_pos = torch.stack([t['pos'][:point_index] for t in trajectory][:num_steps]).cpu()
@@ -186,22 +189,24 @@ class TrapezModel(AbstractSystemModel):
         return traj_ops, mse_loss
 
     @torch.no_grad()
-    def _step_fn(self, initial_state, cur_pos, trajectory, cur_positions, cur_velocities, target_world_pos, x, mask, step):
+    def _step_fn(self, initial_state, cur_pos, trajectory, target_world_pos, x, mask, step, hidden):
         next_pos = copy.deepcopy(target_world_pos)
-        input = {**initial_state, 'x': x, 'pos': cur_pos, 'next_pos': target_world_pos, 'y': target_world_pos[mask]}
+        gl, (h, c) = hidden
+        input = {**initial_state, 'x': x, 'pos': cur_pos, 'next_pos': target_world_pos, 'y': target_world_pos[mask],
+                 'u': gl, 'h': h, 'c': c}
 
         data = Preprocessing.postprocessing(Data.from_dict(input).cpu())
         keep_pc = False if self.mgn else step % self.pc_frequency == 0
         graph = Batch.from_data_list([self.build_graph(data, is_training=False, keep_point_cloud=keep_pc)])
         data = data[0] if keep_pc else data[1]
 
-        prediction, cur_position, cur_velocity = self.update(data.to(device), self(graph)[mask])
+        output, hidden = self(graph)
+
+        prediction, cur_position, cur_velocity = self.update(data.to(device), output[mask])
         next_pos[mask] = prediction
 
         trajectory.append(next_pos)
-        cur_positions.append(cur_position)
-        cur_velocities.append(cur_velocity)
-        return next_pos, trajectory, cur_positions, cur_velocities
+        return next_pos, trajectory, hidden
 
     @torch.no_grad()
     def n_step_computation(self, trajectory: List[Dict[str, Tensor]], n_step: int, num_timesteps=None) -> Tuple[Tensor, Tensor]:

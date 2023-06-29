@@ -20,10 +20,10 @@ from src.algorithms.abstract_simulator import AbstractSimulator
 from src.model.abstract_system_model import AbstractSystemModel
 from src.model.get_model import get_model
 from torch_geometric.data import DataLoader
-from src.util.types import ConfigDict
+from src.util.types import ConfigDict, NodeType
 
 
-class MeshSimulator(AbstractSimulator):
+class LSTMSimulator(AbstractSimulator):
     """
     Class for training and evaluating a graph neural network for mesh based physics simulations.
     """
@@ -125,17 +125,40 @@ class MeshSimulator(AbstractSimulator):
         """
         self._network.train()
         data = self.fetch_data(train_dataloader, True)
+        target_list = list()
+        pred_list = list()
+        for i, graph in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
+            if i != 0 and i % 50 == 0:
+                target = torch.stack(target_list, dim=1)
+                pred = torch.stack(pred_list, dim=1)
+                loss = self._network.loss_fn(target, pred)
+                loss.backward()
 
-        for i, batch in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
+                end_instance = time.time()
+                wandb.log({'loss': loss.detach(), 'training time per instance': end_instance - start_instance})
+
+                self._optimizer.step()
+                self._optimizer.zero_grad()
+
+                target_list = list()
+                pred_list = list()
+            elif i != 0:
+                graph.u = hidden
+                graph.h = h
+                graph.c = c
+
             start_instance = time.time()
-            loss, _ = self._network.training_step(batch)
-            loss.backward()
 
-            self._optimizer.step()
-            self._optimizer.zero_grad()
+            mask = torch.where(graph.node_type == NodeType.MESH)[0]
 
-            end_instance = time.time()
-            wandb.log({'loss': loss.detach(), 'training time per instance': end_instance - start_instance})
+            output, (hidden, (h, c)) = self._network(graph)
+
+            pred_velocity = output[mask]
+            target_velocity = graph.y - graph.pos[mask]
+
+            target_velocity = self._network._output_normalizer(target_velocity, True)
+            target_list.append(target_velocity)
+            pred_list.append(pred_velocity)
 
     def fetch_data(self, trajectory: DataLoader, is_training: bool) -> DataLoader:
         """
@@ -159,7 +182,7 @@ class MeshSimulator(AbstractSimulator):
             graph = self._network.build_graph(data_frame, is_training)
             graphs.append(graph)
 
-        data = torch_geometric.data.DataLoader(graphs, shuffle=True, batch_size=self._batch_size)
+        data = torch_geometric.data.DataLoader(graphs, shuffle=False, batch_size=self._batch_size)
 
         return data
 

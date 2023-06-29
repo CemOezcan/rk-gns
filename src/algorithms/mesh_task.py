@@ -11,6 +11,7 @@ import wandb
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import Polygon
 
+from src.algorithms.abstract_simulator import AbstractSimulator
 from src.algorithms.mesh_simulator import MeshSimulator
 from src.algorithms.get_simulator import get_simulator
 from src.data.get_data import get_directories, get_data
@@ -97,7 +98,7 @@ class MeshTask(AbstractTask):
         Run all training epochs of the mesh simulator.
         Continues the training after the given epoch, if necessary.
         """
-        assert isinstance(self._algorithm, MeshSimulator), 'Need a classifier to train on a classification task'
+        assert isinstance(self._algorithm, AbstractSimulator), 'Need a classifier to train on a classification task'
         start_epoch = self._current_epoch
         for e in trange(start_epoch, self._epochs, desc='Epochs', leave=True):
             task_name = f'{self._task_name}{e + 1}'

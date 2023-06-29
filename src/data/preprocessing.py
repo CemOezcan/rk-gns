@@ -160,6 +160,8 @@ class Preprocessing:
         # create data object for torch
         data = {'x': x.float(),
                 'u': poisson_ratio.float(),
+                'h': poisson_ratio.float(),
+                'c': poisson_ratio.float(),
                 'pos': pos.float(),
                 'next_pos': target.float(),
                 'point_index': num_nodes[0] + num_nodes[1],
@@ -318,7 +320,7 @@ class Preprocessing:
         data.edge_index = torch.cat([data.edge_index, world_edges, world_edges[[1, 0]]], dim=1)
         data.edge_type = torch.cat([data.edge_type, torch.tensor([4] * (len(world_edges[0]) * 2)).long()], dim=0)
 
-        grounding_edges = torch_cluster.radius(data.pos[mask], data.pos[point_index:], r=0.3, max_num_neighbors=100)
+        grounding_edges = torch_cluster.radius(data.pos[mask], data.pos[point_index:], r=0.1, max_num_neighbors=100)
         row, col = grounding_edges[0], grounding_edges[1]
         row, col = row[row != col], col[row != col]
         grounding_edges = torch.stack([row, col], dim=0)
