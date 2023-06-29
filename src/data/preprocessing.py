@@ -2,6 +2,7 @@ import copy
 import math
 import os
 import pickle
+import random
 from typing import Dict, Tuple
 import torch_geometric.transforms as T
 import torch.nn.functional as F
@@ -220,6 +221,7 @@ class Preprocessing:
             data_list: One list of all time steps
         """
         data_list = []
+        random.shuffle(trajectory_list)
         for trajectory in trajectory_list:
             for index, data in enumerate(trajectory):
                 if index >= start_index:
