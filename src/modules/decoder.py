@@ -2,6 +2,7 @@ from typing import Callable, Union, Tuple
 
 from torch import nn, Tensor
 from torch_geometric.data import Batch
+import torch
 
 
 class Decoder(nn.Module):
@@ -20,9 +21,11 @@ class Decoder(nn.Module):
     def forward(self, graph: Batch) -> Tuple[Tensor, Union[None, Tensor]]:
         if self.recurrence:
             if graph.h.shape[-1] == self.latent_size:
-                hidden = self.lstm(graph.u, (graph.h, graph.c))
+                hidden = self.lstm(graph.u.view(-1, 1, self.latent_size), (graph.h, graph.c))
             else:
-                hidden = self.lstm(graph.u)
+                hidden = self.lstm(graph.u.view(-1, 1, self.latent_size))
+
+            hidden = (torch.squeeze(hidden[0]), hidden[1])
         else:
             hidden = None
 
