@@ -62,8 +62,8 @@ class MeshTask(AbstractTask):
         self._rollout_loader = get_data(config=config, split='eval', raw=True)
         self._valid_loader = get_data(config=config, split='eval')
 
-        self._test_rollout_loader = get_data(config=config, split='test', raw=True)
-        self._test_loader = get_data(config=config, split='test')
+        self._test_rollout_loader = self._rollout_loader#get_data(config=config, split='test', raw=True)
+        self._test_loader = self._valid_loader#get_data(config=config, split='test')
 
         self._mp = get_from_nested_dict(config, ['model', 'message_passing_steps'])
         aggr = get_from_nested_dict(config, ['model', 'aggregation'])

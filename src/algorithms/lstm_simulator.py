@@ -183,8 +183,10 @@ class LSTMSimulator(AbstractSimulator):
             graph = self._network.build_graph(data_frame, is_training)
             graphs.append(graph)
 
-        rest = self._trajectories % self._batch_size
-        num_batched_trajectories = self._trajectories // self._batch_size
+        trajectories = len(graphs) // self._time_steps
+
+        rest = trajectories % self._batch_size
+        num_batched_trajectories = trajectories // self._batch_size
         if rest != 0:
             num_batched_trajectories += 1
 
@@ -397,10 +399,10 @@ class LSTMSimulator(AbstractSimulator):
         """
         table = wandb.Table(dataframe=data_frame)
         wandb.log({name: table})
-        artifact = wandb.Artifact(f'{name}_artifact', type='dataset')
-        artifact.add(table, f'{name}_table')
-        artifact.add_file(path)
-        wandb.log_artifact(artifact)
+        #artifact = wandb.Artifact(f'{name}_artifact', type='dataset')
+        #artifact.add(table, f'{name}_table')
+        #artifact.add_file(path)
+        #wandb.log_artifact(artifact)
 
     @staticmethod
     def log_epoch(data: Dict[str, Any]) -> None:
