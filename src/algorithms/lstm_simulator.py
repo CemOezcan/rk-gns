@@ -238,6 +238,7 @@ class LSTMSimulator(AbstractSimulator):
         trajectory_loss = list()
         test_loader = self.fetch_data(ds_loader, is_training=False)
         for i, batch in enumerate(tqdm(test_loader, desc='Validation', leave=True, position=0)):
+            batch = Batch.from_data_list(batch)
             instance_loss = self._network.validation_step(batch, i)
 
             trajectory_loss.append([instance_loss])

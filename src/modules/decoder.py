@@ -25,7 +25,7 @@ class Decoder(nn.Module):
             else:
                 hidden = self.lstm(graph.u.view(-1, 1, self.latent_size))
 
-            hidden = (torch.squeeze(hidden[0]), hidden[1])
+            hidden = (torch.squeeze(hidden[0], dim=1), hidden[1])
         else:
             hidden = None
 
