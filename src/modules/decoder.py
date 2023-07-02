@@ -4,6 +4,8 @@ from torch import nn, Tensor
 from torch_geometric.data import Batch
 import torch
 
+from src.util.types import NodeType
+
 
 class Decoder(nn.Module):
     """Decodes node features from graph."""
@@ -19,14 +21,16 @@ class Decoder(nn.Module):
             self.lstm = nn.LSTM(self.latent_size, self.latent_size, 1, batch_first=True)
 
     def forward(self, graph: Batch) -> Tuple[Tensor, Union[None, Tensor]]:
+        mask = torch.where(graph.node_type == NodeType.MESH)[0]
         if self.recurrence:
             if graph.h.shape[-1] == self.latent_size:
-                hidden = self.lstm(graph.u.view(-1, 1, self.latent_size), (graph.h, graph.c))
+                hidden = self.lstm(graph[self.node_type].x[mask].view(-1, 1, self.latent_size), (graph.h, graph.c))
             else:
-                hidden = self.lstm(graph.u.view(-1, 1, self.latent_size))
+                hidden = self.lstm(graph[self.node_type].x[mask].view(-1, 1, self.latent_size))
 
-            hidden = (torch.squeeze(hidden[0], dim=1), hidden[1])
+            out, hidden = (torch.squeeze(hidden[0], dim=1), hidden[1])
+            out = self.model(out)
         else:
-            hidden = None
+            out, hidden = self.model(graph[self.node_type].x), None
 
-        return self.model(graph[self.node_type].x), hidden
+        return out, hidden

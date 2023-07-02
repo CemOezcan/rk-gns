@@ -47,6 +47,7 @@ class LSTMSimulator(AbstractSimulator):
 
         self._trajectories = config.get('task').get('trajectories')
         self._time_steps = config.get('task').get('n_timesteps')
+        self._seq_len = 5
         self._prefetch_factor = config.get('task').get('prefetch_factor')
 
         self._batch_size = config.get('task').get('batch_size')
@@ -129,7 +130,7 @@ class LSTMSimulator(AbstractSimulator):
         pred_list = list()
         for i, graph in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
             graph = Batch.from_data_list(graph)
-            if i != 0 and i % self._time_steps == 0:
+            if i != 0 and i % self._seq_len == 0:
                 target = torch.stack(target_list, dim=1)
                 pred = torch.stack(pred_list, dim=1)
                 loss = self._network.loss_fn(target, pred)
@@ -144,7 +145,6 @@ class LSTMSimulator(AbstractSimulator):
                 target_list = list()
                 pred_list = list()
             elif i != 0:
-                graph.u = hidden
                 graph.h = h
                 graph.c = c
 
@@ -152,9 +152,9 @@ class LSTMSimulator(AbstractSimulator):
 
             mask = torch.where(graph.node_type == NodeType.MESH)[0]
 
-            output, (hidden, (h, c)) = self._network(graph)
+            output, (h, c) = self._network(graph)
 
-            pred_velocity = output[mask]
+            pred_velocity = output
             target_velocity = graph.y - graph.pos[mask]
 
             target_velocity = self._network._output_normalizer(target_velocity, True)
@@ -183,28 +183,28 @@ class LSTMSimulator(AbstractSimulator):
             graph = self._network.build_graph(data_frame, is_training)
             graphs.append(graph)
 
-        trajectories = len(graphs) // self._time_steps
+        trajectories = len(graphs) // self._seq_len
 
         rest = trajectories % self._batch_size
         num_batched_trajectories = trajectories // self._batch_size
         if rest != 0:
             num_batched_trajectories += 1
 
-        fst_batches = graphs[:(num_batched_trajectories - rest) * self._time_steps * self._batch_size]
+        fst_batches = graphs[:(num_batched_trajectories - rest) * self._seq_len * self._batch_size]
         num_batches = len(fst_batches) // self._batch_size
         batches = [list() for _ in range(num_batches)]
         for i, graph in enumerate(fst_batches):
-            trajectory = i // self._time_steps
-            batch = (i - (self._time_steps * trajectory)) % num_batches
-            batches[(batch + trajectory * self._time_steps) % len(batches)].append(graph)
+            trajectory = i // self._seq_len
+            batch = (i - (self._seq_len * trajectory)) % num_batches
+            batches[(batch + trajectory * self._seq_len) % len(batches)].append(graph)
 
-        snd_batches = graphs[(num_batched_trajectories - rest) * self._time_steps * self._batch_size:]
-        num_batches = rest * self._time_steps
+        snd_batches = graphs[(num_batched_trajectories - rest) * self._seq_len * self._batch_size:]
+        num_batches = rest * self._seq_len
         batches_2 = [list() for _ in range(num_batches)]
         for i, graph in enumerate(snd_batches):
-            trajectory = i // self._time_steps
-            batch = (i - (self._time_steps * trajectory)) % num_batches
-            batches_2[(batch + trajectory * self._time_steps) % len(batches_2)].append(graph)
+            trajectory = i // self._seq_len
+            batch = (i - (self._seq_len * trajectory)) % num_batches
+            batches_2[(batch + trajectory * self._seq_len) % len(batches_2)].append(graph)
 
         batches = batches + batches_2
 

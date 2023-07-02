@@ -126,7 +126,7 @@ class TrapezModel(AbstractSystemModel):
     def validation_step(self, graph: Batch, data_frame: Dict) -> Tuple[Tensor, Tensor]:
         mask = torch.where(graph.node_type == NodeType.MESH)[0]
 
-        pred_velocity = self(graph)[0][mask]
+        pred_velocity = self(graph)[0]
         target_velocity = graph.y - graph.pos[mask]
         # TODO: compute target with or without noise?
 
@@ -191,9 +191,9 @@ class TrapezModel(AbstractSystemModel):
     @torch.no_grad()
     def _step_fn(self, initial_state, cur_pos, trajectory, target_world_pos, x, mask, step, hidden):
         next_pos = copy.deepcopy(target_world_pos)
-        gl, (h, c) = hidden
+        h, c = hidden
         input = {**initial_state, 'x': x, 'pos': cur_pos, 'next_pos': target_world_pos, 'y': target_world_pos[mask],
-                 'u': gl, 'h': h, 'c': c}
+                 'h': h, 'c': c}
 
         data = Preprocessing.postprocessing(Data.from_dict(input).cpu())
         keep_pc = False if self.mgn else step % self.pc_frequency == 0
