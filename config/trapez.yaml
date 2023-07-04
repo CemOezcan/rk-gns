@@ -29,7 +29,7 @@ params:
     size: 2
     noise: 0.01
     pc_noise: 0.0
-    pc_frequency: 1
+    pc_frequency: 5
     mgn: False
     poisson_ratio: False
     scheduler_epoch: 10

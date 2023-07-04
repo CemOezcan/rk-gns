@@ -47,7 +47,7 @@ class LSTMSimulator(AbstractSimulator):
 
         self._trajectories = config.get('task').get('trajectories')
         self._time_steps = config.get('task').get('n_timesteps')
-        self._seq_len = 5
+        self._seq_len = self._trajectories
         self._prefetch_factor = config.get('task').get('prefetch_factor')
 
         self._batch_size = config.get('task').get('batch_size')
