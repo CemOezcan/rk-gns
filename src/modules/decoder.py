@@ -12,10 +12,10 @@ class Decoder(nn.Module):
 
     def __init__(self, make_mlp: Callable, output_size: int, node_type: str, latent_size: int, recurrence: bool):
         super().__init__()
-        self.model = nn.Linear(self.latent_size, output_size) # make_mlp(output_size)
         self.node_type = node_type
         self.recurrence = recurrence
         self.latent_size = latent_size
+        self.model = nn.Linear(self.latent_size, output_size) # make_mlp(output_size)
 
         if self.recurrence:
             self.lstm = nn.GRUCell(self.latent_size, self.latent_size)
