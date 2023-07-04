@@ -98,7 +98,6 @@ class TrapezModel(AbstractSystemModel):
 
         hetero_data.u = data.u
         hetero_data.h = data.h
-        hetero_data.c = data.c
         hetero_data.pos = data.pos
         hetero_data.y = data.y
         hetero_data.next_pos = data.next_pos
@@ -159,7 +158,7 @@ class TrapezModel(AbstractSystemModel):
         target_pos = [t['next_pos'].to(device) for t in trajectory]
         features = [t['x'].to(device) for t in trajectory]
         pred_trajectory = []
-        hidden = (initial_state['u'], (initial_state['h'], initial_state['c']))
+        hidden = initial_state['h']
         for step in range(num_steps):
             node_type = trajectory[step]['node_type']
             mask = torch.where(node_type == NodeType.MESH)[0].to(device)
@@ -187,9 +186,9 @@ class TrapezModel(AbstractSystemModel):
     @torch.no_grad()
     def _step_fn(self, initial_state, cur_pos, trajectory, target_world_pos, x, mask, step, hidden):
         next_pos = copy.deepcopy(target_world_pos)
-        h, c = hidden
+        h = hidden
         input = {**initial_state, 'x': x, 'pos': cur_pos, 'next_pos': target_world_pos, 'y': target_world_pos[mask],
-                 'h': h, 'c': c}
+                 'h': h}
 
         data = Preprocessing.postprocessing(Data.from_dict(input).cpu())
         keep_pc = False if self.mgn else step % self.pc_frequency == 0

@@ -132,7 +132,7 @@ class LSTMSimulator(AbstractSimulator):
         start_instance = time.time()
         for i, graph in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
             graph = Batch.from_data_list(graph).to(device)
-            pred_velocity, (h, c) = self._network(graph)
+            pred_velocity, h = self._network(graph)
             target_velocity = self._network.get_target(graph, True)
 
             target_list.append(target_velocity)
@@ -156,7 +156,6 @@ class LSTMSimulator(AbstractSimulator):
                 start_instance = time.time()
             else:
                 graph.h = h
-                graph.c = c
 
     def fetch_data(self, trajectory: DataLoader, is_training: bool) -> DataLoader:
         """

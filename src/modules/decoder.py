@@ -18,7 +18,7 @@ class Decoder(nn.Module):
         self.latent_size = latent_size
 
         if self.recurrence:
-            self.lstm = nn.LSTM(self.latent_size, self.latent_size, 1, batch_first=True)
+            self.lstm = nn.GRUCell(self.latent_size, self.latent_size)
 
     def forward(self, graph: Batch) -> Tuple[Tensor, Union[None, Tensor]]:
         mask = torch.where(graph.node_type == NodeType.MESH)[0]
@@ -26,12 +26,11 @@ class Decoder(nn.Module):
 
         if self.recurrence:
             if graph.h.shape[-1] == self.latent_size:
-                hidden = self.lstm(node_features.view(-1, 1, self.latent_size), (graph.h, graph.c))
+                hidden = self.lstm(node_features, graph.h)
             else:
-                hidden = self.lstm(node_features.view(-1, 1, self.latent_size))
+                hidden = self.lstm(node_features)
 
-            out, hidden = (torch.squeeze(hidden[0], dim=1), hidden[1])
-            out = self.model(out)
+            out = self.model(hidden)
         else:
             out, hidden = self.model(node_features), None
 

@@ -162,7 +162,6 @@ class Preprocessing:
         data = {'x': x.float(),
                 'u': poisson_ratio.float(),
                 'h': poisson_ratio.float(),
-                'c': poisson_ratio.float(),
                 'pos': pos.float(),
                 'next_pos': target.float(),
                 'point_index': num_nodes[0] + num_nodes[1],
