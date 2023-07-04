@@ -102,7 +102,7 @@ class TrapezModel(AbstractSystemModel):
         hetero_data.pos = data.pos
         hetero_data.y = data.y
         hetero_data.next_pos = data.next_pos
-        hetero_data.to(device)
+        hetero_data.cpu()
 
         return hetero_data
 
@@ -193,7 +193,7 @@ class TrapezModel(AbstractSystemModel):
 
         data = Preprocessing.postprocessing(Data.from_dict(input).cpu())
         keep_pc = False if self.mgn else step % self.pc_frequency == 0
-        graph = Batch.from_data_list([self.build_graph(data, is_training=False, keep_point_cloud=keep_pc)])
+        graph = Batch.from_data_list([self.build_graph(data, is_training=False, keep_point_cloud=keep_pc)]).to(device)
         data = data[0] if keep_pc else data[1]
 
         output, hidden = self(graph)

@@ -21,6 +21,7 @@ from src.model.abstract_system_model import AbstractSystemModel
 from src.model.get_model import get_model
 from torch_geometric.data import DataLoader, Batch
 from src.util.types import ConfigDict, NodeType
+from src.util.util import device
 
 
 class LSTMSimulator(AbstractSimulator):
@@ -130,7 +131,7 @@ class LSTMSimulator(AbstractSimulator):
         pred_list = list()
         start_instance = time.time()
         for i, graph in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
-            graph = Batch.from_data_list(graph)
+            graph = Batch.from_data_list(graph).to(device)
             pred_velocity, (h, c) = self._network(graph)
             target_velocity = self._network.get_target(graph, True)
 
@@ -234,7 +235,7 @@ class LSTMSimulator(AbstractSimulator):
         trajectory_loss = list()
         test_loader = self.fetch_data(ds_loader, is_training=False)
         for i, batch in enumerate(tqdm(test_loader, desc='Validation', leave=True, position=0)):
-            batch = Batch.from_data_list(batch)
+            batch = Batch.from_data_list(batch).to(device)
             instance_loss = self._network.validation_step(batch, i)
 
             trajectory_loss.append([instance_loss])

@@ -21,6 +21,7 @@ from src.model.abstract_system_model import AbstractSystemModel
 from src.model.get_model import get_model
 from torch_geometric.data import DataLoader
 from src.util.types import ConfigDict
+from src.util.util import device
 
 
 class MeshSimulator(AbstractSimulator):
@@ -128,6 +129,7 @@ class MeshSimulator(AbstractSimulator):
 
         for i, batch in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
             start_instance = time.time()
+            batch.to(device)
             loss = self._network.training_step(batch)
             loss.backward()
 
@@ -191,6 +193,7 @@ class MeshSimulator(AbstractSimulator):
         trajectory_loss = list()
         test_loader = self.fetch_data(ds_loader, is_training=False)
         for i, batch in enumerate(tqdm(test_loader, desc='Validation', leave=True, position=0)):
+            batch.to(device)
             instance_loss = self._network.validation_step(batch, i)
 
             trajectory_loss.append([instance_loss])
