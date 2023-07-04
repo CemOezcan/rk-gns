@@ -47,7 +47,7 @@ class LSTMSimulator(AbstractSimulator):
 
         self._trajectories = config.get('task').get('trajectories')
         self._time_steps = config.get('task').get('n_timesteps')
-        self._seq_len = self._trajectories
+        self._seq_len = self._time_steps
         self._prefetch_factor = config.get('task').get('prefetch_factor')
 
         self._batch_size = config.get('task').get('batch_size')
@@ -133,7 +133,9 @@ class LSTMSimulator(AbstractSimulator):
             if i != 0 and i % self._seq_len == 0:
                 target = torch.stack(target_list, dim=1)
                 pred = torch.stack(pred_list, dim=1)
+                print(target.shape, pred.shape)
                 loss = self._network.loss_fn(target, pred)
+                print(loss)
                 loss.backward()
 
                 end_instance = time.time()
