@@ -47,7 +47,7 @@ class LSTMSimulator(AbstractSimulator):
 
         self._trajectories = config.get('task').get('trajectories')
         self._time_steps = config.get('task').get('n_timesteps')
-        self._seq_len = self._time_steps
+        self._seq_len = config.get('task').get('sequence')
         self._prefetch_factor = config.get('task').get('prefetch_factor')
 
         self._batch_size = config.get('task').get('batch_size')
@@ -128,34 +128,34 @@ class LSTMSimulator(AbstractSimulator):
         data = self.fetch_data(train_dataloader, True)
         target_list = list()
         pred_list = list()
+        start_instance = time.time()
         for i, graph in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
             graph = Batch.from_data_list(graph)
-            if i != 0 and i % self._seq_len == 0:
+            pred_velocity, (h, c) = self._network(graph)
+            target_velocity = self._network.get_target(graph, True)
+
+            target_list.append(target_velocity)
+            pred_list.append(pred_velocity)
+
+            if i != 0 and (i + 1) % self._seq_len == 0:
                 target = torch.stack(target_list, dim=1)
                 pred = torch.stack(pred_list, dim=1)
-                print(target.shape, pred.shape)
-                loss = self._network.loss_fn(target, pred)
-                print(loss)
-                loss.backward()
 
-                end_instance = time.time()
-                wandb.log({'loss': loss.detach(), 'training time per instance': end_instance - start_instance})
+                loss = self._network.loss_fn(target, pred)
+                loss.backward()
 
                 self._optimizer.step()
                 self._optimizer.zero_grad()
 
                 target_list = list()
                 pred_list = list()
-            elif i != 0:
+
+                end_instance = time.time()
+                wandb.log({'loss': loss.detach(), 'training time per instance': end_instance - start_instance})
+                start_instance = time.time()
+            else:
                 graph.h = h
                 graph.c = c
-
-            start_instance = time.time()
-            pred_velocity, (h, c) = self._network(graph)
-            target_velocity = self._network.get_target(graph, True)
-
-            target_list.append(target_velocity)
-            pred_list.append(pred_velocity)
 
     def fetch_data(self, trajectory: DataLoader, is_training: bool) -> DataLoader:
         """
@@ -203,8 +203,6 @@ class LSTMSimulator(AbstractSimulator):
             batches_2[(batch + trajectory * self._seq_len) % len(batches_2)].append(graph)
 
         batches = batches + batches_2
-
-
 
         return batches
 
