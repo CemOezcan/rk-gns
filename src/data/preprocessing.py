@@ -170,7 +170,6 @@ class Preprocessing:
                 'edge_attr': edge_attr.float(),
                 'cells': cells.long(),
                 'y': target[:index_shift_dict['collider']].float(),
-                'y_old': input_data['mesh_pos'].float(),
                 'node_type': node_type,
                 'edge_type': edge_type,
                 'cell_type': cell_type}
