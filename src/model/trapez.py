@@ -110,27 +110,23 @@ class TrapezModel(AbstractSystemModel):
         return self.learned_model(graph)
 
     def training_step(self, graph: Batch):
-        mask = torch.where(graph.node_type == NodeType.MESH)[0]
+        pred_velocity, _ = self(graph)
+        target_velocity = self.get_target(graph, True)
 
-        output = self(graph)
-
-        pred_velocity = output[0][mask]
-        target_velocity = graph.y - graph.pos[mask]
-
-        target_velocity = self._output_normalizer(target_velocity, True)
         loss = self.loss_fn(target_velocity, pred_velocity)
 
-        return loss, output[1]
+        return loss
+
+    def get_target(self, graph, is_training):
+        mask = torch.where(graph.node_type == NodeType.MESH)[0]
+        target_velocity = graph.y - graph.pos[mask]
+
+        return self._output_normalizer(target_velocity, is_training)
 
     @torch.no_grad()
     def validation_step(self, graph: Batch, data_frame: Dict) -> Tuple[Tensor, Tensor]:
-        mask = torch.where(graph.node_type == NodeType.MESH)[0]
-
         pred_velocity = self(graph)[0]
-        target_velocity = graph.y - graph.pos[mask]
-        # TODO: compute target with or without noise?
-
-        target_velocity = self._output_normalizer(target_velocity, False)
+        target_velocity = self.get_target(graph, False)
         error = self.loss_fn(target_velocity, pred_velocity).cpu()
 
         pred_position, _, _ = self.update(graph, pred_velocity)

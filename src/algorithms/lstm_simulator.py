@@ -149,15 +149,9 @@ class LSTMSimulator(AbstractSimulator):
                 graph.c = c
 
             start_instance = time.time()
+            pred_velocity, (h, c) = self._network(graph)
+            target_velocity = self._network.get_target(graph, True)
 
-            mask = torch.where(graph.node_type == NodeType.MESH)[0]
-
-            output, (h, c) = self._network(graph)
-
-            pred_velocity = output
-            target_velocity = graph.y - graph.pos[mask]
-
-            target_velocity = self._network._output_normalizer(target_velocity, True)
             target_list.append(target_velocity)
             pred_list.append(pred_velocity)
 

@@ -22,15 +22,17 @@ class Decoder(nn.Module):
 
     def forward(self, graph: Batch) -> Tuple[Tensor, Union[None, Tensor]]:
         mask = torch.where(graph.node_type == NodeType.MESH)[0]
+        node_features = graph[self.node_type].x[mask]
+
         if self.recurrence:
             if graph.h.shape[-1] == self.latent_size:
-                hidden = self.lstm(graph[self.node_type].x[mask].view(-1, 1, self.latent_size), (graph.h, graph.c))
+                hidden = self.lstm(node_features.view(-1, 1, self.latent_size), (graph.h, graph.c))
             else:
-                hidden = self.lstm(graph[self.node_type].x[mask].view(-1, 1, self.latent_size))
+                hidden = self.lstm(node_features.view(-1, 1, self.latent_size))
 
             out, hidden = (torch.squeeze(hidden[0], dim=1), hidden[1])
             out = self.model(out)
         else:
-            out, hidden = self.model(graph[self.node_type].x), None
+            out, hidden = self.model(node_features), None
 
         return out, hidden

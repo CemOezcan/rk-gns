@@ -128,7 +128,7 @@ class MeshSimulator(AbstractSimulator):
 
         for i, batch in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
             start_instance = time.time()
-            loss, _ = self._network.training_step(batch)
+            loss = self._network.training_step(batch)
             loss.backward()
 
             self._optimizer.step()
