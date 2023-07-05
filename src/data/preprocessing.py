@@ -288,58 +288,27 @@ class Preprocessing:
         obst_mask = torch.where(data.node_type == NodeType.COLLIDER)[0]
         point_index = data.point_index
 
+        # Add collision edges
+        collision_edges = torch_cluster.radius(data.pos[mask], data.pos[obst_mask], r=0.3, max_num_neighbors=100)
+        Preprocessing.add_edge_set(data, collision_edges, (len(mask), 0), 2, False)
+
         # Add world edges
-        world_edges = torch_cluster.radius(data.pos[mask], data.pos[obst_mask], r=0.3, max_num_neighbors=100)
-        row, col = world_edges[0], world_edges[1]
-        row, col = row[row != col], col[row != col]
-        world_edges = torch.stack([row, col], dim=0)
-        world_edges[0, :] += len(mask)
-
-        data.edge_index = torch.cat([data.edge_index, world_edges], dim=1)
-        data.edge_type = torch.cat([data.edge_type, torch.tensor([2] * len(world_edges[0])).long()], dim=0)
-
-        ext_edges = torch_cluster.radius(data.pos[mask], data.pos[mask], r=0.3, max_num_neighbors=100)
-        row, col = ext_edges[0], ext_edges[1]
-        row, col = row[row != col], col[row != col]
-        ext_edges = torch.stack([row, col], dim=0)
-        # TODO: Remove duplicates with transforms.remove_duplicated_edges
-        ext_edges = Preprocessing.remove_duplicates_with_mesh_edges(data.edge_index, ext_edges)
-        data.edge_index = torch.cat([data.edge_index, ext_edges], dim=1)
-        data.edge_type = torch.cat([data.edge_type, torch.tensor([3] * len(ext_edges[0])).long()], dim=0)
+        world_edges = torch_cluster.radius(data.pos[mask], data.pos[mask], r=0.3, max_num_neighbors=100)
+        Preprocessing.add_edge_set(data, world_edges, (0, 0), 3, True, remove_duplicates=True)
 
         data_mgn = copy.deepcopy(data)
         old_edges = data_mgn.edge_type.shape[0]
 
-        world_edges = torch_cluster.radius(data.pos[point_index:], data.pos[obst_mask], r=0.1, max_num_neighbors=100)
-        row, col = world_edges[0], world_edges[1]
-        row, col = row[row != col], col[row != col]
-        world_edges = torch.stack([row, col], dim=0)
-        world_edges[0, :] += len(mask)
-        world_edges[1, :] += point_index
-
-        data.edge_index = torch.cat([data.edge_index, world_edges, world_edges[[1, 0]]], dim=1)
-        data.edge_type = torch.cat([data.edge_type, torch.tensor([4] * (len(world_edges[0]) * 2)).long()], dim=0)
+        cp_edges = torch_cluster.radius(data.pos[point_index:], data.pos[obst_mask], r=0.1, max_num_neighbors=100)
+        Preprocessing.add_edge_set(data, cp_edges, (len(mask), point_index), 4, True)
 
         grounding_edges = torch_cluster.radius(data.pos[mask], data.pos[point_index:], r=0.1, max_num_neighbors=100)
-        row, col = grounding_edges[0], grounding_edges[1]
-        row, col = row[row != col], col[row != col]
-        grounding_edges = torch.stack([row, col], dim=0)
-        grounding_edges[0, :] += point_index
-        data.edge_index = torch.cat([data.edge_index, grounding_edges, grounding_edges[[1, 0]]], dim=1)
-        data.edge_type = torch.cat([data.edge_type, torch.tensor([5] * (len(grounding_edges[0]) * 2)).long()], dim=0)
+        Preprocessing.add_edge_set(data, grounding_edges, (point_index, 0), 5, False)
 
         pc_edges = torch_cluster.radius(data.pos[point_index:], data.pos[point_index:], r=0.1, max_num_neighbors=100)
-        row, col = pc_edges[0], pc_edges[1]
-        row, col = row[row != col], col[row != col]
-        pc_edges = torch.stack([row, col], dim=0)
-        pc_edges[:, :] += point_index
-        data.edge_index = torch.cat([data.edge_index, pc_edges], dim=1)
-        data.edge_type = torch.cat([data.edge_type, torch.tensor([6] * len(pc_edges[0])).long()], dim=0)
+        Preprocessing.add_edge_set(data, pc_edges, (point_index, point_index), 6, True)
 
-        data.edge_index = torch.cat([data.edge_index, world_edges, world_edges[[1, 0]]], dim=1)
-        data.edge_type = torch.cat([data.edge_type, torch.tensor([7] * (len(world_edges[0]) * 2)).long()], dim=0)
-
-        values = [0] * 8
+        values = [0] * 7
         for key in data.edge_type:
             values[int(key)] += 1
 
@@ -347,7 +316,7 @@ class Preprocessing:
         mesh_edge_mask = torch.where(data.edge_type == 0)[0]
         data.edge_attr = Preprocessing.add_relative_mesh_positions(data.edge_attr,
                                                                    data.edge_type,
-                                                                         data.edge_index[:, mesh_edge_mask],
+                                                                   data.edge_index[:, mesh_edge_mask],
                                                                    data.init_pos[mask])
         data_mgn.edge_attr = data.edge_attr[:old_edges]
         data_mgn.edge_type = data.edge_type[:old_edges]
@@ -359,32 +328,35 @@ class Preprocessing:
         return data, data_mgn
 
     @staticmethod
-    def remove_duplicates_with_mesh_edges(mesh_edges: Tensor, world_edges: Tensor) -> Tensor:
-        """
-        Removes the duplicates with the mesh edges have of the world edges that are created using a nearset neighbor search. (only MGN)
-        To speed this up the adjacency matrices are used
-        Args:
-            mesh_edges: edge list of the mesh edges
-            world_edges: edge list of the world edges
+    def add_edge_set(data, edges, index_shift, edge_type, bidirectional, remove_duplicates=False):
+        row, col = edges[0], edges[1]
+        row, col = row[row != col], col[row != col]
+        edges = torch.stack([row, col], dim=0)
+        edges[0, :] += index_shift[0]
+        edges[1, :] += index_shift[1]
 
-        Returns:
-            new_world_edges: updated world edges without duplicates
-        """
-        import torch_geometric.utils as utils
-        adj_mesh = utils.to_dense_adj(mesh_edges)
-        if world_edges.shape[1] > 0:
-            adj_world = utils.to_dense_adj(world_edges)
+        if remove_duplicates:
+            edges = Preprocessing.get_unique_edges(data.edge_index, edges)
+
+        indices = [data.edge_index, edges]
+        factor = len(edges[0])
+
+        if bidirectional:
+            indices.append(edges[[1, 0]])
+            factor *= 2
+
+        data.edge_index = torch.cat(indices, dim=1)
+        data.edge_type = torch.cat([data.edge_type, torch.tensor([edge_type] * factor).long()], dim=0)
+
+    @staticmethod
+    def get_unique_edges(e_1, e_2):
+        e_1, e_2 = e_1.numpy(), e_2.numpy()
+        e_1_set = set((i, j) for i, j in zip(*e_1))
+        e_2_set = set((i, j) for i, j in zip(*e_2))
+
+        unique_edges = e_2_set - e_1_set
+
+        if len(unique_edges) == 0:
+            return torch.tensor([[], []], dtype=torch.int64)
         else:
-            adj_world = torch.zeros_like(adj_mesh)
-        if adj_world.shape[1] < adj_mesh.shape[1]:
-            padding_size = adj_mesh.shape[1] - adj_world.shape[1]
-            padding_mask = torch.nn.ConstantPad2d((0, padding_size, 0, padding_size), 0)
-            adj_world = padding_mask(adj_world)
-        elif adj_world.shape[1] > adj_mesh.shape[1]:
-            padding_size = adj_world.shape[1] - adj_mesh.shape[1]
-            padding_mask = torch.nn.ConstantPad2d((0, padding_size, 0, padding_size), 0)
-            adj_mesh = padding_mask(adj_mesh)
-        new_adj = adj_world - adj_mesh
-        new_adj[new_adj < 0] = 0
-        new_world_edges = utils.dense_to_sparse(new_adj)[0]
-        return new_world_edges
+            return torch.tensor(list(unique_edges), dtype=torch.int64).t()

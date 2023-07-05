@@ -40,7 +40,7 @@ def visualize_graph(data):
     ax.scatter(gt_pos[collider_mask][:, 0], gt_pos[collider_mask][:, 1], label='Ground Truth Position', c='dimgrey', alpha=0.5, s=5)
     ax.scatter(gt_pos[point_index:][:, 0], gt_pos[point_index:][:, 1], label='Ground Truth Position', c='green', s=5)
 
-    colors = ['dimgrey', 'red', 'blue', 'green', 'yellow', 'red']
+    colors = ['dimgrey', 'red', 'blue', 'green', 'yellow', 'red', 'brown', 'blue']
     for i, (x, y) in enumerate(zip(data.edge_index[0], data.edge_index[1])):
         fst = gt_pos[x]
         snd = gt_pos[y]
