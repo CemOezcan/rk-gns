@@ -5,10 +5,10 @@ params:
   retrain: False # Start training a new model if True. Continue training the most recent version of the model if False.
   task:
     task: lstm
-    sequence: 50
+    sequence: 25
     dataset: deformable_plate
     rollout_split: valid
-    batch_size: 30
+    batch_size: 25
     epochs: 150
     n_timesteps: 50
     trajectories: 675

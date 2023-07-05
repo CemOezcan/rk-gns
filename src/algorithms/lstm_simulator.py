@@ -132,6 +132,10 @@ class LSTMSimulator(AbstractSimulator):
         start_instance = time.time()
         for i, graph in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
             graph = Batch.from_data_list(graph).to(device)
+
+            if i != 0 and i % self._seq_len != 0:
+                graph.h = h
+
             pred_velocity, h = self._network(graph)
             target_velocity = self._network.get_target(graph, True)
 
@@ -154,8 +158,6 @@ class LSTMSimulator(AbstractSimulator):
                 end_instance = time.time()
                 wandb.log({'loss': loss.detach(), 'training time per instance': end_instance - start_instance})
                 start_instance = time.time()
-            else:
-                graph.h = h
 
     def fetch_data(self, trajectory: DataLoader, is_training: bool) -> DataLoader:
         """

@@ -1,11 +1,11 @@
 params:
   retrain: False # Start training a new model if True. Continue training the most recent version of the model if False.
   task:
-    task: lstm
+    task: mesh
     sequence: 5
     dataset: deformable_plate
     rollout_split: valid
-    batch_size: 30
+    batch_size: 25
     epochs: 150
     n_timesteps: 50
     trajectories: 675
@@ -29,12 +29,12 @@ params:
     pc_noise: 0.0
     pc_frequency: 2
     mgn: False
-    poisson_ratio: False
+    poisson_ratio: True
     scheduler_epoch: 10
     aggregation: pna
     learning_rate: 5.0e-4
     message_passing_steps: 5
-    use_global: False
+    use_global: True
     heterogeneous: False
   logging:
     wandb_mode: online
