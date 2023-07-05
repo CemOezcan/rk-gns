@@ -8,7 +8,7 @@ params:
     sequence: 50
     dataset: deformable_plate
     rollout_split: valid
-    batch_size: 30
+    batch_size: 25
     epochs: 150
     n_timesteps: 50
     trajectories: 675
@@ -30,7 +30,7 @@ params:
     size: 2
     noise: 0.01
     pc_noise: 0.0
-    pc_frequency: 5
+    pc_frequency: 2
     mgn: False
     poisson_ratio: False
     scheduler_epoch: 10
