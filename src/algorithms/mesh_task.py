@@ -73,8 +73,9 @@ class MeshTask(AbstractTask):
         poisson = get_from_nested_dict(config, ['model', 'poisson_ratio'])
         mgn = get_from_nested_dict(config, ['model', 'mgn'])
         task = get_from_nested_dict(config, ['task', 'task'])
+        seq = get_from_nested_dict(config, ['task', 'sequence'])
         batch_size = config.get('task').get('batch_size')
-        self._task_name = f'{self._dataset_name}_batch:{batch_size}_task:{task}_aggr:{aggr}_lr:{lr}_global:{use_global}_hetero:{heterogeneous}_mgn:{mgn}_poisson:{poisson}_mp:{self._mp}_epoch:'
+        self._task_name = f'{self._dataset_name}_batch:{batch_size}_task:{task}_aggr:{aggr}_lr:{lr}_global:{use_global}_seq:{seq}_mgn:{mgn}_poisson:{poisson}_mp:{self._mp}_epoch:'
 
         retrain = config.get('retrain')
         epochs = list() if retrain else [
