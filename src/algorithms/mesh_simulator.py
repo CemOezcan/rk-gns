@@ -159,8 +159,7 @@ class MeshSimulator(AbstractSimulator):
         """
         dataset = RegularDataset(trajectory, partial(self._network.build_graph, is_training=is_training))
 
-        batches = DataLoader(dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True,
-                             num_workers=os.cpu_count() - 1, prefetch_factor=2)
+        batches = DataLoader(dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True)
 
         return batches
 
