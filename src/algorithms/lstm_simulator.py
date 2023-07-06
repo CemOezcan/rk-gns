@@ -15,11 +15,13 @@ from pandas import DataFrame
 from torch import Tensor
 from tqdm import tqdm
 
+from src.data.datasets import SequenceNoReturnDataset
 from src.data.get_data import get_directories
 from src.algorithms.abstract_simulator import AbstractSimulator
 from src.model.abstract_system_model import AbstractSystemModel
 from src.model.get_model import get_model
-from torch_geometric.data import DataLoader, Batch
+from torch_geometric.data import Batch
+from torch_geometric.loader import DataLoader
 from src.util.types import ConfigDict, NodeType
 from src.util.util import device
 
@@ -127,37 +129,33 @@ class LSTMSimulator(AbstractSimulator):
         """
         self._network.train()
         data = self.fetch_data(train_dataloader, True)
-        target_list = list()
-        pred_list = list()
+
         start_instance = time.time()
-        for i, graph in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
-            graph = Batch.from_data_list(graph).to(device)
+        for i, sequence in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
+            target_list = list()
+            pred_list = list()
 
-            if i != 0 and i % self._seq_len != 0:
-                graph.h = h
+            for j, graph in enumerate(sequence):
+                if j != 0:
+                    graph.h = h
+                pred_velocity, h = self._network(graph)
+                target_velocity = self._network.get_target(graph, True)
 
-            pred_velocity, h = self._network(graph)
-            target_velocity = self._network.get_target(graph, True)
+                target_list.append(target_velocity)
+                pred_list.append(pred_velocity)
 
-            target_list.append(target_velocity)
-            pred_list.append(pred_velocity)
+            target = torch.stack(target_list, dim=1)
+            pred = torch.stack(pred_list, dim=1)
 
-            if i != 0 and (i + 1) % self._seq_len == 0:
-                target = torch.stack(target_list, dim=1)
-                pred = torch.stack(pred_list, dim=1)
+            loss = self._network.loss_fn(target, pred)
+            loss.backward()
 
-                loss = self._network.loss_fn(target, pred)
-                loss.backward()
+            self._optimizer.step()
+            self._optimizer.zero_grad()
 
-                self._optimizer.step()
-                self._optimizer.zero_grad()
-
-                target_list = list()
-                pred_list = list()
-
-                end_instance = time.time()
-                wandb.log({'loss': loss.detach(), 'training time per instance': end_instance - start_instance})
-                start_instance = time.time()
+            end_instance = time.time()
+            wandb.log({'loss': loss.detach(), 'training time per instance': end_instance - start_instance})
+            start_instance = time.time()
 
     def fetch_data(self, trajectory: DataLoader, is_training: bool) -> DataLoader:
         """
@@ -181,7 +179,16 @@ class LSTMSimulator(AbstractSimulator):
             graph = self._network.build_graph(data_frame, is_training)
             graphs.append(graph)
 
-        trajectories = len(graphs) // self._seq_len
+        trajectories = [list() for _ in range(len(graphs) // self._time_steps)]
+        for i, graph in enumerate(graphs):
+            index = i // self._time_steps
+            trajectories[index].append(graph)
+
+        train_dataset = SequenceNoReturnDataset(trajectories, self._seq_len)
+        batches = DataLoader(train_dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True)
+
+
+        """trajectories = len(graphs) // self._seq_len
 
         rest = trajectories % self._batch_size
         num_batched_trajectories = trajectories // self._batch_size
@@ -204,8 +211,7 @@ class LSTMSimulator(AbstractSimulator):
             batch = (i - (self._seq_len * trajectory)) % num_batches
             batches_2[(batch + trajectory * self._seq_len) % len(batches_2)].append(graph)
 
-        batches = batches + batches_2
-
+        batches = batches + batches_2"""
         return batches
 
     @torch.no_grad()
