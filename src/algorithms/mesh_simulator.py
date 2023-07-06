@@ -1,6 +1,7 @@
 import os
 import pickle
 import time
+from functools import partial
 from typing import Optional, Dict, List, Tuple, Any
 
 import numpy as np
@@ -15,6 +16,7 @@ from pandas import DataFrame
 from torch import Tensor
 from tqdm import tqdm
 
+from src.data.datasets import RegularDataset
 from src.data.get_data import get_directories
 from src.algorithms.abstract_simulator import AbstractSimulator
 from src.model.abstract_system_model import AbstractSystemModel
@@ -155,15 +157,12 @@ class MeshSimulator(AbstractSimulator):
             DataLoader
                 Collection of batched graphs.
         """
-        graphs = []
-        # TODO: Parallelize
-        for i, data_frame in enumerate(tqdm(trajectory, desc='Building Graphs', leave=False, position=0)):
-            graph = self._network.build_graph(data_frame, is_training)
-            graphs.append(graph)
+        dataset = RegularDataset(trajectory, partial(self._network.build_graph, is_training=is_training))
 
-        data = torch_geometric.data.DataLoader(graphs, shuffle=True, batch_size=self._batch_size)
+        batches = DataLoader(dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True,
+                             num_workers=os.cpu_count() - 1, prefetch_factor=2)
 
-        return data
+        return batches
 
     @torch.no_grad()
     def one_step_evaluator(self, ds_loader: DataLoader, instances: int, task_name: str, logging=True) -> Optional[Dict]:

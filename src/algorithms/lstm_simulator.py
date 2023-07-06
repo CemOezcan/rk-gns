@@ -1,6 +1,7 @@
 import os
 import pickle
 import time
+from functools import partial
 from typing import Optional, Dict, List, Tuple, Any
 
 import numpy as np
@@ -15,12 +16,11 @@ from pandas import DataFrame
 from torch import Tensor
 from tqdm import tqdm
 
-from src.data.datasets import SequenceNoReturnDataset
+from src.data.datasets import SequenceNoReturnDataset, RegularDataset
 from src.data.get_data import get_directories
 from src.algorithms.abstract_simulator import AbstractSimulator
 from src.model.abstract_system_model import AbstractSystemModel
 from src.model.get_model import get_model
-from torch_geometric.data import Batch
 from torch_geometric.loader import DataLoader
 from src.util.types import ConfigDict, NodeType
 from src.util.util import device
@@ -174,45 +174,17 @@ class LSTMSimulator(AbstractSimulator):
             DataLoader
                 Collection of batched graphs.
         """
-        graphs = []
-        # TODO: Parallelize
-        for i, data_frame in enumerate(tqdm(trajectory, desc='Building Graphs', leave=False, position=0)):
-            graph = self._network.build_graph(data_frame, is_training)
-            graphs.append(graph)
+        if is_training:
+            trajectories = [list() for _ in range(len(trajectory) // self._time_steps)]
+            for i, graph in enumerate(trajectory):
+                index = i // self._time_steps
+                trajectories[index].append(graph)
+            dataset = SequenceNoReturnDataset(trajectories, self._seq_len, partial(self._network.build_graph, is_training=True))
+        else:
+            dataset = RegularDataset(trajectory, partial(self._network.build_graph, is_training=False))
 
-        trajectories = [list() for _ in range(len(graphs) // self._time_steps)]
-        for i, graph in enumerate(graphs):
-            index = i // self._time_steps
-            trajectories[index].append(graph)
+        batches = DataLoader(dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True, num_workers=os.cpu_count() - 1, prefetch_factor=2)
 
-        train_dataset = SequenceNoReturnDataset(trajectories, self._seq_len)
-        batches = DataLoader(train_dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True)
-
-
-        """trajectories = len(graphs) // self._seq_len
-
-        rest = trajectories % self._batch_size
-        num_batched_trajectories = trajectories // self._batch_size
-        if rest != 0:
-            num_batched_trajectories += 1
-
-        fst_batches = graphs[:(num_batched_trajectories - rest) * self._seq_len * self._batch_size]
-        num_batches = len(fst_batches) // self._batch_size
-        batches = [list() for _ in range(num_batches)]
-        for i, graph in enumerate(fst_batches):
-            trajectory = i // self._seq_len
-            batch = (i - (self._seq_len * trajectory)) % num_batches
-            batches[(batch + trajectory * self._seq_len) % len(batches)].append(graph)
-
-        snd_batches = graphs[(num_batched_trajectories - rest) * self._seq_len * self._batch_size:]
-        num_batches = rest * self._seq_len
-        batches_2 = [list() for _ in range(num_batches)]
-        for i, graph in enumerate(snd_batches):
-            trajectory = i // self._seq_len
-            batch = (i - (self._seq_len * trajectory)) % num_batches
-            batches_2[(batch + trajectory * self._seq_len) % len(batches_2)].append(graph)
-
-        batches = batches + batches_2"""
         return batches
 
     @torch.no_grad()
@@ -243,7 +215,7 @@ class LSTMSimulator(AbstractSimulator):
         trajectory_loss = list()
         test_loader = self.fetch_data(ds_loader, is_training=False)
         for i, batch in enumerate(tqdm(test_loader, desc='Validation', leave=True, position=0)):
-            batch = Batch.from_data_list(batch).to(device)
+            batch.to(device)
             instance_loss = self._network.validation_step(batch, i)
 
             trajectory_loss.append([instance_loss])

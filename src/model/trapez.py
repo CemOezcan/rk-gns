@@ -73,8 +73,8 @@ class TrapezModel(AbstractSystemModel):
 
         data.to(device)
         if is_training:
-            data = self.add_noise_to_mesh_nodes(data, self.input_mesh_noise, device)
-        data = self.add_noise_to_pcd_points(data, self.input_pcd_noise, device)
+            data = self.add_noise_to_mesh_nodes(data, self.input_mesh_noise)
+        data = self.add_noise_to_pcd_points(data, self.input_pcd_noise)
         data = self.transform_position_to_edges(data, self.euclidian_distance)
         data.edge_attr = self._mesh_edge_normalizer(data.edge_attr, is_training)
 
@@ -106,6 +106,7 @@ class TrapezModel(AbstractSystemModel):
         return hetero_data
 
     def forward(self, graph):
+        graph.to(device)
         return self.learned_model(graph)
 
     def training_step(self, graph: Batch):
@@ -117,6 +118,7 @@ class TrapezModel(AbstractSystemModel):
         return loss
 
     def get_target(self, graph, is_training):
+        graph.to(device)
         mask = torch.where(graph.node_type == NodeType.MESH)[0]
         target_velocity = graph.y - graph.pos[mask]
 
@@ -218,7 +220,7 @@ class TrapezModel(AbstractSystemModel):
         return torch.mean(torch.stack(mse_losses)), torch.mean(torch.stack(last_losses))
 
     @staticmethod
-    def add_noise_to_mesh_nodes(data: Data, sigma: float, device):
+    def add_noise_to_mesh_nodes(data: Data, sigma: float):
         """
         Adds training noise to the mesh node positions with standard deviation sigma
         Args:
@@ -241,7 +243,7 @@ class TrapezModel(AbstractSystemModel):
         return data
 
     @staticmethod
-    def add_noise_to_pcd_points(data: Data, sigma: float, device):
+    def add_noise_to_pcd_points(data: Data, sigma: float):
         """
         Adds training noise to the point cloud positions with standard deviation sigma
         Args:
