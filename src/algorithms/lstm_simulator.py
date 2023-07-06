@@ -136,6 +136,7 @@ class LSTMSimulator(AbstractSimulator):
             pred_list = list()
 
             for j, graph in enumerate(sequence):
+                graph.to(device)
                 if j != 0:
                     graph.h = h
                 pred_velocity, h = self._network(graph)
