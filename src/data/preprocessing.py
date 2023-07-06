@@ -299,13 +299,13 @@ class Preprocessing:
         data_mgn = copy.deepcopy(data)
         old_edges = data_mgn.edge_type.shape[0]
 
-        cp_edges = torch_cluster.radius(data.pos[point_index:], data.pos[obst_mask], r=0.1, max_num_neighbors=100)
+        cp_edges = torch_cluster.radius(data.pos[point_index:], data.pos[obst_mask], r=0.08, max_num_neighbors=100)
         Preprocessing.add_edge_set(data, cp_edges, (len(mask), point_index), 4, True)
 
-        grounding_edges = torch_cluster.radius(data.pos[mask], data.pos[point_index:], r=0.1, max_num_neighbors=100)
-        Preprocessing.add_edge_set(data, grounding_edges, (point_index, 0), 5, False)
+        grounding_edges = torch_cluster.radius(data.pos[mask], data.pos[point_index:], r=0.08, max_num_neighbors=100)
+        Preprocessing.add_edge_set(data, grounding_edges, (point_index, 0), 5, True)
 
-        pc_edges = torch_cluster.radius(data.pos[point_index:], data.pos[point_index:], r=0.1, max_num_neighbors=100)
+        pc_edges = torch_cluster.radius(data.pos[point_index:], data.pos[point_index:], r=0.08, max_num_neighbors=100)
         Preprocessing.add_edge_set(data, pc_edges, (point_index, point_index), 6, True)
 
         values = [0] * 7
