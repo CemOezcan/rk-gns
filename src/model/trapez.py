@@ -1,5 +1,6 @@
+import copy
 import math
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Union, List
 
 import torch_cluster
 import torch_geometric.transforms as T
@@ -14,7 +15,7 @@ from src.modules.mesh_graph_nets import MeshGraphNets
 from src.modules.normalizer import Normalizer
 from src.model.abstract_system_model import AbstractSystemModel
 from src.util.util import device
-from src.util.types import NodeType, MultiGraph
+from src.util.types import NodeType
 from torch import nn, Tensor
 
 from src.util.types import ConfigDict
@@ -30,10 +31,11 @@ class TrapezModel(AbstractSystemModel):
         self.loss_fn = torch.nn.MSELoss()
 
         self._output_normalizer = Normalizer(size=2, name='output_normalizer')
-        self._mesh_edge_normalizer = Normalizer(size=10, name='mesh_edge_normalizer')
+        self._mesh_edge_normalizer = Normalizer(size=13, name='mesh_edge_normalizer', device='cpu').cpu()
 
         self.message_passing_steps = params.get('message_passing_steps')
         self.message_passing_aggregator = params.get('aggregation')
+        self.recurrence = True
 
         self._edge_sets = [''.join(('mesh', '0', 'mesh'))]
         self._node_sets = ['mesh']
@@ -47,24 +49,31 @@ class TrapezModel(AbstractSystemModel):
             edge_sets=self._edge_sets,
             node_sets=self._node_sets,
             dec=self._node_sets[0],
-            use_global=False
+            use_global=params.get('use_global'), recurrence=self.recurrence
         ).to(device)
 
-        self.pointcloud_dropout = 1
-        self.hetero = False
-        self.use_world_edges = False
-        self.input_mesh_noise = 0.03
-        self.input_pcd_noise = 0.01
         self.euclidian_distance = True
+        self.pc_frequency = params.get('pc_frequency')
+        self.mgn = params.get('mgn')
+        self.hetero = params.get('heterogeneous')
+        self.input_mesh_noise = params.get('noise')
+        self.input_pcd_noise = params.get('pc_noise')
 
-    def build_graph(self, data: Data, is_training: bool) -> Data:
+    def build_graph(self, data: Tuple[Data, Data], is_training: bool, keep_point_cloud: Union[bool, None] = None) -> HeteroData:
         """Builds input graph."""
-        data.to(device)
+        if self.mgn:
+            data = data[1]
+        elif keep_point_cloud is None:
+            x = np.random.rand(1)
+            data = data[0] if x < (1 / self.pc_frequency) else data[1]
+        elif keep_point_cloud:
+            data = data[0]
+        else:
+            data = data[1]
+
         if is_training:
-            #data = self.add_pointcloud_dropout(data, self.pointcloud_dropout, self.hetero, self.use_world_edges)
-            #data.to(device)
-            data = self.add_noise_to_mesh_nodes(data, self.input_mesh_noise, device)
-        #data = self.add_noise_to_pcd_points(data, self.input_pcd_noise, device)
+            data = self.add_noise_to_mesh_nodes(data, self.input_mesh_noise)
+        data = self.add_noise_to_pcd_points(data, self.input_pcd_noise)
         data = self.transform_position_to_edges(data, self.euclidian_distance)
         data.edge_attr = self._mesh_edge_normalizer(data.edge_attr, is_training)
 
@@ -75,7 +84,7 @@ class TrapezModel(AbstractSystemModel):
         edge_type = data.edge_type
 
         # Create a HeteroData object
-        hetero_data = HeteroData()
+        hetero_data = HeteroData().cpu()
 
         # Add node data to the HeteroData object
         hetero_data[self._node_sets[0]].x = node_attr
@@ -87,44 +96,45 @@ class TrapezModel(AbstractSystemModel):
         hetero_data.edge_type = edge_type
 
         hetero_data.u = data.u
+        hetero_data.h = data.h
         hetero_data.pos = data.pos
-        hetero_data.batch = data.batch
         hetero_data.y = data.y
-        hetero_data.to(device)
+        hetero_data.next_pos = data.next_pos
+        hetero_data.cpu()
 
         return hetero_data
 
     def forward(self, graph):
         return self.learned_model(graph)
 
-    def training_step(self, graph, data_frame):
-        mask = torch.where(graph.node_type == NodeType.MESH)[0]
+    def training_step(self, graph: Batch):
+        graph.to(device)
+        pred_velocity, _ = self(graph)
+        target_velocity = self.get_target(graph, True)
 
-        pred_velocity = self(graph)[mask]
-        target_velocity = graph.y[mask] - graph.pos[mask]
-
-        target_velocity = self._output_normalizer(target_velocity, True)
         loss = self.loss_fn(target_velocity, pred_velocity)
 
         return loss
 
-    @torch.no_grad()
-    def validation_step(self, graph: MultiGraph, data_frame: Dict) -> Tuple[Tensor, Tensor]:
+    def get_target(self, graph, is_training):
         mask = torch.where(graph.node_type == NodeType.MESH)[0]
+        target_velocity = graph.y - graph.pos[mask]
 
-        pred_velocity = self(graph)[mask]
-        target_velocity = graph.y[mask] - graph.pos[mask]
-        # TODO: compute target with or without noise?
+        return self._output_normalizer(target_velocity, is_training)
 
-        target_velocity = self._output_normalizer(target_velocity, False)
+    @torch.no_grad()
+    def validation_step(self, graph: Batch, data_frame: Dict) -> Tuple[Tensor, Tensor]:
+        graph.to(device)
+        pred_velocity = self(graph)[0]
+        target_velocity = self.get_target(graph, False)
         error = self.loss_fn(target_velocity, pred_velocity).cpu()
 
         pred_position, _, _ = self.update(graph, pred_velocity)
-        pos_error = self.loss_fn(pred_position, graph.y[mask]).cpu()
+        pos_error = self.loss_fn(pred_position, graph.y).cpu()
 
         return error, pos_error
 
-    def update(self, inputs, per_node_network_output: Tensor) -> Tensor:
+    def update(self, inputs: Batch, per_node_network_output: Tensor) -> Tensor:
         """Integrate model outputs."""
         mask = torch.where(inputs.node_type == NodeType.MESH)[0]
         velocity = self._output_normalizer.inverse(per_node_network_output)
@@ -138,64 +148,70 @@ class TrapezModel(AbstractSystemModel):
         return (position, cur_position, velocity)
 
     @torch.no_grad()
-    def rollout(self, trajectory: Dict[str, Tensor], num_steps: int) -> Tuple[Dict[str, Tensor], Tensor]:
+    def rollout(self, trajectory: List[Dict[str, Tensor]], num_steps: int) -> Tuple[Dict[str, Tensor], Tensor]:
         """Rolls out a model trajectory."""
-        num_steps = trajectory['cells'].shape[0] if num_steps is None else num_steps
-        initial_state = {k: torch.squeeze(v, 0)[0] for k, v in trajectory.items()}
+        num_steps = len(trajectory) if num_steps is None else num_steps
+        initial_state = trajectory[0] # {k: torch.squeeze(v, 0)[0] for k, v in trajectory.items()}
 
-        node_type = initial_state['node_type']
-        mask = torch.where(node_type == NodeType.MESH)[0].to(device)
+        point_index = initial_state['point_index']
 
         cur_pos = torch.squeeze(initial_state['pos'], 0).to(device)
-        target_pos = trajectory['y'].to(device)
+        target_pos = [t['next_pos'].to(device) for t in trajectory]
+        features = [t['x'].to(device) for t in trajectory]
         pred_trajectory = []
-        cur_positions = []
-        cur_velocities = []
+        hidden = initial_state['h']
         for step in range(num_steps):
-            cur_pos,  pred_trajectory, cur_positions, cur_velocities = \
-                self._step_fn(initial_state, cur_pos, pred_trajectory, cur_positions,
-                              cur_velocities, target_pos[step], step, mask, num_steps)
+            node_type = trajectory[step]['node_type']
+            mask = torch.where(node_type == NodeType.MESH)[0].to(device)
+            cur_pos, pred_trajectory, hidden = self._step_fn(initial_state, cur_pos, pred_trajectory,
+                                                             target_pos[step], features[step], mask, step, hidden)
 
-        prediction, cur_positions, cur_velocities = \
-            (torch.stack(pred_trajectory), torch.stack(cur_positions), torch.stack(cur_velocities))
+        prediction = torch.stack([x[:point_index] for x in pred_trajectory][:num_steps]).cpu()
+        gt_pos = torch.stack([t['pos'][:point_index] for t in trajectory][:num_steps]).cpu()
 
         traj_ops = {
-            'cells': trajectory['cells'][0],
-            'cell_type': trajectory['cell_type'][0],
+            'cells': trajectory[0]['cells'],
+            'cell_type': trajectory[0]['cell_type'],
             'node_type': node_type,
-            'gt_pos': trajectory['pos'],
+            'gt_pos': gt_pos,
             'pred_pos': prediction
         }
+        mask = mask.cpu()
 
         mse_loss_fn = torch.nn.MSELoss(reduction='none')
-        mse_loss = mse_loss_fn(trajectory['pos'][:num_steps].cpu(), prediction.cpu()).cpu()
+        mse_loss = mse_loss_fn(gt_pos[:, mask], prediction[:, mask]).cpu()
         mse_loss = torch.mean(torch.mean(mse_loss, dim=-1), dim=-1).detach()
 
         return traj_ops, mse_loss
 
     @torch.no_grad()
-    def _step_fn(self, initial_state, cur_pos, trajectory, cur_positions, cur_velocities, target_world_pos, step, mask, num_steps):
-        input = {**initial_state, 'pos': cur_pos, 'y': target_world_pos}
-        data = Preprocessing.postprocessing(Data.from_dict(input).cpu())
-        graph = self.build_graph(data, is_training=False)
+    def _step_fn(self, initial_state, cur_pos, trajectory, target_world_pos, x, mask, step, hidden):
+        next_pos = copy.deepcopy(target_world_pos)
+        h = hidden
+        input = {**initial_state, 'x': x, 'pos': cur_pos, 'next_pos': target_world_pos, 'y': target_world_pos[mask],
+                 'h': h}
 
-        prediction, cur_position, cur_velocity = self.update(data.to(device), self(graph)[mask])
-        next_pos = target_world_pos
+        data = Preprocessing.postprocessing(Data.from_dict(input).cpu())
+        keep_pc = False if self.mgn else step % self.pc_frequency == 0
+        graph = Batch.from_data_list([self.build_graph(data, is_training=False, keep_point_cloud=keep_pc)]).to(device)
+        data = data[0] if keep_pc else data[1]
+
+        output, hidden = self(graph)
+
+        prediction, cur_position, cur_velocity = self.update(data.to(device), output[mask])
         next_pos[mask] = prediction
 
         trajectory.append(next_pos)
-        cur_positions.append(cur_position)
-        cur_velocities.append(cur_velocity)
-        return next_pos, trajectory, cur_positions, cur_velocities
+        return next_pos, trajectory, hidden
 
     @torch.no_grad()
-    def n_step_computation(self, trajectory: Dict[str, Tensor], n_step: int, num_timesteps=None) -> Tuple[Tensor, Tensor]:
+    def n_step_computation(self, trajectory: List[Dict[str, Tensor]], n_step: int, num_timesteps=None) -> Tuple[Tensor, Tensor]:
         mse_losses = list()
         last_losses = list()
-        num_timesteps = trajectory['cells'].shape[0] if num_timesteps is None else num_timesteps
+        num_timesteps = len(trajectory) if num_timesteps is None else num_timesteps
         for step in range(num_timesteps - n_step):
             # TODO: clusters/balancers are reset when computing n_step loss
-            eval_traj = {k: v[step: step + n_step + 1] for k, v in trajectory.items()}
+            eval_traj = trajectory[step: step + n_step + 1]
             prediction_trajectory, mse_loss = self.rollout(eval_traj, n_step + 1)
             mse_losses.append(torch.mean(mse_loss).cpu())
             last_losses.append(mse_loss.cpu()[-1])
@@ -203,7 +219,7 @@ class TrapezModel(AbstractSystemModel):
         return torch.mean(torch.stack(mse_losses)), torch.mean(torch.stack(last_losses))
 
     @staticmethod
-    def add_noise_to_mesh_nodes(data: Data, sigma: float, device):
+    def add_noise_to_mesh_nodes(data: Data, sigma: float):
         """
         Adds training noise to the mesh node positions with standard deviation sigma
         Args:
@@ -219,14 +235,14 @@ class TrapezModel(AbstractSystemModel):
             indices = torch.where(data.node_type == NodeType.MESH)[0]
             num_noise_features = data.pos.shape[1]
             num_node_features = data.pos.shape[1]
-            noise = (torch.randn(indices.shape[0], num_noise_features) * sigma).to(device)
+            noise = (torch.randn(indices.shape[0], num_noise_features) * sigma).cpu()
             data.pos[indices, num_node_features - num_noise_features:num_node_features] = \
                 data.pos[indices, num_node_features - num_noise_features:num_node_features] + noise
 
         return data
 
     @staticmethod
-    def add_noise_to_pcd_points(data: Data, sigma: float, device):
+    def add_noise_to_pcd_points(data: Data, sigma: float):
         """
         Adds training noise to the point cloud positions with standard deviation sigma
         Args:
@@ -242,93 +258,9 @@ class TrapezModel(AbstractSystemModel):
             indices = torch.where(data.node_type == NodeType.MESH)[0]
             num_noise_features = data.pos.shape[1]
             num_node_features = data.pos.shape[1]
-            noise = (torch.randn(indices.shape[0], num_noise_features) * sigma).to(device)
+            noise = (torch.randn(indices.shape[0], num_noise_features) * sigma).cpu()
             data.pos[indices, num_node_features - num_noise_features:num_node_features] = data.pos[indices,
                                                                                           num_node_features - num_noise_features:num_node_features] + noise
-        return data
-
-    @staticmethod
-    def add_pointcloud_dropout(data: Data, pointcloud_dropout: float, hetero: bool, use_world_edges=False) -> Data:
-        """
-        Randomly drops the pointcloud (with nodes and edges) for the input batch. A bit hacky
-        data.batch and data.ptr are used
-        Args:
-            data: PyG data element containing (a batch of) heterogeneous or homogeneous graph(s)
-            pointcloud_dropout: Probability of dropping the point cloud for a batch
-            hetero: Use hetero data
-            use_world_edges: Use world edges
-
-        Returns:
-            data: updated data element
-        """
-        x = np.random.rand(1)
-        if x < pointcloud_dropout:
-            # node and edge types to keep
-            node_types = [1, 2]
-            if use_world_edges:
-                edge_types = [1, 2, 5, 8, 9]
-            else:
-                edge_types = [1, 2, 5, 8]
-
-            # extract correct edge indices
-            edge_indices = []
-            for edge_type in edge_types:
-                edge_indices.append(torch.where(data.edge_type == edge_type)[0])
-            edge_indices = torch.cat(edge_indices, dim=0)
-
-            # create index shift lists for edge index
-            num_node_type = []
-            num_node_type_0 = []
-            graph_pointer = []
-            for batch in range(int(torch.max(data.batch) + 1)):
-                batch_data = data.node_type[data.batch == batch]
-                num_node_type_0.append(len(batch_data[batch_data == 0]))
-                graph_pointer.append(len(batch_data[batch_data == 1]) + len(batch_data[batch_data == 2]))
-                num_node_type.append(len(batch_data))
-
-            num_node_type_0 = list(np.cumsum(num_node_type_0))
-            num_node_type = list(np.cumsum(num_node_type))
-            num_node_type = [0] + num_node_type
-            graph_pointer = [0] + list(np.cumsum(graph_pointer))
-
-            # extract correct node indices (in batch order)
-            # therefore the index shift list num_node_type is needed
-            # to_heterogeneous does not care about batch indices, so to make this work, we need to keep the order of the batch when extracting the mesh only data
-            node_indices = []
-            for batch in range(int(torch.max(data.batch) + 1)):
-                batch_data = data.node_type[data.batch == batch]
-                for node_type in node_types:
-                    node_indices.append(torch.where(batch_data == node_type)[0] + num_node_type[batch])
-            node_indices = torch.cat(node_indices, dim=0)
-
-            # create updated tensors
-            new_pos = data.pos[node_indices]
-            new_x = data.x[node_indices]
-            new_batch = data.batch[node_indices]
-            new_node_type = data.node_type[node_indices]
-            new_edge_index = data.edge_index[:, edge_indices]
-            new_edge_type = data.edge_type[edge_indices]
-
-            # shift indices for updated edge_index tensor:
-            for index in range(len(num_node_type_0)):
-                new_edge_index = torch.where(
-                    torch.logical_and(new_edge_index > num_node_type[index], new_edge_index < num_node_type[index + 1]),
-                    new_edge_index - num_node_type_0[index], new_edge_index)
-
-            # update data object
-            data.pos = new_pos
-            data.x = new_x
-            data.batch = new_batch
-            data.node_type = new_node_type
-            data.edge_index = new_edge_index
-            data.edge_type = new_edge_type
-            data.ptr = torch.tensor(graph_pointer)
-
-            # edge_attr are only used for homogeneous graphs at this stage
-            if not hetero:
-                new_edge_attr = data.edge_attr[edge_indices]
-                data.edge_attr = new_edge_attr
-
         return data
 
     @staticmethod

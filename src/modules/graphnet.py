@@ -3,11 +3,8 @@ from typing import Callable, List
 import torch
 
 from torch import nn, Tensor
-from torch_geometric.data import HeteroData
+from torch_geometric.data import Batch
 from torch_geometric.utils import scatter
-
-from src.util.util import device
-from src.util.types import MultiGraph, EdgeSet
 
 
 class GraphNet(nn.Module):
@@ -24,7 +21,7 @@ class GraphNet(nn.Module):
         self._use_global = use_global
         self.message_passing_aggregator = message_passing_aggregator
 
-    def _update_edges(self, graph: HeteroData):
+    def _update_edges(self, graph: Batch):
         for position, (edge_type, edge_store) in enumerate(zip(graph.edge_types, graph.edge_stores)):
             edge_attr = edge_store.get('edge_attr')
             edge_indices = edge_store.get('edge_index')
@@ -47,27 +44,27 @@ class GraphNet(nn.Module):
 
             edge_store['edge_attr'] = torch.add(edge_attr, self.edge_models["".join(edge_type)](aggregated_features))
 
-    def _update_nodes(self, graph: HeteroData):
-        node_features = graph.node_stores[0].get('x')
-        num_nodes = node_features.shape[0]
+    def _update_nodes(self, graph: Batch):
+        num_nodes = sum([node_store.x.shape[0] for node_store in graph.node_stores])
 
         edge_features = list()
         for edge_type, edge_store in zip(graph.edge_types, graph.edge_stores):
-            edge_features.append(self.aggregation(edge_store.get('edge_attr'), edge_store.get('edge_index')[1], num_nodes))
+            edge_features.append(
+                self.aggregation(edge_store.get('edge_attr'), edge_store.get('edge_index')[1], num_nodes))
 
         edge_features = torch.cat(edge_features, dim=-1)
 
         for position, (node_type, node_store) in enumerate(zip(graph.node_types, graph.node_stores)):
             node_features = node_store.get('x')
             aggregated_features = torch.cat([node_features, edge_features], 1)
-            # global
+
             if self._use_global:
                 batch = graph[node_type].batch
                 aggregated_features = torch.cat([aggregated_features, graph.u[batch]], 1)
-            # update
+
             node_store["x"] = torch.add(node_features, self.node_models[node_type](aggregated_features))
 
-    def _update_global(self, graph: HeteroData):
+    def _update_global(self, graph: Batch):
         edge_feature_list = []
         node_feature_list = []
         for edge_type, edge_store in zip(graph.edge_types, graph.edge_stores):
@@ -100,7 +97,7 @@ class GraphNet(nn.Module):
 
         return reduced
 
-    def forward(self, graph: HeteroData) -> HeteroData:
+    def forward(self, graph: Batch) -> Batch:
         """Applies GraphNetBlock and returns updated MultiGraph."""
 
         self._update_edges(graph)
@@ -123,9 +120,6 @@ class GraphNet(nn.Module):
         assert all([i in data.shape for i in segment_ids.shape]
                    ), "segment_ids.shape should be a prefix of data.shape"
 
-        shape = [num_segments] + list(data.shape[1:])
-        result = torch.zeros(*shape).to(device)
-
         if operation == 'sum':
             result = scatter(data.float(), segment_ids, dim=0, dim_size=num_segments, reduce='add')
         elif operation == 'max':
@@ -134,7 +128,7 @@ class GraphNet(nn.Module):
             result = scatter(data.float(), segment_ids, dim=0, dim_size=num_segments, reduce='mean')
         elif operation == 'min':
             result = scatter(data.float(), segment_ids, dim=0, dim_size=num_segments, reduce='min')
-        elif operation == 'std':
+        elif operation == 'mul':
             result = scatter(data.float(), segment_ids, dim=0, dim_size=num_segments, reduce='mul')
         else:
             raise Exception('Invalid operation type!')

@@ -5,14 +5,13 @@ from collections import OrderedDict
 from typing import List, Type, Tuple
 
 from torch import nn, Tensor
-from torch_geometric.data import HeteroData
+from torch_geometric.data import Batch
 
 from src.modules.encoder import Encoder
 from src.modules.graphnet import GraphNet
 from src.modules.processor import Processor
 from src.modules.decoder import Decoder
 from src.util.util import device
-from src.util.types import MultiGraph
 
 
 class MeshGraphNets(nn.Module):
@@ -20,7 +19,7 @@ class MeshGraphNets(nn.Module):
 
     def __init__(self, output_size: int, latent_size: int, num_layers: int, message_passing_aggregator: str,
                  message_passing_steps: int, node_sets: List[str], edge_sets: List[str], dec: str,
-                 use_global: bool):
+                 use_global: bool, recurrence: bool):
         super().__init__()
         self._latent_size = latent_size
         self._output_size = output_size
@@ -42,9 +41,9 @@ class MeshGraphNets(nn.Module):
                                    graphnet_block=graphnet_block,
                                    use_global=use_global)
         self.decoder = Decoder(make_mlp=functools.partial(self._make_mlp, layer_norm=False),
-                               output_size=self._output_size, node_type=dec)
+                               output_size=self._output_size, node_type=dec, latent_size=latent_size, recurrence=recurrence)
 
-    def forward(self, graph: HeteroData) -> Tensor:
+    def forward(self, graph: Batch) -> Tensor:
         """Encodes and processes a multigraph, and returns node features."""
         latent_graph = self.encoder(graph)
         latent_graph = self.processor(latent_graph)

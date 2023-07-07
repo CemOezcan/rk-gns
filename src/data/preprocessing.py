@@ -1,8 +1,11 @@
+import copy
+import math
 import os
 import pickle
-from typing import Dict
+import random
+from typing import Dict, Tuple
 import torch_geometric.transforms as T
-
+import torch.nn.functional as F
 import torch
 import torch_cluster
 from torch import Tensor
@@ -10,18 +13,20 @@ from torch_geometric.data import Data
 from tqdm import tqdm
 
 from src.util.types import NodeType
+from src.util.util import get_from_nested_dict
 
 
 class Preprocessing:
 
-    def __init__(self, split, path, raw):
-        self.euclidian_distance = True
+    def __init__(self, split, path, raw, config):
 
-        self.hetero = False
-        self.use_poisson = False
+        self.hetero = config.get('model').get('heterogeneous')
+        self.use_poisson = config.get('model').get('poisson_ratio')
         self.split = split
         self.path = path
         self.raw = raw
+        self.trajectories = config.get('task').get('trajectories')
+        self.trajectories = math.inf if isinstance(self.trajectories, str) else self.trajectories
 
         # dataset parameters
         self.input_dataset = 'deformable_plate'
@@ -38,9 +43,12 @@ class Preprocessing:
             rollout_length = len(trajectory['nodes_grid'])
             data_list = []
 
+            if index >= self.trajectories:
+                break
+
             for timestep in range(rollout_length - 2):
-                data_timestep = self.prepare_data_for_trajectory(trajectory, timestep)
-                data = self.create_graph_from_raw(data_timestep)
+                data_timestep = self.extract_system_parameters(trajectory, timestep)
+                data = self.create_graph(data_timestep)
 
                 if not self.raw:
                     data = Preprocessing.postprocessing(Data.from_dict(data))
@@ -49,36 +57,70 @@ class Preprocessing:
 
             trajectory_list.append(data_list)
 
-        trajectory_list = self.squash_data(trajectory_list) if self.raw else self.split_data(trajectory_list)
+        trajectory_list = trajectory_list if self.raw else self.split_data(trajectory_list)
 
         return trajectory_list
 
-    def prepare_data_for_trajectory(self, data: Dict, timestep: int) -> Dict:
+    @staticmethod
+    def extract_system_parameters(data: Dict, timestep: int) -> Dict:
+        """
+        Extract relevant parameters regarding the system State for a given instance.
+
+        Parameters
+        ----------
+            data : Dict
+                An entire trajectory of system states
+
+            timestep :
+                The desired timestep within the given trajectory
+
+        Returns
+        -------
+            Dict
+                The system parameters of the desired time step.
+
+        """
         # Transpose: edge list to sender, receiver list
         instance = dict()
-        instance['pcd_pos'] = torch.tensor(data["pcd_points"][timestep])
-        instance['target_pcd_pos'] = torch.tensor(data["pcd_points"][timestep + 1]).long()
+        instance['poisson_ratio'] = torch.tensor(data['poisson_ratio']).reshape(-1, 1)
 
-        instance['mesh_pos'] = torch.tensor(data["nodes_grid"][timestep])
-        instance['target_mesh_pos'] = torch.tensor(data["nodes_grid"][timestep + 1])
-        instance['init_mesh_pos'] = torch.tensor(data["nodes_grid"][0])
-        instance['mesh_edge_index'] = torch.tensor(data["edge_index_grid"].T).long()
-        instance['mesh_cells'] = torch.tensor(data["triangles_grid"]).long()
+        instance['pcd_pos'] = torch.tensor(data['pcd_points'][timestep])
+        instance['target_pcd_pos'] = torch.tensor(data['pcd_points'][timestep + 1])
 
-        instance['target_collider_pos'] = torch.tensor(data["nodes_collider"][timestep + 1])
-        instance['collider_pos'] = torch.tensor(data["nodes_collider"][timestep])
-        instance['init_collider_pos'] = torch.tensor(data["nodes_collider"][0])
-        instance['collider_edge_index'] = torch.tensor(data["edge_index_collider"].T).long()
-        instance['collider_cells'] = torch.tensor(data["triangles_collider"]).long()
+        instance['mesh_pos'] = torch.tensor(data['nodes_grid'][timestep])
+        instance['target_mesh_pos'] = torch.tensor(data['nodes_grid'][timestep + 1])
+        instance['init_mesh_pos'] = torch.tensor(data['nodes_grid'][0])
+        instance['mesh_edge_index'] = torch.tensor(data['edge_index_grid'].T).long()
+        instance['mesh_cells'] = torch.tensor(data['triangles_grid']).long()
+
+        instance['target_collider_pos'] = torch.tensor(data['nodes_collider'][timestep + 1])
+        instance['collider_pos'] = torch.tensor(data['nodes_collider'][timestep])
+        instance['init_collider_pos'] = torch.tensor(data['nodes_collider'][0])
+        instance['collider_edge_index'] = torch.tensor(data['edge_index_collider'].T).long()
+        instance['collider_cells'] = torch.tensor(data['triangles_collider']).long()
 
         return instance
 
-    def create_graph_from_raw(self, input_data) -> Data:
+    def create_graph(self, input_data: Dict) -> Dict:
+        """
+        Convert system state parameters into a graph.
+
+        Parameters
+        ----------
+            input_data: Dict
+                Defines the state of a system at a particular time step.
+
+        Returns
+        -------
+            Dict
+                A graph with mesh edges.
+
+        """
 
         # dictionary for positions
-        pos_dict = {'mesh': input_data['mesh_pos'], 'collider': input_data['collider_pos']}
+        pos_dict = {'mesh': input_data['mesh_pos'], 'collider': input_data['collider_pos'], 'point': input_data['pcd_pos']}
         init_pos_dict = {'mesh': input_data['init_mesh_pos'], 'collider': input_data['init_collider_pos']}
-        target_dict = {'mesh': input_data['target_mesh_pos'], 'collider': input_data['target_collider_pos']}
+        target_dict = {'mesh': input_data['target_mesh_pos'], 'collider': input_data['target_collider_pos'], 'point': input_data['target_pcd_pos']}
 
         # build nodes features (one hot)
         num_nodes = [values.shape[0] for values in pos_dict.values()]
@@ -86,10 +128,10 @@ class Preprocessing:
         node_type = self.build_type(num_nodes)
 
         # # used if poisson ratio needed as input feature, but atm incompatible with Imputation training
-        poisson_ratio = torch.tensor([1.0])
+        poisson_ratio = input_data['poisson_ratio'] if self.use_poisson else torch.tensor([0.0]).reshape(-1, 1)
 
         # index shift dict for edge index matrix
-        index_shift_dict = {'mesh': 0, 'collider': num_nodes[0]}
+        index_shift_dict = {'mesh': 0, 'collider': num_nodes[0], 'point': num_nodes[0] + num_nodes[1]}
         mesh_edges = torch.cat((input_data['mesh_edge_index'], input_data['mesh_edge_index'][[1, 0]]), dim=1)
         mesh_edges[:, :] += index_shift_dict['mesh']
 
@@ -118,30 +160,21 @@ class Preprocessing:
 
         # create data object for torch
         data = {'x': x.float(),
-                'u': poisson_ratio,
+                'u': poisson_ratio.float(),
+                'h': poisson_ratio.float(),
                 'pos': pos.float(),
+                'next_pos': target.float(),
+                'point_index': num_nodes[0] + num_nodes[1],
                 'init_pos': init_pos,
                 'edge_index': edge_index.long(),
                 'edge_attr': edge_attr.float(),
                 'cells': cells.long(),
-                'y': target.float(),
-                'y_old': input_data['mesh_pos'].float(),
+                'y': target[:index_shift_dict['collider']].float(),
                 'node_type': node_type,
                 'edge_type': edge_type,
                 'cell_type': cell_type}
 
         return data
-
-    def squash_data(self, trajectories):
-        squashed_trajectories = list()
-        for trajectory in trajectories:
-            data_dict = dict()
-            for key in trajectory[0].keys():
-                data_dict[key] = torch.stack([data[key] for data in trajectory], dim=0)
-            squashed_trajectories.append(data_dict)
-
-        return squashed_trajectories
-
 
     @staticmethod
     def build_one_hot_features(num_per_type: list) -> Tensor:
@@ -186,6 +219,7 @@ class Preprocessing:
             data_list: One list of all time steps
         """
         data_list = []
+        random.shuffle(trajectory_list)
         for trajectory in trajectory_list:
             for index, data in enumerate(trajectory):
                 if index >= start_index:
@@ -234,29 +268,47 @@ class Preprocessing:
         return data.edge_attr
 
     @staticmethod
-    def postprocessing(data):
+    def postprocessing(data: Data) -> Tuple[Data, Data]:
+        """
+        Task specific expansion of the given input graph. Adds different edge types based on neighborhood graphs.
+        Convert the resulting graph into a Data object.
+
+        Parameters
+        ----------
+            data: Data
+                Basic graph without additional edge types
+
+        Returns
+        -------
+            Tuple[Data, Data]
+                Tuple containing the basic graph and the expanded graph.
+
+        """
         mask = torch.where(data.node_type == NodeType.MESH)[0]
         obst_mask = torch.where(data.node_type == NodeType.COLLIDER)[0]
+        point_index = data.point_index
+
+        # Add collision edges
+        collision_edges = torch_cluster.radius(data.pos[mask], data.pos[obst_mask], r=0.3, max_num_neighbors=100)
+        Preprocessing.add_edge_set(data, collision_edges, (len(mask), 0), 2, False)
 
         # Add world edges
-        world_edges = torch_cluster.radius(data.pos[mask], data.pos[obst_mask], r=0.3, max_num_neighbors=100)
-        row, col = world_edges[0], world_edges[1]
-        row, col = row[row != col], col[row != col]
-        world_edges = torch.stack([row, col], dim=0)
-        world_edges[0, :] += len(mask)
+        world_edges = torch_cluster.radius(data.pos[mask], data.pos[mask], r=0.3, max_num_neighbors=100)
+        Preprocessing.add_edge_set(data, world_edges, (0, 0), 3, True, remove_duplicates=True)
 
-        data.edge_index = torch.cat([data.edge_index, world_edges], dim=1)
-        data.edge_type = torch.cat([data.edge_type, torch.tensor([2] * len(world_edges[0])).long()], dim=0)
+        data_mgn = copy.deepcopy(data)
+        old_edges = data_mgn.edge_type.shape[0]
 
-        ext_edges = torch_cluster.radius(data.pos[mask], data.pos[mask], r=0.3, max_num_neighbors=100)
-        row, col = ext_edges[0], ext_edges[1]
-        row, col = row[row != col], col[row != col]
-        ext_edges = torch.stack([row, col], dim=0)
-        ext_edges = Preprocessing.remove_duplicates_with_mesh_edges(data.edge_index, ext_edges)
-        data.edge_index = torch.cat([data.edge_index, ext_edges], dim=1)
-        data.edge_type = torch.cat([data.edge_type, torch.tensor([3] * len(ext_edges[0])).long()], dim=0)
+        cp_edges = torch_cluster.radius(data.pos[point_index:], data.pos[obst_mask], r=0.08, max_num_neighbors=100)
+        Preprocessing.add_edge_set(data, cp_edges, (len(mask), point_index), 4, True)
 
-        values = [0] * 4
+        grounding_edges = torch_cluster.radius(data.pos[mask], data.pos[point_index:], r=0.08, max_num_neighbors=100)
+        Preprocessing.add_edge_set(data, grounding_edges, (point_index, 0), 5, True)
+
+        pc_edges = torch_cluster.radius(data.pos[point_index:], data.pos[point_index:], r=0.08, max_num_neighbors=100)
+        Preprocessing.add_edge_set(data, pc_edges, (point_index, point_index), 6, True)
+
+        values = [0] * 7
         for key in data.edge_type:
             values[int(key)] += 1
 
@@ -264,38 +316,47 @@ class Preprocessing:
         mesh_edge_mask = torch.where(data.edge_type == 0)[0]
         data.edge_attr = Preprocessing.add_relative_mesh_positions(data.edge_attr,
                                                                    data.edge_type,
-                                                                         data.edge_index[:, mesh_edge_mask],
+                                                                   data.edge_index[:, mesh_edge_mask],
                                                                    data.init_pos[mask])
+        data_mgn.edge_attr = data.edge_attr[:old_edges]
+        data_mgn.edge_type = data.edge_type[:old_edges]
+        data_mgn.x = data_mgn.x[:point_index]
+        data_mgn.pos = data_mgn.pos[:point_index]
+        data_mgn.next_pos = data_mgn.next_pos[:point_index]
+        data_mgn.node_type = data_mgn.node_type[:point_index]
 
-        return data
+        return data, data_mgn
 
     @staticmethod
-    def remove_duplicates_with_mesh_edges(mesh_edges: Tensor, world_edges: Tensor) -> Tensor:
-        """
-        Removes the duplicates with the mesh edges have of the world edges that are created using a nearset neighbor search. (only MGN)
-        To speed this up the adjacency matrices are used
-        Args:
-            mesh_edges: edge list of the mesh edges
-            world_edges: edge list of the world edges
+    def add_edge_set(data, edges, index_shift, edge_type, bidirectional, remove_duplicates=False):
+        row, col = edges[0], edges[1]
+        row, col = row[row != col], col[row != col]
+        edges = torch.stack([row, col], dim=0)
+        edges[0, :] += index_shift[0]
+        edges[1, :] += index_shift[1]
 
-        Returns:
-            new_world_edges: updated world edges without duplicates
-        """
-        import torch_geometric.utils as utils
-        adj_mesh = utils.to_dense_adj(mesh_edges)
-        if world_edges.shape[1] > 0:
-            adj_world = utils.to_dense_adj(world_edges)
+        if remove_duplicates:
+            edges = Preprocessing.get_unique_edges(data.edge_index, edges)
+
+        indices = [data.edge_index, edges]
+        factor = len(edges[0])
+
+        if bidirectional:
+            indices.append(edges[[1, 0]])
+            factor *= 2
+
+        data.edge_index = torch.cat(indices, dim=1)
+        data.edge_type = torch.cat([data.edge_type, torch.tensor([edge_type] * factor).long()], dim=0)
+
+    @staticmethod
+    def get_unique_edges(e_1, e_2):
+        e_1, e_2 = e_1.numpy(), e_2.numpy()
+        e_1_set = set((i, j) for i, j in zip(*e_1))
+        e_2_set = set((i, j) for i, j in zip(*e_2))
+
+        unique_edges = e_2_set - e_1_set
+
+        if len(unique_edges) == 0:
+            return torch.tensor([[], []], dtype=torch.int64)
         else:
-            adj_world = torch.zeros_like(adj_mesh)
-        if adj_world.shape[1] < adj_mesh.shape[1]:
-            padding_size = adj_mesh.shape[1] - adj_world.shape[1]
-            padding_mask = torch.nn.ConstantPad2d((0, padding_size, 0, padding_size), 0)
-            adj_world = padding_mask(adj_world)
-        elif adj_world.shape[1] > adj_mesh.shape[1]:
-            padding_size = adj_world.shape[1] - adj_mesh.shape[1]
-            padding_mask = torch.nn.ConstantPad2d((0, padding_size, 0, padding_size), 0)
-            adj_mesh = padding_mask(adj_mesh)
-        new_adj = adj_world - adj_mesh
-        new_adj[new_adj < 0] = 0
-        new_world_edges = utils.dense_to_sparse(new_adj)[0]
-        return new_world_edges
+            return torch.tensor(list(unique_edges), dtype=torch.int64).t()

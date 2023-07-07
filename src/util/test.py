@@ -13,7 +13,7 @@ from src.util.types import NodeType
 def visualize_graph(data):
     mask = torch.where(data.node_type == NodeType.MESH)[0]
     collider_mask = torch.where(data.node_type == NodeType.COLLIDER)[0]
-    point_mask = torch.where(data.node_type == NodeType.POINT)[0]
+    point_index = data.point_index# torch.where(data.node_type == NodeType.POINT)[0]
     cell_mask = torch.where(data.cell_type == NodeType.MESH)[0]
     obst_cell_mask = torch.where(data.cell_type == NodeType.COLLIDER)[0]
 
@@ -36,13 +36,11 @@ def visualize_graph(data):
     #ax.add_collection(obst_collection)
     #ax.add_collection(gt_collection)
 
-    #ax.scatter(gt_pos[mask][:, 0], gt_pos[mask][:, 1], label='Ground Truth Position', c='blue', alpha=0.5, s=5)
-    #ax.scatter(gt_pos[collider_mask][:, 0], gt_pos[collider_mask][:, 1], label='Ground Truth Position', c='dimgrey', alpha=0.5, s=5)
+    ax.scatter(gt_pos[mask][:, 0], gt_pos[mask][:, 1], label='Ground Truth Position', c='blue', alpha=0.5, s=5)
+    ax.scatter(gt_pos[collider_mask][:, 0], gt_pos[collider_mask][:, 1], label='Ground Truth Position', c='dimgrey', alpha=0.5, s=5)
+    ax.scatter(gt_pos[point_index:][:, 0], gt_pos[point_index:][:, 1], label='Ground Truth Position', c='green', s=5)
 
-
-    ax.scatter(gt_pos[point_mask][:, 0], gt_pos[point_mask][:, 1], label='Ground Truth Position', c='green', s=5)
-
-    colors = ['dimgrey', 'red', 'blue', 'green', 'yellow', 'red']
+    colors = ['dimgrey', 'red', 'blue', 'green', 'yellow', 'red', 'brown', 'blue']
     for i, (x, y) in enumerate(zip(data.edge_index[0], data.edge_index[1])):
         fst = gt_pos[x]
         snd = gt_pos[y]

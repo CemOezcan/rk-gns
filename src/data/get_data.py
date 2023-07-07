@@ -1,9 +1,5 @@
 import os
-from torch_geometric.data import DataLoader
-
 from src.data.preprocessing import Preprocessing
-from src.util.util import device
-from src.util.types import *
 
 from src.util.types import ConfigDict
 from src.util.util import get_from_nested_dict
@@ -31,10 +27,8 @@ def get_data(config: ConfigDict, split='train', split_and_preprocess=True, add_t
     if dataset_name == 'trapez' or dataset_name == 'deformable_plate':
         directory, _ = get_directories(dataset_name)
 
-        pp = Preprocessing(split, directory, raw)
+        pp = Preprocessing(split, directory, raw, config)
         train_data_list = pp.build_dataset_for_split()
-        # TODO: shuffle
-        trainloader = train_data_list if raw else DataLoader(train_data_list, shuffle=True, batch_size=1)
-        return trainloader
+        return train_data_list
     else:
         raise NotImplementedError('Implement your data loading here!')

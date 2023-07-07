@@ -1,4 +1,4 @@
-from typing import Optional, Tuple
+from typing import Tuple
 
 import torch
 from torch import nn, Tensor
@@ -17,7 +17,7 @@ class AbstractSystemModel(ABC, nn.Module):
         self._params = params
 
     @abstractmethod
-    def training_step(self, graph: MultiGraph, data_frame: Dict[str, Tensor]) -> Tensor:
+    def training_step(self, graph: Batch) -> Tensor:
         """
         Perform a single training step.
 
@@ -39,7 +39,7 @@ class AbstractSystemModel(ABC, nn.Module):
 
     @abstractmethod
     @torch.no_grad()
-    def validation_step(self, graph: MultiGraph, data_frame: Dict[str, Tensor]) -> Tuple[Tensor, Tensor]:
+    def validation_step(self, graph: Batch, data_frame: Dict[str, Tensor]) -> Tuple[Tensor, Tensor]:
         """
         Evaluate given input data and potentially auxiliary information to create a dictionary of resulting values.
         What kinds of things are scored/evaluated depends on the concrete algorithm.
@@ -62,7 +62,7 @@ class AbstractSystemModel(ABC, nn.Module):
         raise NotImplementedError
 
     @abstractmethod
-    def update(self, inputs: Dict[str, Tensor], per_node_network_output: Tensor) -> Tensor:
+    def update(self, inputs: Batch, per_node_network_output: Tensor) -> Tensor:
         """
         Makes a prediction for the given input data and uses it to compute the predicted system state.
 
@@ -83,7 +83,7 @@ class AbstractSystemModel(ABC, nn.Module):
         raise NotImplementedError
 
     @abstractmethod
-    def build_graph(self, inputs: Dict[str, Tensor], is_training: bool) -> MultiGraph:
+    def build_graph(self, inputs: Tuple[Data, Data], is_training: bool) -> HeteroData:
         """
         Constructs the input graph given a system state.
 
@@ -105,7 +105,7 @@ class AbstractSystemModel(ABC, nn.Module):
 
     @abstractmethod
     @torch.no_grad()
-    def rollout(self, trajectory: Dict[str, Tensor], num_steps: int) -> Tuple[Dict[str, Tensor], Tensor]:
+    def rollout(self, trajectory: List[Dict[str, Tensor]], num_steps: int) -> Tuple[Dict[str, Tensor], Tensor]:
         """
         Predict a sub trajectory for n time steps by making n consecutive one-step predictions recursively.
 
@@ -128,7 +128,7 @@ class AbstractSystemModel(ABC, nn.Module):
 
     @abstractmethod
     @torch.no_grad()
-    def n_step_computation(self, trajectory: Dict[str, Tensor], n_step: int) -> Tuple[Tensor, Tensor]:
+    def n_step_computation(self, trajectory: List[Dict[str, Tensor]], n_step: int) -> Tuple[Tensor, Tensor]:
         """
         Predict the system state after n time steps. N step predictions are performed recursively within trajectories.
 

@@ -16,17 +16,17 @@ from pandas import DataFrame
 from torch import Tensor
 from tqdm import tqdm
 
-from src.data.datasets import RegularDataset
+from src.data.datasets import SequenceNoReturnDataset, RegularDataset
 from src.data.get_data import get_directories
 from src.algorithms.abstract_simulator import AbstractSimulator
 from src.model.abstract_system_model import AbstractSystemModel
 from src.model.get_model import get_model
-from torch_geometric.data import DataLoader
-from src.util.types import ConfigDict
+from torch_geometric.loader import DataLoader
+from src.util.types import ConfigDict, NodeType
 from src.util.util import device
 
 
-class MeshSimulator(AbstractSimulator):
+class LSTMSimulator(AbstractSimulator):
     """
     Class for training and evaluating a graph neural network for mesh based physics simulations.
     """
@@ -50,6 +50,7 @@ class MeshSimulator(AbstractSimulator):
 
         self._trajectories = config.get('task').get('trajectories')
         self._time_steps = config.get('task').get('n_timesteps')
+        self._seq_len = config.get('task').get('sequence')
         self._prefetch_factor = config.get('task').get('prefetch_factor')
 
         self._batch_size = config.get('task').get('batch_size')
@@ -129,10 +130,25 @@ class MeshSimulator(AbstractSimulator):
         self._network.train()
         data = self.fetch_data(train_dataloader, True)
 
-        for i, batch in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
-            start_instance = time.time()
-            batch.to(device)
-            loss = self._network.training_step(batch)
+        start_instance = time.time()
+        for i, sequence in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
+            target_list = list()
+            pred_list = list()
+
+            for j, graph in enumerate(sequence):
+                graph.to(device)
+                if j != 0:
+                    graph.h = h
+                pred_velocity, h = self._network(graph)
+                target_velocity = self._network.get_target(graph, True)
+
+                target_list.append(target_velocity)
+                pred_list.append(pred_velocity)
+
+            target = torch.stack(target_list, dim=1)
+            pred = torch.stack(pred_list, dim=1)
+
+            loss = self._network.loss_fn(target, pred)
             loss.backward()
 
             self._optimizer.step()
@@ -140,6 +156,7 @@ class MeshSimulator(AbstractSimulator):
 
             end_instance = time.time()
             wandb.log({'loss': loss.detach(), 'training time per instance': end_instance - start_instance})
+            start_instance = time.time()
 
     def fetch_data(self, trajectory: DataLoader, is_training: bool) -> DataLoader:
         """
@@ -157,7 +174,14 @@ class MeshSimulator(AbstractSimulator):
             DataLoader
                 Collection of batched graphs.
         """
-        dataset = RegularDataset(trajectory, partial(self._network.build_graph, is_training=is_training))
+        if is_training:
+            trajectories = [list() for _ in range(len(trajectory) // self._time_steps)]
+            for i, graph in enumerate(trajectory):
+                index = i // self._time_steps
+                trajectories[index].append(graph)
+            dataset = SequenceNoReturnDataset(trajectories, self._seq_len, partial(self._network.build_graph, is_training=True))
+        else:
+            dataset = RegularDataset(trajectory, partial(self._network.build_graph, is_training=False))
 
         batches = DataLoader(dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True, num_workers=8, prefetch_factor=2)
 
@@ -350,10 +374,10 @@ class MeshSimulator(AbstractSimulator):
         """
         table = wandb.Table(dataframe=data_frame)
         wandb.log({name: table})
-        artifact = wandb.Artifact(f'{name}_artifact', type='dataset')
-        artifact.add(table, f'{name}_table')
-        artifact.add_file(path)
-        wandb.log_artifact(artifact)
+        #artifact = wandb.Artifact(f'{name}_artifact', type='dataset')
+        #artifact.add(table, f'{name}_table')
+        #artifact.add_file(path)
+        #wandb.log_artifact(artifact)
 
     @staticmethod
     def log_epoch(data: Dict[str, Any]) -> None:

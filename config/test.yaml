@@ -20,12 +20,12 @@ params:
       n_step_rollouts: 1 # Number of trajectories that are going to be used to compute the n_step_loss during evaluation
       n_steps: 10
     validation:
-      interval: 10
-      trajectories: 135 # Number of trajectories that are going to be used to compute the validation loss during training
-      rollouts: 100 # Number of trajectories that are going to be used to compute the rollout loss during training
+      interval: 2
+      trajectories: 10 # Number of trajectories that are going to be used to compute the validation loss during training
+      rollouts: 10 # Number of trajectories that are going to be used to compute the rollout loss during training
       n_steps: 10
-      n_step_rollouts: 50
-      n_viz: 5
+      n_step_rollouts: 10
+      n_viz: 2
   model:
     size: 2
     noise: 0.01
