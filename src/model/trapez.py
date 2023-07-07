@@ -31,7 +31,7 @@ class TrapezModel(AbstractSystemModel):
         self.loss_fn = torch.nn.MSELoss()
 
         self._output_normalizer = Normalizer(size=2, name='output_normalizer')
-        self._mesh_edge_normalizer = Normalizer(size=13, name='mesh_edge_normalizer')
+        self._mesh_edge_normalizer = Normalizer(size=13, name='mesh_edge_normalizer', device='cpu').cpu()
 
         self.message_passing_steps = params.get('message_passing_steps')
         self.message_passing_aggregator = params.get('aggregation')
@@ -71,7 +71,6 @@ class TrapezModel(AbstractSystemModel):
         else:
             data = data[1]
 
-        data.to(device)
         if is_training:
             data = self.add_noise_to_mesh_nodes(data, self.input_mesh_noise)
         data = self.add_noise_to_pcd_points(data, self.input_pcd_noise)
@@ -85,7 +84,7 @@ class TrapezModel(AbstractSystemModel):
         edge_type = data.edge_type
 
         # Create a HeteroData object
-        hetero_data = HeteroData()
+        hetero_data = HeteroData().cpu()
 
         # Add node data to the HeteroData object
         hetero_data[self._node_sets[0]].x = node_attr
@@ -236,7 +235,7 @@ class TrapezModel(AbstractSystemModel):
             indices = torch.where(data.node_type == NodeType.MESH)[0]
             num_noise_features = data.pos.shape[1]
             num_node_features = data.pos.shape[1]
-            noise = (torch.randn(indices.shape[0], num_noise_features) * sigma).to(device)
+            noise = (torch.randn(indices.shape[0], num_noise_features) * sigma).cpu()
             data.pos[indices, num_node_features - num_noise_features:num_node_features] = \
                 data.pos[indices, num_node_features - num_noise_features:num_node_features] + noise
 
@@ -259,7 +258,7 @@ class TrapezModel(AbstractSystemModel):
             indices = torch.where(data.node_type == NodeType.MESH)[0]
             num_noise_features = data.pos.shape[1]
             num_node_features = data.pos.shape[1]
-            noise = (torch.randn(indices.shape[0], num_noise_features) * sigma).to(device)
+            noise = (torch.randn(indices.shape[0], num_noise_features) * sigma).cpu()
             data.pos[indices, num_node_features - num_noise_features:num_node_features] = data.pos[indices,
                                                                                           num_node_features - num_noise_features:num_node_features] + noise
         return data

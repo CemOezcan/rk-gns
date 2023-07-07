@@ -2,16 +2,14 @@
 import torch
 
 from torch import nn, Tensor
-
-from src.util.util import device
-
+import src.util.util
 
 class Normalizer(nn.Module):
     """
     Feature normalizer that accumulates statistics online.
     """
 
-    def __init__(self, size: int, name: str, max_accumulations=10 ** 6, std_epsilon=1e-8) -> None:
+    def __init__(self, size: int, name: str, device=None, max_accumulations=10 ** 6, std_epsilon=1e-8) -> None:
         """
         Initialize the normalizer.
 
@@ -32,12 +30,16 @@ class Normalizer(nn.Module):
         super(Normalizer, self).__init__()
         self._name = name
         self._max_accumulations = max_accumulations
-        self._std_epsilon = torch.tensor([std_epsilon], requires_grad=False).to(device)
+        if device is None:
+            self.device = src.util.util.device
+        else:
+            self.device = device
+        self._std_epsilon = torch.tensor([std_epsilon], requires_grad=False).to(self.device)
 
-        self._acc_count = torch.zeros(1, dtype=torch.float32, requires_grad=False).to(device)
-        self._num_accumulations = torch.zeros(1, dtype=torch.float32, requires_grad=False).to(device)
-        self._acc_sum = torch.zeros(size, dtype=torch.float32, requires_grad=False).to(device)
-        self._acc_sum_squared = torch.zeros(size, dtype=torch.float32, requires_grad=False).to(device)
+        self._acc_count = torch.zeros(1, dtype=torch.float32, requires_grad=False).to(self.device)
+        self._num_accumulations = torch.zeros(1, dtype=torch.float32, requires_grad=False).to(self.device)
+        self._acc_sum = torch.zeros(size, dtype=torch.float32, requires_grad=False).to(self.device)
+        self._acc_sum_squared = torch.zeros(size, dtype=torch.float32, requires_grad=False).to(self.device)
 
     def forward(self, batched_data: Tensor, accumulate=True) -> Tensor:
         """Normalizes input data and accumulates statistics."""
@@ -53,7 +55,7 @@ class Normalizer(nn.Module):
     def _accumulate(self, batched_data: Tensor) -> None:
         """Function to perform the accumulation of the batch_data statistics."""
         count = torch.tensor(
-            batched_data.shape[0], dtype=torch.float32, device=device)
+            batched_data.shape[0], dtype=torch.float32, device=self.device)
 
         data_sum = torch.sum(batched_data, dim=0)
         squared_data_sum = torch.sum(batched_data ** 2, dim=0)
@@ -63,11 +65,11 @@ class Normalizer(nn.Module):
         self._num_accumulations = self._num_accumulations.add(1.)
 
     def _mean(self) -> float:
-        safe_count = torch.maximum(self._acc_count, torch.tensor([1.], device=device))
+        safe_count = torch.maximum(self._acc_count, torch.tensor([1.], device=self.device))
         return self._acc_sum / safe_count
 
     def _std_with_epsilon(self) -> float:
-        safe_count = torch.maximum(self._acc_count, torch.tensor([1.], device=device))
+        safe_count = torch.maximum(self._acc_count, torch.tensor([1.], device=self.device))
         std = torch.sqrt(torch.abs(self._acc_sum_squared / safe_count - self._mean() ** 2))
         return torch.maximum(std, self._std_epsilon)
 
