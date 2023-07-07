@@ -105,10 +105,10 @@ class TrapezModel(AbstractSystemModel):
         return hetero_data
 
     def forward(self, graph):
-        graph.to(device)
         return self.learned_model(graph)
 
     def training_step(self, graph: Batch):
+        graph.to(device)
         pred_velocity, _ = self(graph)
         target_velocity = self.get_target(graph, True)
 
@@ -117,7 +117,6 @@ class TrapezModel(AbstractSystemModel):
         return loss
 
     def get_target(self, graph, is_training):
-        graph.to(device)
         mask = torch.where(graph.node_type == NodeType.MESH)[0]
         target_velocity = graph.y - graph.pos[mask]
 
@@ -125,6 +124,7 @@ class TrapezModel(AbstractSystemModel):
 
     @torch.no_grad()
     def validation_step(self, graph: Batch, data_frame: Dict) -> Tuple[Tensor, Tensor]:
+        graph.to(device)
         pred_velocity = self(graph)[0]
         target_velocity = self.get_target(graph, False)
         error = self.loss_fn(target_velocity, pred_velocity).cpu()
