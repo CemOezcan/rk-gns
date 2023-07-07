@@ -139,7 +139,7 @@ class LSTMSimulator(AbstractSimulator):
                 graph.to(device)
                 if j != 0:
                     graph.h = h
-                pred_velocity, h = self._network(graph)
+                pred_velocity, h = self._network(graph, True)
                 target_velocity = self._network.get_target(graph, True)
 
                 target_list.append(target_velocity)
