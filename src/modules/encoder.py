@@ -1,6 +1,4 @@
-from typing import Callable, List, Tuple
-
-import torch
+from typing import Callable, List
 from torch import nn
 from torch_geometric.data import Batch
 

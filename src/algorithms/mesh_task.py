@@ -1,23 +1,23 @@
 import os
 import pickle
 import re
-from typing import Tuple
-
-import matplotlib.colors
-from matplotlib.animation import PillowWriter, FuncAnimation
-import matplotlib.pyplot as plt
 import torch
 import wandb
+import matplotlib.colors
+
+import matplotlib.pyplot as plt
+
+from typing import Tuple
+from matplotlib.animation import PillowWriter, FuncAnimation
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import Polygon
+from tqdm import trange
 
 from src.algorithms.abstract_simulator import AbstractSimulator
 from src.algorithms.mesh_simulator import MeshSimulator
 from src.algorithms.get_simulator import get_simulator
 from src.data.get_data import get_directories, get_data
 from src.algorithms.abstract_task import AbstractTask
-from tqdm import trange
-
 from src.util.types import ConfigDict, NodeType
 from src.util.util import get_from_nested_dict
 
@@ -220,7 +220,7 @@ class MeshTask(AbstractTask):
 
         return anima, writergif
 
-    def _save_plot(self, animation: FuncAnimation, writervideo: PillowWriter, task_name: str) -> str:
+    def _save_plot(self, animation: FuncAnimation, writer_video: PillowWriter, task_name: str) -> str:
         """
         Saves a simulation as a .gif file.
 
@@ -228,7 +228,7 @@ class MeshTask(AbstractTask):
         ----------
             animation : FuncAnimation
                 The animation
-            writervideo : PillowWriter
+            writer_video : PillowWriter
                 The writer
             task_name : str
                 The task name
@@ -240,7 +240,7 @@ class MeshTask(AbstractTask):
 
         """
         dir = os.path.join(self._out_dir, f'{task_name}_animation.gif')
-        animation.save(dir, writer=writervideo)
+        animation.save(dir, writer=writer_video)
         plt.show(block=True)
         return dir
 

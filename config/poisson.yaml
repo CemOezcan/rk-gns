@@ -5,11 +5,11 @@ params:
   retrain: False # Start training a new model if True. Continue training the most recent version of the model if False.
   task:
     task: mesh
-    sequence: 50
+    sequence: 10
     dataset: deformable_plate
     rollout_split: valid
     batch_size: 25
-    epochs: 150
+    epochs: 300
     n_timesteps: 50
     trajectories: 675
     mode: all
@@ -20,9 +20,9 @@ params:
       n_step_rollouts: 1 # Number of trajectories that are going to be used to compute the n_step_loss during evaluation
       n_steps: 10
     validation:
-      interval: 10
+      interval: 15
       trajectories: 135 # Number of trajectories that are going to be used to compute the validation loss during training
-      rollouts: 100 # Number of trajectories that are going to be used to compute the rollout loss during training
+      rollouts: 135 # Number of trajectories that are going to be used to compute the rollout loss during training
       n_steps: 10
       n_step_rollouts: 50
       n_viz: 5
@@ -32,12 +32,12 @@ params:
     pc_noise: 0.0
     pc_frequency: 2
     mgn: False
-    poisson_ratio: False
+    poisson_ratio: True
     scheduler_epoch: 10
     aggregation: pna
     learning_rate: 5.0e-4
     message_passing_steps: 5
-    use_global: False
+    use_global: True
     heterogeneous: False
   logging:
     wandb_mode: online

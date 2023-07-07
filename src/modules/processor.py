@@ -1,5 +1,4 @@
 from typing import Callable, List, Type
-
 from torch import nn
 from torch_geometric.data import Batch
 

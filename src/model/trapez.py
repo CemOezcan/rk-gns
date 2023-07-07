@@ -1,23 +1,19 @@
 import copy
-import math
-from typing import Dict, Tuple, Union, List
-
-import torch_cluster
+import torch
 import torch_geometric.transforms as T
 import numpy as np
-import torch
-import torch.nn.functional as F
+
+from typing import Dict, Tuple, Union, List
 from torch_geometric.data import Data, Batch, HeteroData
+from torch import Tensor
 
 from src.data.preprocessing import Preprocessing
-from src.util import util, test
 from src.modules.mesh_graph_nets import MeshGraphNets
 from src.modules.normalizer import Normalizer
 from src.model.abstract_system_model import AbstractSystemModel
+from src.util import test
 from src.util.util import device
 from src.util.types import NodeType
-from torch import nn, Tensor
-
 from src.util.types import ConfigDict
 
 
@@ -31,7 +27,7 @@ class TrapezModel(AbstractSystemModel):
         self.loss_fn = torch.nn.MSELoss()
 
         self._output_normalizer = Normalizer(size=2, name='output_normalizer')
-        self._mesh_edge_normalizer = Normalizer(size=13, name='mesh_edge_normalizer', device='cpu').cpu()
+        self._mesh_edge_normalizer = Normalizer(size=13, name='mesh_edge_normalizer')
 
         self.message_passing_steps = params.get('message_passing_steps')
         self.message_passing_aggregator = params.get('aggregation')
@@ -72,10 +68,9 @@ class TrapezModel(AbstractSystemModel):
             data = data[1]
 
         if is_training:
-            data = self.add_noise_to_mesh_nodes(data, self.input_mesh_noise)
-        data = self.add_noise_to_pcd_points(data, self.input_pcd_noise)
+            data = self.add_noise(data, self.input_mesh_noise, NodeType.MESH)
+        data = self.add_noise(data, self.input_pcd_noise, NodeType.POINT)
         data = self.transform_position_to_edges(data, self.euclidian_distance)
-        data.edge_attr = self._mesh_edge_normalizer(data.edge_attr, is_training)
 
         edge_index = data.edge_index
         edge_attr = data.edge_attr
@@ -104,19 +99,20 @@ class TrapezModel(AbstractSystemModel):
 
         return hetero_data
 
-    def forward(self, graph):
+    def forward(self, graph: Batch, is_training: bool) -> Tuple[Tensor, Tensor]:
+        graph[('mesh', '0', 'mesh')].edge_attr = self._mesh_edge_normalizer(graph[('mesh', '0', 'mesh')].edge_attr, is_training)
         return self.learned_model(graph)
 
     def training_step(self, graph: Batch):
         graph.to(device)
-        pred_velocity, _ = self(graph)
+        pred_velocity, _ = self(graph, True)
         target_velocity = self.get_target(graph, True)
 
         loss = self.loss_fn(target_velocity, pred_velocity)
 
         return loss
 
-    def get_target(self, graph, is_training):
+    def get_target(self, graph: Batch, is_training: bool) -> Tensor:
         mask = torch.where(graph.node_type == NodeType.MESH)[0]
         target_velocity = graph.y - graph.pos[mask]
 
@@ -125,7 +121,7 @@ class TrapezModel(AbstractSystemModel):
     @torch.no_grad()
     def validation_step(self, graph: Batch, data_frame: Dict) -> Tuple[Tensor, Tensor]:
         graph.to(device)
-        pred_velocity = self(graph)[0]
+        pred_velocity = self(graph, False)[0]
         target_velocity = self.get_target(graph, False)
         error = self.loss_fn(target_velocity, pred_velocity).cpu()
 
@@ -196,7 +192,7 @@ class TrapezModel(AbstractSystemModel):
         graph = Batch.from_data_list([self.build_graph(data, is_training=False, keep_point_cloud=keep_pc)]).to(device)
         data = data[0] if keep_pc else data[1]
 
-        output, hidden = self(graph)
+        output, hidden = self(graph, False)
 
         prediction, cur_position, cur_velocity = self.update(data.to(device), output[mask])
         next_pos[mask] = prediction
@@ -219,48 +215,24 @@ class TrapezModel(AbstractSystemModel):
         return torch.mean(torch.stack(mse_losses)), torch.mean(torch.stack(last_losses))
 
     @staticmethod
-    def add_noise_to_mesh_nodes(data: Data, sigma: float):
+    def add_noise(data: Data, sigma: float, node_type: int):
         """
         Adds training noise to the mesh node positions with standard deviation sigma
         Args:
             data: PyG data element containing (a batch of) graph(s)
             sigma: standard deviation of used noise
-            device: working device (cuda or cpu)
+            node_type: The type of node to add noise to
 
         Returns:
             data: updated graph with noise
 
         """
         if sigma > 0.0:
-            indices = torch.where(data.node_type == NodeType.MESH)[0]
-            num_noise_features = data.pos.shape[1]
+            indices = torch.where(data.node_type == node_type)[0]
             num_node_features = data.pos.shape[1]
-            noise = (torch.randn(indices.shape[0], num_noise_features) * sigma).cpu()
-            data.pos[indices, num_node_features - num_noise_features:num_node_features] = \
-                data.pos[indices, num_node_features - num_noise_features:num_node_features] + noise
+            noise = (torch.randn(indices.shape[0], num_node_features) * sigma).cpu()
+            data.pos[indices, :num_node_features] = data.pos[indices, :num_node_features] + noise
 
-        return data
-
-    @staticmethod
-    def add_noise_to_pcd_points(data: Data, sigma: float):
-        """
-        Adds training noise to the point cloud positions with standard deviation sigma
-        Args:
-            data: PyG data element containing (a batch of) graph(s)
-            sigma: standard deviation of used noise
-            device: working device (cuda or cpu)
-
-        Returns:
-            data: updated graph with noise
-
-        """
-        if sigma > 0.0:
-            indices = torch.where(data.node_type == NodeType.MESH)[0]
-            num_noise_features = data.pos.shape[1]
-            num_node_features = data.pos.shape[1]
-            noise = (torch.randn(indices.shape[0], num_noise_features) * sigma).cpu()
-            data.pos[indices, num_node_features - num_noise_features:num_node_features] = data.pos[indices,
-                                                                                          num_node_features - num_noise_features:num_node_features] + noise
         return data
 
     @staticmethod

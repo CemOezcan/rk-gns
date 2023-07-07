@@ -1,8 +1,8 @@
-from typing import Callable, Union, Tuple
-
-from torch import nn, Tensor
-from torch_geometric.data import Batch
 import torch
+
+from torch_geometric.data import Batch
+from typing import Callable, Union, Tuple
+from torch import nn, Tensor
 
 from src.util.types import NodeType
 
