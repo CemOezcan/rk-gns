@@ -8,7 +8,7 @@ import torch.optim as optim
 import numpy as np
 import pandas as pd
 
-from typing import Optional, Dict, List, Tuple, Any
+from typing import Optional, Dict, List, Tuple, Any, Union
 from pandas import DataFrame
 from torch import Tensor
 from tqdm import tqdm
@@ -112,7 +112,7 @@ class AbstractSimulator(ABC):
             self._initialized = True
 
     @abstractmethod
-    def fetch_data(self, trajectory: DataLoader, is_training: bool) -> DataLoader:
+    def fetch_data(self, trajectory: List, is_training: bool) -> DataLoader:
         """
         Transform a collection of system states into batched graphs.
 
@@ -131,15 +131,15 @@ class AbstractSimulator(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def fit_iteration(self, train_dataloader: DataLoader) -> None:
+    def fit_iteration(self, train_dataloader: List) -> None:
         """
         Train your algorithm for a single iteration. This can e.g., be a single epoch of neural network training,
         a policy update step, or something more complex. Just see this as the outermost for-loop of your algorithm.
 
         Parameters
         ----------
-            train_dataloader : DataLoader
-                A data loader containing the training data
+            train_dataloader : List
+                A List containing the training data
 
         Returns
         -------
@@ -151,14 +151,14 @@ class AbstractSimulator(ABC):
         raise NotImplementedError
 
     @torch.no_grad()
-    def one_step_evaluator(self, ds_loader: DataLoader, instances: int, task_name: str, logging=True) -> Optional[Dict]:
+    def one_step_evaluator(self, ds_loader: List, instances: int, task_name: str, logging: bool = True) -> Optional[Dict]:
         """
         Predict the system state for the next time step and evaluate the predictions over the test data.
 
         Parameters
         ----------
-            ds_loader : DataLoader
-                A data loader containing test/validation instances
+            ds_loader : List
+                A list containing test/validation instances
 
             instances : int
                 Number of trajectories used to estimate the one-step loss
@@ -217,22 +217,21 @@ class AbstractSimulator(ABC):
             self._publish_csv(data_frame, f'one_step', path)
 
     @torch.no_grad()
-    def n_step_evaluator(self, ds_loader: DataLoader, task_name: str, n_steps: int = 60, n_traj: int = 2,
-                         logging: bool = True) -> Optional[Dict]:
+    def n_step_evaluator(self, ds_loader: List, task_name: str, n_steps: int, n_traj: int, logging: bool = True) -> Optional[Dict]:
         """
         Predict the system state after n time steps. N step predictions are performed recursively within trajectories.
         Evaluate the predictions over the test data.
 
         Parameters
         ----------
-            ds_loader : DataLoader
-                A data loader containing test/validation instances
+            ds_loader : List
+                A list containing test/validation instances
 
             task_name : str
                 Name of the task
 
-            n_step_list : List[int]
-                Different values for n, with which to estimate the n-step loss
+            n_steps : int
+                Value of n, with which to estimate the n-step loss
 
             n_traj : int
                 Number of trajectories used to estimate the n-step loss
@@ -268,15 +267,15 @@ class AbstractSimulator(ABC):
             self._publish_csv(data_frame, f'n_step_losses', path)
 
     @torch.no_grad()
-    def rollout_evaluator(self, ds_loader: DataLoader, rollouts: int, task_name: str, logging=True) -> Optional[Dict]:
+    def rollout_evaluator(self, ds_loader: List, rollouts: int, task_name: str, logging: bool = True) -> Optional[Dict]:
         """
         Recursive prediction of the system state at the end of trajectories.
         Evaluate the predictions over the test data.
 
         Parameters
         ----------
-            ds_loader : DataLoader
-                A data loader containing test/validation instances
+            ds_loader : List
+                A list containing test/validation instances
 
             rollouts : int
                 Number of trajectories used to estimate the rollout loss

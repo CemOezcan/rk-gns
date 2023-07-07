@@ -220,7 +220,7 @@ class MeshTask(AbstractTask):
 
         return anima, writergif
 
-    def _save_plot(self, animation: FuncAnimation, writervideo: PillowWriter, task_name: str) -> str:
+    def _save_plot(self, animation: FuncAnimation, writer_video: PillowWriter, task_name: str) -> str:
         """
         Saves a simulation as a .gif file.
 
@@ -228,7 +228,7 @@ class MeshTask(AbstractTask):
         ----------
             animation : FuncAnimation
                 The animation
-            writervideo : PillowWriter
+            writer_video : PillowWriter
                 The writer
             task_name : str
                 The task name
@@ -240,7 +240,7 @@ class MeshTask(AbstractTask):
 
         """
         dir = os.path.join(self._out_dir, f'{task_name}_animation.gif')
-        animation.save(dir, writer=writervideo)
+        animation.save(dir, writer=writer_video)
         plt.show(block=True)
         return dir
 

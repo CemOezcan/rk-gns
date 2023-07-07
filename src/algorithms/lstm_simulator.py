@@ -1,10 +1,14 @@
 import os
 import pickle
 import time
+from typing import List, Union
+
 import torch
 import wandb
 
 from functools import partial
+
+from torch_geometric.data import Data
 from tqdm import tqdm
 from torch_geometric.loader import DataLoader
 
@@ -32,7 +36,7 @@ class LSTMSimulator(AbstractSimulator):
         """
         super().__init__(config=config)
 
-    def fit_iteration(self, train_dataloader: DataLoader) -> None:
+    def fit_iteration(self, train_dataloader: List[List[Data]]) -> None:
         """
         Perform a training epoch, followed by a validation iteration to assess the model performance.
         Document relevant metrics with wandb.
@@ -79,7 +83,7 @@ class LSTMSimulator(AbstractSimulator):
             wandb.log({'loss': loss.detach(), 'training time per instance': end_instance - start_instance})
             start_instance = time.time()
 
-    def fetch_data(self, trajectory: DataLoader, is_training: bool) -> DataLoader:
+    def fetch_data(self, trajectory: List[Union[List[Data], Data]], is_training: bool) -> DataLoader:
         """
         Transform a collection of system states into batched graphs.
 

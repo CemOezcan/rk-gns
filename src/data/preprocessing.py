@@ -8,18 +8,34 @@ import torch_cluster
 
 import torch_geometric.transforms as T
 
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Union, List
 from torch import Tensor
 from torch_geometric.data import Data
 from tqdm import tqdm
 
-from src.util.types import NodeType
+from src.util.types import NodeType, ConfigDict
 
 
 class Preprocessing:
+    """
+    Class for preprocessing raw datasets into trajectories of system states.
+    """
 
-    def __init__(self, split, path, raw, config):
+    def __init__(self, split: str, path: str, raw: bool, config: ConfigDict):
+        """
+        Initialization
 
+        Parameters
+        ----------
+            split: str
+                Name of the split.
+            path: str
+                Dataset path.
+            raw: bool
+                Whether to keep or split trajectories into individual data instances.
+            config: ConfigDict
+                Contains the configuration file.
+        """
         self.hetero = config.get('model').get('heterogeneous')
         self.use_poisson = config.get('model').get('poisson_ratio')
         self.split = split
@@ -32,8 +48,13 @@ class Preprocessing:
         self.input_dataset = 'deformable_plate'
         self.directory = os.path.join(self.path, self.input_dataset + '_' + self.split + '.pkl')
 
+    def build_dataset_for_split(self) -> List[Union[List[Data], Data]]:
+        """
 
-    def build_dataset_for_split(self):
+        Returns
+        -------
+
+        """
         print(f'Generating {self.split} data')
         with open(self.directory, 'rb') as file:
             rollout_data = pickle.load(file)
@@ -328,7 +349,29 @@ class Preprocessing:
         return data, data_mgn
 
     @staticmethod
-    def add_edge_set(data, edges, index_shift, edge_type, bidirectional, remove_duplicates=False):
+    def add_edge_set(data: Data, edges: Tensor, index_shift: Tuple[int], edge_type: int, bidirectional: bool, remove_duplicates: bool = False) -> None:
+        """
+        Adds a new set of edges to an existing graph
+        Parameters
+        ----------
+            data: Data
+                The current graph
+            edges: Tensor
+                Set of edges
+            index_shift: Tuple[int]
+                Shift edge indices
+            edge_type: int
+                Edge type for one-hot encoding
+            bidirectional: bool
+                Whether to expand edges to be bidirectional
+            remove_duplicates: bool
+                Whether to check existing edge set for duplicates and removing them if need be
+
+        Returns
+        -------
+        Transformed graph
+
+        """
         row, col = edges[0], edges[1]
         row, col = row[row != col], col[row != col]
         edges = torch.stack([row, col], dim=0)
@@ -349,7 +392,22 @@ class Preprocessing:
         data.edge_type = torch.cat([data.edge_type, torch.tensor([edge_type] * factor).long()], dim=0)
 
     @staticmethod
-    def get_unique_edges(e_1, e_2):
+    def get_unique_edges(e_1: Tensor, e_2: Tensor) -> Tensor:
+        """
+        Adds a new set of edges to the existing set while removing duplicates.
+
+        Parameters
+        ----------
+            e_1: Tensor
+                Current edge set
+            e_2: Tensor
+                New edges
+
+        Returns
+        -------
+            Combined set of edges
+
+        """
         e_1, e_2 = e_1.numpy(), e_2.numpy()
         e_1_set = set((i, j) for i, j in zip(*e_1))
         e_2_set = set((i, j) for i, j in zip(*e_2))

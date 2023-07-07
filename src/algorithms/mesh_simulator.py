@@ -1,9 +1,11 @@
 import time
+from typing import List
+
 import wandb
 
 from functools import partial
 from tqdm import tqdm
-from torch_geometric.data import DataLoader
+from torch_geometric.data import DataLoader, Data
 
 from src.data.datasets import RegularDataset
 from src.algorithms.abstract_simulator import AbstractSimulator
@@ -29,7 +31,7 @@ class MeshSimulator(AbstractSimulator):
         """
         super().__init__(config=config)
 
-    def fit_iteration(self, train_dataloader: DataLoader) -> None:
+    def fit_iteration(self, train_dataloader: List[Data]) -> None:
         """
         Perform a training epoch, followed by a validation iteration to assess the model performance.
         Document relevant metrics with wandb.
@@ -60,7 +62,7 @@ class MeshSimulator(AbstractSimulator):
             end_instance = time.time()
             wandb.log({'loss': loss.detach(), 'training time per instance': end_instance - start_instance})
 
-    def fetch_data(self, trajectory: DataLoader, is_training: bool) -> DataLoader:
+    def fetch_data(self, trajectory: List[Data], is_training: bool) -> DataLoader:
         """
         Transform a collection of system states into batched graphs.
 

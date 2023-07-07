@@ -51,8 +51,7 @@ class SequenceNoReturnDataset(Dataset):
 
 class RegularDataset(Dataset):
     """
-        Dataset that draws sequences of specific length from a list of trajectories without replacement.
-        In this case, we can still define a training epoch, if all samples are used once.
+        Implements a dataset containing Graphs
     """
     def __init__(self, trajectory_list: list, preprocessing: Callable):
         """
@@ -62,8 +61,6 @@ class RegularDataset(Dataset):
         """
         self.trajectory_list = trajectory_list
         self.preprocessing = preprocessing
-
-        # create index list of tuples (i, t_i), where i indicates the index for the trajectory and t_i for the starting time step of the sequence
         self.indices = []
         self.indices.extend(range(len(self.trajectory_list)))
 
