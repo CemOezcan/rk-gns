@@ -3,17 +3,17 @@ import math
 import os
 import pickle
 import random
-from typing import Dict, Tuple
-import torch_geometric.transforms as T
-import torch.nn.functional as F
 import torch
 import torch_cluster
+
+import torch_geometric.transforms as T
+
+from typing import Dict, Tuple
 from torch import Tensor
 from torch_geometric.data import Data
 from tqdm import tqdm
 
 from src.util.types import NodeType
-from src.util.util import get_from_nested_dict
 
 
 class Preprocessing:

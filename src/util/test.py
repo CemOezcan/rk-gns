@@ -1,12 +1,9 @@
-
-import matplotlib.colors
-import matplotlib.pyplot as plt
 import torch
+import matplotlib.colors
 
-from matplotlib.collections import PatchCollection
+import matplotlib.pyplot as plt
+
 from matplotlib.lines import Line2D
-from matplotlib.patches import Polygon
-
 
 from src.util.types import NodeType
 

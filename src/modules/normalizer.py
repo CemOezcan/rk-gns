@@ -1,8 +1,7 @@
-
 import torch
+import src.util.util
 
 from torch import nn, Tensor
-import src.util.util
 
 class Normalizer(nn.Module):
     """

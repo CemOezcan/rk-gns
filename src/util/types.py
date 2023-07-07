@@ -1,7 +1,7 @@
-import collections
 import enum
-from typing import Dict, Any, List, Union, Iterable, Callable, Optional, Tuple, Generator
 import numpy as np
+
+from typing import Dict, Any, List, Union, Iterable, Callable, Optional, Tuple, Generator
 from torch import Tensor
 from torch_geometric.data.batch import Batch
 from torch_geometric.data.hetero_data import HeteroData

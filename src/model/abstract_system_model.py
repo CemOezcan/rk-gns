@@ -1,10 +1,10 @@
-from typing import Tuple
-
 import torch
+
+from typing import Tuple
+from abc import ABC, abstractmethod
 from torch import nn, Tensor
 
 from src.util.types import *
-from abc import ABC, abstractmethod
 
 
 class AbstractSystemModel(ABC, nn.Module):

@@ -1,7 +1,6 @@
-from typing import Callable, List
-
 import torch
 
+from typing import Callable, List
 from torch import nn, Tensor
 from torch_geometric.data import Batch
 from torch_geometric.utils import scatter

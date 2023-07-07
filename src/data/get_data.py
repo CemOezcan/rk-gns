@@ -1,9 +1,10 @@
 import os
-from src.data.preprocessing import Preprocessing
 
+from os.path import dirname as up
+
+from src.data.preprocessing import Preprocessing
 from src.util.types import ConfigDict
 from src.util.util import get_from_nested_dict
-from os.path import dirname as up
 
 # TODO: Find a solution for this (incompatible with job_flag.sh scripts where CONFIG_NAME is supposed to be set)
 ROOT_DIR = up(up(up(os.path.join(os.path.abspath(__file__)))))

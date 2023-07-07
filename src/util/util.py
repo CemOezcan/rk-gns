@@ -1,12 +1,9 @@
-
-import collections
-import enum
 import torch
 import yaml
-from torch_geometric.utils import scatter
+
 import numpy as np
+
 from typing import Dict, Any, List, Union, Optional
-import numpy as np
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 

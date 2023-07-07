@@ -1,23 +1,23 @@
 import os
 import pickle
 import re
-from typing import Tuple
-
-import matplotlib.colors
-from matplotlib.animation import PillowWriter, FuncAnimation
-import matplotlib.pyplot as plt
 import torch
 import wandb
+import matplotlib.colors
+
+import matplotlib.pyplot as plt
+
+from typing import Tuple
+from matplotlib.animation import PillowWriter, FuncAnimation
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import Polygon
+from tqdm import trange
 
 from src.algorithms.abstract_simulator import AbstractSimulator
 from src.algorithms.mesh_simulator import MeshSimulator
 from src.algorithms.get_simulator import get_simulator
 from src.data.get_data import get_directories, get_data
 from src.algorithms.abstract_task import AbstractTask
-from tqdm import trange
-
 from src.util.types import ConfigDict, NodeType
 from src.util.util import get_from_nested_dict
 
