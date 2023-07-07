@@ -23,7 +23,8 @@ class SequenceNoReturnDataset(Dataset):
         # create index list of tuples (i, t_i), where i indicates the index for the trajectory and t_i for the starting time step of the sequence
         self.indices = []
         for trajectory in range(len(trajectory_list)):
-            self.indices.extend([(i, t_i) for i, t_i in itertools.product([trajectory], range(len(trajectory_list[trajectory])-self.sequence_length))])
+            difference = max(len(trajectory_list[trajectory]) - self.sequence_length, 1)
+            self.indices.extend([(i, t_i) for i, t_i in itertools.product([trajectory], range(difference))])
 
     def __len__(self):
         return len(self.indices)
@@ -38,7 +39,7 @@ class SequenceNoReturnDataset(Dataset):
         self.index = self.indices[idx]
         self.trajectory_length = len(self.trajectory_list[self.index[0]])
         self.startpoint = self.index[1]
-        data_list = self.trajectory_list[self.index[0]][self.startpoint:self.startpoint+self.sequence_length]
+        data_list = self.trajectory_list[self.index[0]][self.startpoint: self.startpoint + self.sequence_length]
         copy = list()
         for x in data_list:
             data = deepcopy(x)
