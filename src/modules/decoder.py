@@ -34,6 +34,7 @@ class Decoder(nn.Module):
 
             out = self.model(hidden)
         else:
-            out, hidden = self.model(node_features), None
+            out = self.model(node_features)
+            hidden = out
 
         return out, hidden

@@ -27,11 +27,11 @@ class TrapezModel(AbstractSystemModel):
         self.loss_fn = torch.nn.MSELoss()
 
         self._output_normalizer = Normalizer(size=2, name='output_normalizer')
-        self._mesh_edge_normalizer = Normalizer(size=13, name='mesh_edge_normalizer')
+        self._mesh_edge_normalizer = Normalizer(size=12, name='mesh_edge_normalizer')
 
         self.message_passing_steps = params.get('message_passing_steps')
         self.message_passing_aggregator = params.get('aggregation')
-        self.recurrence = True
+        self.recurrence = False
 
         self._edge_sets = [''.join(('mesh', '0', 'mesh'))]
         self._node_sets = ['mesh']

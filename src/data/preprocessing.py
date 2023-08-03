@@ -59,6 +59,8 @@ class Preprocessing:
         with open(self.directory, 'rb') as file:
             rollout_data = pickle.load(file)
 
+        random.shuffle(rollout_data)
+
         trajectory_list = []
         for index, trajectory in enumerate(tqdm(rollout_data)):
             rollout_length = len(trajectory['nodes_grid'])
@@ -314,22 +316,22 @@ class Preprocessing:
         Preprocessing.add_edge_set(data, collision_edges, (len(mask), 0), 2, False)
 
         # Add world edges
-        world_edges = torch_cluster.radius(data.pos[mask], data.pos[mask], r=0.3, max_num_neighbors=100)
-        Preprocessing.add_edge_set(data, world_edges, (0, 0), 3, True, remove_duplicates=True)
+        # world_edges = torch_cluster.radius(data.pos[mask], data.pos[mask], r=0.3, max_num_neighbors=100)
+        # Preprocessing.add_edge_set(data, world_edges, (0, 0), 3, True, remove_duplicates=True)
 
         data_mgn = copy.deepcopy(data)
         old_edges = data_mgn.edge_type.shape[0]
 
         cp_edges = torch_cluster.radius(data.pos[point_index:], data.pos[obst_mask], r=0.08, max_num_neighbors=100)
-        Preprocessing.add_edge_set(data, cp_edges, (len(mask), point_index), 4, True)
+        Preprocessing.add_edge_set(data, cp_edges, (len(mask), point_index), 3, False)
 
         grounding_edges = torch_cluster.radius(data.pos[mask], data.pos[point_index:], r=0.08, max_num_neighbors=100)
-        Preprocessing.add_edge_set(data, grounding_edges, (point_index, 0), 5, True)
+        Preprocessing.add_edge_set(data, grounding_edges, (point_index, 0), 4, False)
 
-        pc_edges = torch_cluster.radius(data.pos[point_index:], data.pos[point_index:], r=0.08, max_num_neighbors=100)
-        Preprocessing.add_edge_set(data, pc_edges, (point_index, point_index), 6, True)
+        pc_edges = torch_cluster.radius_graph(data.pos[point_index:], r=0.08, max_num_neighbors=100)
+        Preprocessing.add_edge_set(data, pc_edges, (point_index, point_index), 5, False)
 
-        values = [0] * 7
+        values = [0] * 6
         for key in data.edge_type:
             values[int(key)] += 1
 
