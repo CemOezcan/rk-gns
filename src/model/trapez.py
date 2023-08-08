@@ -26,8 +26,9 @@ class TrapezModel(AbstractSystemModel):
         super(TrapezModel, self).__init__(params)
         self.loss_fn = torch.nn.MSELoss()
 
-        self._output_normalizer = Normalizer(size=2, name='output_normalizer')
-        self._mesh_edge_normalizer = Normalizer(size=12, name='mesh_edge_normalizer')
+        self._output_normalizer = Normalizer(name='output_normalizer')
+        self._mesh_edge_normalizer = Normalizer(name='mesh_edge_normalizer')
+        self._feature_normalizer = Normalizer(name='node_normalizer')
 
         self.message_passing_steps = params.get('message_passing_steps')
         self.message_passing_aggregator = params.get('aggregation')
@@ -101,6 +102,8 @@ class TrapezModel(AbstractSystemModel):
 
     def forward(self, graph: Batch, is_training: bool) -> Tuple[Tensor, Tensor]:
         graph[('mesh', '0', 'mesh')].edge_attr = self._mesh_edge_normalizer(graph[('mesh', '0', 'mesh')].edge_attr, is_training)
+        graph['mesh'].x = self._feature_normalizer(graph['mesh'].x, is_training)
+
         return self.learned_model(graph)
 
     def training_step(self, graph: Batch):
@@ -130,7 +133,7 @@ class TrapezModel(AbstractSystemModel):
 
         return error, pos_error
 
-    def update(self, inputs: Batch, per_node_network_output: Tensor) -> Tensor:
+    def update(self, inputs: Batch, per_node_network_output: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
         """Integrate model outputs."""
         mask = torch.where(inputs.node_type == NodeType.MESH)[0]
         velocity = self._output_normalizer.inverse(per_node_network_output)
@@ -147,20 +150,15 @@ class TrapezModel(AbstractSystemModel):
     def rollout(self, trajectory: List[Dict[str, Tensor]], num_steps: int) -> Tuple[Dict[str, Tensor], Tensor]:
         """Rolls out a model trajectory."""
         num_steps = len(trajectory) if num_steps is None else num_steps
-        initial_state = trajectory[0] # {k: torch.squeeze(v, 0)[0] for k, v in trajectory.items()}
-
+        initial_state = trajectory[0]
         point_index = initial_state['point_index']
 
-        cur_pos = torch.squeeze(initial_state['pos'], 0).to(device)
-        target_pos = [t['next_pos'].to(device) for t in trajectory]
-        features = [t['x'].to(device) for t in trajectory]
         pred_trajectory = []
-        hidden = initial_state['h']
+        cur_pos = torch.squeeze(initial_state['pos'], 0).to(device)
         for step in range(num_steps):
-            node_type = trajectory[step]['node_type']
-            mask = torch.where(node_type == NodeType.MESH)[0].to(device)
-            cur_pos, pred_trajectory, hidden = self._step_fn(initial_state, cur_pos, pred_trajectory,
-                                                             target_pos[step], features[step], mask, step, hidden)
+            cur_pos, hidden = self._step_fn(initial_state, cur_pos, trajectory[step], step)
+            initial_state['h'] = hidden
+            pred_trajectory.append(cur_pos)
 
         prediction = torch.stack([x[:point_index] for x in pred_trajectory][:num_steps]).cpu()
         gt_pos = torch.stack([t['pos'][:point_index] for t in trajectory][:num_steps]).cpu()
@@ -168,12 +166,12 @@ class TrapezModel(AbstractSystemModel):
         traj_ops = {
             'cells': trajectory[0]['cells'],
             'cell_type': trajectory[0]['cell_type'],
-            'node_type': node_type,
+            'node_type': trajectory[0]['node_type'],
             'gt_pos': gt_pos,
             'pred_pos': prediction
         }
-        mask = mask.cpu()
 
+        mask = torch.where(trajectory[0]['node_type'] == NodeType.MESH)[0].cpu()
         mse_loss_fn = torch.nn.MSELoss(reduction='none')
         mse_loss = mse_loss_fn(gt_pos[:, mask], prediction[:, mask]).cpu()
         mse_loss = torch.mean(torch.mean(mse_loss, dim=-1), dim=-1).detach()
@@ -181,11 +179,12 @@ class TrapezModel(AbstractSystemModel):
         return traj_ops, mse_loss
 
     @torch.no_grad()
-    def _step_fn(self, initial_state, cur_pos, trajectory, target_world_pos, x, mask, step, hidden):
-        next_pos = copy.deepcopy(target_world_pos)
-        h = hidden
-        input = {**initial_state, 'x': x, 'pos': cur_pos, 'next_pos': target_world_pos, 'y': target_world_pos[mask],
-                 'h': h}
+    def _step_fn(self, initial_state, cur_pos, ground_truth, step):
+        mask = torch.where(ground_truth['node_type'] == NodeType.MESH)[0].to(device)
+        next_pos = copy.deepcopy(ground_truth['next_pos'])
+
+        input = {**initial_state, 'x': ground_truth['x'], 'pos': cur_pos, 'next_pos': ground_truth['next_pos'],
+                 'y': ground_truth['next_pos'][mask]}
 
         data = Preprocessing.postprocessing(Data.from_dict(input).cpu())
         keep_pc = False if self.mgn else step % self.pc_frequency == 0
@@ -197,8 +196,7 @@ class TrapezModel(AbstractSystemModel):
         prediction, cur_position, cur_velocity = self.update(data.to(device), output[mask])
         next_pos[mask] = prediction
 
-        trajectory.append(next_pos)
-        return next_pos, trajectory, hidden
+        return next_pos, hidden
 
     @torch.no_grad()
     def n_step_computation(self, trajectory: List[Dict[str, Tensor]], n_step: int, num_timesteps=None) -> Tuple[Tensor, Tensor]:
