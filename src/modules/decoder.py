@@ -16,6 +16,8 @@ class Decoder(nn.Module):
         self.recurrence = recurrence
         self.latent_size = latent_size
 
+        self.use_u = output_size == 1
+
         if self.recurrence:
             self.lstm = nn.GRUCell(self.latent_size, self.latent_size)
             self.model = nn.Linear(self.latent_size, output_size)
@@ -24,7 +26,7 @@ class Decoder(nn.Module):
 
     def forward(self, graph: Batch) -> Tuple[Tensor, Union[None, Tensor]]:
         mask = torch.where(graph.node_type == NodeType.MESH)[0]
-        node_features = graph[self.node_type].x[mask]
+        node_features = graph.u if self.use_u else graph[self.node_type].x[mask]
 
         if self.recurrence:
             if graph.h.shape[-1] == self.latent_size:
