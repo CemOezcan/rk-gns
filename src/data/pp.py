@@ -122,10 +122,9 @@ class Preprocessing:
         ratio = (instance['init_mesh_pos'].shape[0] - instance['mesh_pos'].shape[0]) / instance['init_mesh_pos'].shape[0]
 
         count = min(100, int(100 - ratio * 100))
-        soft = max(20, 120 - count)
+        soft = 100 - count
 
         nodes = count / instance['mesh_pos'].shape[0]
-
         index = fps(instance['mesh_pos'], ratio=nodes)
 
         new_index = list(set(range(int(instance['mesh_pos'].shape[0]))) - set(index))
@@ -133,14 +132,12 @@ class Preprocessing:
         norm = torch.nn.Softmax()
         center = torch.mean(instance['collider_pos'], dim=0)
         radius = torch.pairwise_distance(instance['collider_pos'][0], center)
-        center[1] = center[1] - (radius / 4)
+        center[1] = center[1] #- radius / 2
         dist = torch.pairwise_distance(instance['mesh_pos'][new_index], center)
 
-        probs = norm(1 /dist ** 2)
+        probs = norm(1 / dist ** 2)
         new_index = np.random.choice(new_index, size=soft, replace=False, p=probs)
         index = list(set(new_index).union(set(index)))
-
-        index = index[:120]
 
         instance['mesh_pos'] = instance['mesh_pos'][index]
 
