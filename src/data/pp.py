@@ -3,7 +3,6 @@ import math
 import os
 import pickle
 import random
-import multiprocessing as mp
 import numpy as np
 import scipy
 import torch
@@ -341,38 +340,26 @@ class Preprocessing:
         point_index = data.point_index
 
         # Add collision edges
-        collision_edges = torch_cluster.radius(data.pos[mask], data.pos[obst_mask], r=0.25, max_num_neighbors=100)
+        collision_edges = torch_cluster.radius(data.pos[mask], data.pos[obst_mask], r=0.3, max_num_neighbors=100)
         Preprocessing.add_edge_set(data, collision_edges, (len(mask), 0), 2, False)
 
-        # Add world edges
-        # world_edges = torch_cluster.radius(data.pos[mask], data.pos[mask], r=0.3, max_num_neighbors=100)
-        # Preprocessing.add_edge_set(data, world_edges, (0, 0), 3, True, remove_duplicates=True)
-
-        # cp_edges = torch_cluster.radius(data.pos[point_index:], data.pos[obst_mask], r=0.08, max_num_neighbors=100)
-        # Preprocessing.add_edge_set(data, cp_edges, (len(mask), point_index), 3, False)
-        #
-        # grounding_edges = torch_cluster.radius(data.pos[mask], data.pos[point_index:], r=0.08, max_num_neighbors=100)
-        # Preprocessing.add_edge_set(data, grounding_edges, (point_index, 0), 4, False)
-
-        # pc_edges = torch_cluster.radius_graph(data.pos[point_index:], r=0.15, max_num_neighbors=100)
         triangles = scipy.spatial.Delaunay(data.pos[mask])
         pc_edges = set()
         for simplex in triangles.simplices:
             pc_edges.update((simplex[i], simplex[j]) for i in range(-1, len(simplex)) for j in range(i + 1, len(simplex)))
 
-        pc_edges_copy = [list(), list()]
-        for e in pc_edges:
-            rec = collision_edges[1].tolist()
-            if e[0] in rec and e[1] in rec:
-                condition = torch.dist(data.pos[e[0]], data.pos[e[1]]) < 0.3
-            else:
-                condition = torch.dist(data.pos[e[0]], data.pos[e[1]]) < 0.5
+        coll_set = set(collision_edges[1].tolist())
+        short_dist_graph = torch_cluster.radius_graph(data.pos[mask], r=0.35, max_num_neighbors=100).tolist()
+        short_edges = [(x, y) for x, y in zip(short_dist_graph[0], short_dist_graph[1]) if x in coll_set and y in coll_set]
+        short_pc_edges = set(short_edges).intersection(set(pc_edges))
 
-            if condition:
-                pc_edges_copy[0].append(e[0])
-                pc_edges_copy[1].append(e[1])
+        long_dist_graph = torch_cluster.radius_graph(data.pos[mask], r=0.6, max_num_neighbors=100).tolist()
+        long_edges = [(x, y) for x, y in zip(long_dist_graph[0], long_dist_graph[1]) if x not in coll_set or y not in coll_set]
 
-        pc_edges = pc_edges_copy
+        pc_edges_copy = set(long_edges).union(short_pc_edges).intersection(set(pc_edges))
+        pc_edges = zip(*list(pc_edges_copy))
+
+
         # Convert edge indices to PyTorch tensor
         pc_edges = torch.tensor(list(pc_edges), dtype=torch.long)
         Preprocessing.add_edge_set(data, pc_edges, (0, 0), 3, False)
@@ -385,11 +372,6 @@ class Preprocessing:
         old_edges = data_mgn.edge_type.shape[0]
 
         data.edge_attr = Preprocessing.build_one_hot_features(values)
-        # mesh_edge_mask = torch.where(data.edge_type == 0)[0]
-        # data.edge_attr = Preprocessing.add_relative_mesh_positions(data.edge_attr,
-        #                                                            data.edge_type,
-        #                                                            data.edge_index[:, mesh_edge_mask],
-        #                                                            data.init_pos[mask])
         data_mgn.edge_attr = data.edge_attr[:old_edges]
         data_mgn.edge_type = data.edge_type[:old_edges]
         data_mgn.x = data_mgn.x[:point_index]
