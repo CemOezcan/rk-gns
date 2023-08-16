@@ -136,7 +136,7 @@ class Preprocessing:
 
         probs = norm(1 / dist ** 2)
         new_index = np.random.choice(new_index, size=soft, replace=False, p=probs)
-        index = list(set(new_index).union(set(index)))
+        index = list(set(new_index).union(set(index)))[:100]
 
         instance['mesh_pos'] = instance['mesh_pos'][index]
 

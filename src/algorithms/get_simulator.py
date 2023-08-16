@@ -1,6 +1,7 @@
 """
 Utility class to select an algorithm based on a given config file
 """
+from src.algorithms.alternating_simulator import AlternatingSimulator
 from src.algorithms.lstm_simulator import LSTMSimulator
 from src.algorithms.mesh_simulator import MeshSimulator
 from src.util.types import *
@@ -15,5 +16,7 @@ def get_simulator(config: ConfigDict) -> AbstractSimulator:
         return MeshSimulator(config=config)
     elif task == 'lstm':
         return LSTMSimulator(config=config)
+    elif task == 'alternating':
+        return AlternatingSimulator(config=config)
     else:
         raise NotImplementedError("Implement your tasks here!")

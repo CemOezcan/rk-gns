@@ -25,7 +25,7 @@ class Decoder(nn.Module):
             self.model = make_mlp(output_size)
 
     def forward(self, graph: Batch) -> Tuple[Tensor, Union[None, Tensor]]:
-        mask = torch.where(graph.node_type == NodeType.MESH)[0]
+        mask = torch.where(graph[self.node_type].node_type == NodeType.MESH)[0]
         node_features = graph.u if self.use_u else graph[self.node_type].x[mask]
 
         if self.recurrence:

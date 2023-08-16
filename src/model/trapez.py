@@ -22,7 +22,7 @@ class TrapezModel(AbstractSystemModel):
     Model for static flag simulation.
     """
 
-    def __init__(self, params: ConfigDict):
+    def __init__(self, params: ConfigDict, recurrence: bool = False):
         super(TrapezModel, self).__init__(params)
         self.loss_fn = torch.nn.MSELoss()
 
@@ -32,7 +32,7 @@ class TrapezModel(AbstractSystemModel):
 
         self.message_passing_steps = params.get('message_passing_steps')
         self.message_passing_aggregator = params.get('aggregation')
-        self.recurrence = False
+        self.recurrence = recurrence
 
         self._edge_sets = [''.join(('mesh', '0', 'mesh'))]
         self._node_sets = ['mesh']
@@ -84,18 +84,19 @@ class TrapezModel(AbstractSystemModel):
 
         # Add node data to the HeteroData object
         hetero_data[self._node_sets[0]].x = node_attr
-        hetero_data.node_type = node_type
+        hetero_data[self._node_sets[0]].node_type = node_type
+        hetero_data[self._node_sets[0]].pos = data.pos
+        hetero_data[self._node_sets[0]].next_pos = data.next_pos
 
         # Add edge data to the HeteroData object
         hetero_data[('mesh', '0', 'mesh')].edge_index = edge_index
         hetero_data[('mesh', '0', 'mesh')].edge_attr = edge_attr
-        hetero_data.edge_type = edge_type
+        hetero_data[('mesh', '0', 'mesh')].edge_type = edge_type
 
         hetero_data.u = data.u
+        hetero_data.poisson = data.poisson
         hetero_data.h = data.h
-        hetero_data.pos = data.pos
         hetero_data.y = data.y
-        hetero_data.next_pos = data.next_pos
         hetero_data.cpu()
 
         return hetero_data
@@ -116,8 +117,8 @@ class TrapezModel(AbstractSystemModel):
         return loss
 
     def get_target(self, graph: Batch, is_training: bool) -> Tensor:
-        mask = torch.where(graph.node_type == NodeType.MESH)[0]
-        target_velocity = graph.y - graph.pos[mask]
+        mask = torch.where(graph['mesh'].node_type == NodeType.MESH)[0]
+        target_velocity = graph.y - graph['mesh'].pos[mask]
 
         return self._output_normalizer(target_velocity, is_training)
 
@@ -135,11 +136,11 @@ class TrapezModel(AbstractSystemModel):
 
     def update(self, inputs: Batch, per_node_network_output: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
         """Integrate model outputs."""
-        mask = torch.where(inputs.node_type == NodeType.MESH)[0]
+        mask = torch.where(inputs['mesh'].node_type == NodeType.MESH)[0]
         velocity = self._output_normalizer.inverse(per_node_network_output)
 
         # integrate forward
-        cur_position = inputs.pos[mask]
+        cur_position = inputs['mesh'].pos[mask]
 
         # vel. = next_pos - cur_pos
         position = cur_position + velocity
@@ -184,16 +185,15 @@ class TrapezModel(AbstractSystemModel):
         next_pos = copy.deepcopy(ground_truth['next_pos'])
 
         input = {**initial_state, 'x': ground_truth['x'], 'pos': cur_pos, 'next_pos': ground_truth['next_pos'],
-                 'y': ground_truth['next_pos'][mask]}
+                 'y': ground_truth['next_pos'][mask], 'node_type': ground_truth['node_type']}
 
         data = Preprocessing.postprocessing(Data.from_dict(input).cpu())
         keep_pc = False if self.mgn else step % self.pc_frequency == 0
         graph = Batch.from_data_list([self.build_graph(data, is_training=False, keep_point_cloud=keep_pc)]).to(device)
-        data = data[0] if keep_pc else data[1]
 
         output, hidden = self(graph, False)
 
-        prediction, cur_position, cur_velocity = self.update(data.to(device), output[mask])
+        prediction, cur_position, cur_velocity = self.update(graph.to(device), output[mask])
         next_pos[mask] = prediction
 
         return next_pos, hidden

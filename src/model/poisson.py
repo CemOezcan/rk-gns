@@ -32,14 +32,14 @@ class PoissonModel(AbstractSystemModel):
 
         self.message_passing_steps = params.get('message_passing_steps')
         self.message_passing_aggregator = params.get('aggregation')
-        #TODO: integrate
-        self.recurrence = False
+        # TODO: integrate
+        self.recurrence = True
 
         self._edge_sets = [''.join(('mesh', '0', 'mesh'))]
         self._node_sets = ['mesh']
 
         self.learned_model = MeshGraphNets(
-            output_size=params.get('size'),
+            output_size=1,
             latent_size=128,
             num_layers=1,
             message_passing_steps=self.message_passing_steps,
@@ -47,7 +47,7 @@ class PoissonModel(AbstractSystemModel):
             edge_sets=self._edge_sets,
             node_sets=self._node_sets,
             dec=self._node_sets[0],
-            use_global=params.get('use_global'), recurrence=self.recurrence
+            use_global=True, recurrence=self.recurrence
         ).to(device)
 
         self.euclidian_distance = True
@@ -85,19 +85,19 @@ class PoissonModel(AbstractSystemModel):
 
         # Add node data to the HeteroData object
         hetero_data[self._node_sets[0]].x = node_attr
-        hetero_data.node_type = node_type
+        hetero_data[self._node_sets[0]].node_type = node_type
+        hetero_data[self._node_sets[0]].pos = data.pos
+        hetero_data[self._node_sets[0]].next_pos = data.next_pos
 
         # Add edge data to the HeteroData object
         hetero_data[('mesh', '0', 'mesh')].edge_index = edge_index
         hetero_data[('mesh', '0', 'mesh')].edge_attr = edge_attr
-        hetero_data.edge_type = edge_type
+        hetero_data[('mesh', '0', 'mesh')].edge_type = edge_type
 
         hetero_data.u = data.u
         hetero_data.h = data.h
         hetero_data.poisson = data.poisson
-        hetero_data.pos = data.pos
         hetero_data.y = data.y
-        hetero_data.next_pos = data.next_pos
         hetero_data.cpu()
 
         return hetero_data
@@ -118,8 +118,7 @@ class PoissonModel(AbstractSystemModel):
         return loss
 
     def get_target(self, graph: Batch, is_training: bool) -> Tensor:
-        mask = torch.where(graph.node_type == NodeType.MESH)[0]
-        target_velocity = graph.y - graph.pos[mask]
+        mask = torch.where(graph['mesh'].node_type == NodeType.MESH)[0]
 
         return self._output_normalizer(graph.poisson, is_training)
 
@@ -137,11 +136,11 @@ class PoissonModel(AbstractSystemModel):
 
     def update(self, inputs: Batch, per_node_network_output: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
         """Integrate model outputs."""
-        mask = torch.where(inputs.node_type == NodeType.MESH)[0]
+        mask = torch.where(inputs['mesh'].node_type == NodeType.MESH)[0]
         velocity = self._output_normalizer.inverse(per_node_network_output)
 
         # integrate forward
-        cur_position = inputs.pos[mask]
+        cur_position = inputs['mesh'].pos[mask]
 
         # vel. = next_pos - cur_pos
         position = velocity
@@ -166,9 +165,6 @@ class PoissonModel(AbstractSystemModel):
 
         u_pred = torch.stack([t for t in pred_trajectory][:num_steps]).cpu()
         u_gt = torch.stack([t['poisson'] for t in trajectory][:num_steps]).cpu()
-
-        if num_steps > 25:
-            print(u_pred[-1], u_gt[-1])
 
         traj_ops = {
             'cells': trajectory[0]['cells'],
@@ -205,7 +201,7 @@ class PoissonModel(AbstractSystemModel):
 
         output, hidden = self(graph, False)
 
-        prediction, cur_position, cur_velocity = self.update(data.to(device), output)
+        prediction, cur_position, cur_velocity = self.update(graph.to(device), output)
         #next_pos[mask] = prediction
 
         return prediction, hidden

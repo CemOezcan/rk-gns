@@ -352,7 +352,7 @@ class Preprocessing:
         return data, data_mgn
 
     @staticmethod
-    def add_edge_set(data: Data, edges: Tensor, index_shift: Tuple[int], edge_type: int, bidirectional: bool, remove_duplicates: bool = False) -> None:
+    def add_edge_set(data: Data, edges: Tensor, index_shift: Tuple[int, int], edge_type: int, bidirectional: bool, remove_duplicates: bool = False) -> None:
         """
         Adds a new set of edges to an existing graph
         Parameters
