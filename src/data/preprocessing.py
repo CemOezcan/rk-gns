@@ -3,6 +3,9 @@ import math
 import os
 import pickle
 import random
+
+import numpy as np
+import scipy
 import torch
 import torch_cluster
 
@@ -10,6 +13,7 @@ import torch_geometric.transforms as T
 
 from typing import Dict, Tuple, Union, List
 from torch import Tensor
+from torch_cluster import fps
 from torch_geometric.data import Data
 from tqdm import tqdm
 
@@ -43,6 +47,7 @@ class Preprocessing:
         self.raw = raw
         self.trajectories = config.get('task').get('trajectories')
         self.trajectories = math.inf if isinstance(self.trajectories, str) else self.trajectories
+        self.triangulate = config.get('task').get('task') == 'alternating' or config.get('task').get('model') == 'poisson'
 
         # dataset parameters
         self.input_dataset = 'deformable_plate'
@@ -74,7 +79,7 @@ class Preprocessing:
                 data = self.create_graph(data_timestep)
 
                 if not self.raw:
-                    data = Preprocessing.postprocessing(Data.from_dict(data))
+                    data = Preprocessing.postprocessing(Data.from_dict(data), self.triangulate)
 
                 data_list.append(data)
 
@@ -84,8 +89,7 @@ class Preprocessing:
 
         return trajectory_list
 
-    @staticmethod
-    def extract_system_parameters(data: Dict, timestep: int) -> Dict:
+    def extract_system_parameters(self, data: Dict, timestep: int) -> Dict:
         """
         Extract relevant parameters regarding the system State for a given instance.
 
@@ -109,6 +113,7 @@ class Preprocessing:
 
         instance['pcd_pos'] = torch.tensor(data['pcd_points'][timestep])
         instance['target_pcd_pos'] = torch.tensor(data['pcd_points'][timestep + 1])
+        instance['init_pcd_pos'] = torch.tensor(data['pcd_points'][0])
 
         instance['mesh_pos'] = torch.tensor(data['nodes_grid'][timestep])
         instance['target_mesh_pos'] = torch.tensor(data['nodes_grid'][timestep + 1])
@@ -122,7 +127,32 @@ class Preprocessing:
         instance['collider_edge_index'] = torch.tensor(data['edge_index_collider'].T).long()
         instance['collider_cells'] = torch.tensor(data['triangles_collider']).long()
 
+        if self.triangulate:
+            # TODO: more efficient implementation
+            instance['pcd_pos'] = instance['pcd_pos'][Preprocessing.subsample(instance)]
+            instance['target_pcd_pos'] = instance['target_pcd_pos'][Preprocessing.subsample(instance, target='target_pcd_pos')]
+
         return instance
+
+    @staticmethod
+    def subsample(instance, target='pcd_pos'):
+        ratio = (instance['init_pcd_pos'].shape[0] - instance[target].shape[0]) / instance['init_pcd_pos'].shape[0]
+        # TODO: convex hull
+        count = min(90, int(90 - ratio * 90))
+        soft = 90 - count
+
+        nodes = count / instance[target].shape[0]
+        index = fps(instance[target], ratio=nodes)
+
+        new_index = list(set(range(int(instance[target].shape[0]))) - set(index))
+
+        norm = torch.nn.Softmax()
+        center = torch.mean(instance['collider_pos'], dim=0)
+        dist = torch.pairwise_distance(instance[target][new_index], center)
+
+        probs = norm(1 / dist ** 2)
+        new_index = np.random.choice(new_index, size=soft, replace=False, p=probs)
+        return list(set(new_index).union(set(index)))
 
     def create_graph(self, input_data: Dict) -> Dict:
         """
@@ -292,7 +322,7 @@ class Preprocessing:
         return data.edge_attr
 
     @staticmethod
-    def postprocessing(data: Data) -> Tuple[Data, Data]:
+    def postprocessing(data: Data, triangulate) -> Tuple[Data, Data]:
         """
         Task specific expansion of the given input graph. Adds different edge types based on neighborhood graphs.
         Convert the resulting graph into a Data object.
@@ -310,6 +340,7 @@ class Preprocessing:
         """
         mask = torch.where(data.node_type == NodeType.MESH)[0]
         obst_mask = torch.where(data.node_type == NodeType.COLLIDER)[0]
+        point_mask = torch.where(data.node_type == NodeType.POINT)[0]
         point_index = data.point_index
 
         # Add collision edges
@@ -323,16 +354,40 @@ class Preprocessing:
         data_mgn = copy.deepcopy(data)
         old_edges = data_mgn.edge_type.shape[0]
 
-        cp_edges = torch_cluster.radius(data.pos[point_index:], data.pos[obst_mask], r=0.08, max_num_neighbors=100)
+        cp_edges = torch_cluster.radius(data.pos[point_index:], data.pos[obst_mask], r=0.3, max_num_neighbors=100)
         Preprocessing.add_edge_set(data, cp_edges, (len(mask), point_index), 3, False)
 
-        grounding_edges = torch_cluster.radius(data.pos[mask], data.pos[point_index:], r=0.08, max_num_neighbors=100)
-        Preprocessing.add_edge_set(data, grounding_edges, (point_index, 0), 4, False)
+        if triangulate:
+            triangles = scipy.spatial.Delaunay(data.pos[point_mask])
+            pc_edges = set()
+            for simplex in triangles.simplices:
+                pc_edges.update(
+                    (simplex[i], simplex[j]) for i in range(-1, len(simplex)) for j in range(i + 1, len(simplex)))
 
-        pc_edges = torch_cluster.radius_graph(data.pos[point_index:], r=0.08, max_num_neighbors=100)
-        Preprocessing.add_edge_set(data, pc_edges, (point_index, point_index), 5, False)
+            coll_set = set(collision_edges[1].tolist())
+            short_dist_graph = torch_cluster.radius_graph(data.pos[point_mask], r=0.35, max_num_neighbors=100).tolist()
+            short_edges = [(x, y) for x, y in zip(short_dist_graph[0], short_dist_graph[1]) if
+                           x in coll_set and y in coll_set]
+            short_pc_edges = set(short_edges).intersection(set(pc_edges))
 
-        values = [0] * 6
+            long_dist_graph = torch_cluster.radius_graph(data.pos[point_mask], r=0.6, max_num_neighbors=100).tolist()
+            long_edges = [(x, y) for x, y in zip(long_dist_graph[0], long_dist_graph[1]) if
+                          x not in coll_set or y not in coll_set]
+
+            pc_edges_copy = set(long_edges).union(short_pc_edges).intersection(set(pc_edges))
+            pc_edges = zip(*list(pc_edges_copy))
+
+            # Convert edge indices to PyTorch tensor
+            pc_edges = torch.tensor(list(pc_edges), dtype=torch.long)
+            Preprocessing.add_edge_set(data, pc_edges, (point_index, point_index), 4, False)
+        else:
+            grounding_edges = torch_cluster.radius(data.pos[mask], data.pos[point_index:], r=0.1, max_num_neighbors=100)
+            Preprocessing.add_edge_set(data, grounding_edges, (point_index, 0), 4, False)
+            # TODO: Integrate GGNS into Poisson
+            #pc_edges = torch_cluster.radius_graph(data.pos[point_index:], r=0.08, max_num_neighbors=100)
+            #Preprocessing.add_edge_set(data, pc_edges, (point_index, point_index), 5, False)
+
+        values = [0] * 5
         for key in data.edge_type:
             values[int(key)] += 1
 
@@ -352,7 +407,7 @@ class Preprocessing:
         return data, data_mgn
 
     @staticmethod
-    def add_edge_set(data: Data, edges: Tensor, index_shift: Tuple[int, int], edge_type: int, bidirectional: bool, remove_duplicates: bool = False) -> None:
+    def add_edge_set(data: Data, edges: Tensor, index_shift: Tuple[int], edge_type: int, bidirectional: bool, remove_duplicates: bool = False) -> None:
         """
         Adds a new set of edges to an existing graph
         Parameters

@@ -24,19 +24,8 @@ class TrapezModel(AbstractSystemModel):
 
     def __init__(self, params: ConfigDict, recurrence: bool = False):
         super(TrapezModel, self).__init__(params)
-        self.loss_fn = torch.nn.MSELoss()
 
-        self._output_normalizer = Normalizer(name='output_normalizer')
-        self._mesh_edge_normalizer = Normalizer(name='mesh_edge_normalizer')
-        self._feature_normalizer = Normalizer(name='node_normalizer')
-
-        self.message_passing_steps = params.get('message_passing_steps')
-        self.message_passing_aggregator = params.get('aggregation')
         self.recurrence = recurrence
-
-        self._edge_sets = [''.join(('mesh', '0', 'mesh'))]
-        self._node_sets = ['mesh']
-
         self.learned_model = MeshGraphNets(
             output_size=params.get('size'),
             latent_size=128,
@@ -48,58 +37,6 @@ class TrapezModel(AbstractSystemModel):
             dec=self._node_sets[0],
             use_global=params.get('use_global'), recurrence=self.recurrence
         ).to(device)
-
-        self.euclidian_distance = True
-        self.pc_frequency = params.get('pc_frequency')
-        self.mgn = params.get('mgn')
-        self.hetero = params.get('heterogeneous')
-        self.input_mesh_noise = params.get('noise')
-        self.input_pcd_noise = params.get('pc_noise')
-
-    def build_graph(self, data: Tuple[Data, Data], is_training: bool, keep_point_cloud: Union[bool, None] = None) -> HeteroData:
-        """Builds input graph."""
-        if self.mgn:
-            data = data[1]
-        elif keep_point_cloud is None:
-            x = np.random.rand(1)
-            data = data[0] if x < (1 / self.pc_frequency) else data[1]
-        elif keep_point_cloud:
-            data = data[0]
-        else:
-            data = data[1]
-
-        if is_training:
-            data = self.add_noise(data, self.input_mesh_noise, NodeType.MESH)
-        data = self.add_noise(data, self.input_pcd_noise, NodeType.POINT)
-        data = self.transform_position_to_edges(data, self.euclidian_distance)
-
-        edge_index = data.edge_index
-        edge_attr = data.edge_attr
-        node_attr = data.x
-        node_type = data.node_type
-        edge_type = data.edge_type
-
-        # Create a HeteroData object
-        hetero_data = HeteroData().cpu()
-
-        # Add node data to the HeteroData object
-        hetero_data[self._node_sets[0]].x = node_attr
-        hetero_data[self._node_sets[0]].node_type = node_type
-        hetero_data[self._node_sets[0]].pos = data.pos
-        hetero_data[self._node_sets[0]].next_pos = data.next_pos
-
-        # Add edge data to the HeteroData object
-        hetero_data[('mesh', '0', 'mesh')].edge_index = edge_index
-        hetero_data[('mesh', '0', 'mesh')].edge_attr = edge_attr
-        hetero_data[('mesh', '0', 'mesh')].edge_type = edge_type
-
-        hetero_data.u = data.u
-        hetero_data.poisson = data.poisson
-        hetero_data.h = data.h
-        hetero_data.y = data.y
-        hetero_data.cpu()
-
-        return hetero_data
 
     def forward(self, graph: Batch, is_training: bool) -> Tuple[Tensor, Tensor]:
         graph[('mesh', '0', 'mesh')].edge_attr = self._mesh_edge_normalizer(graph[('mesh', '0', 'mesh')].edge_attr, is_training)
@@ -187,7 +124,7 @@ class TrapezModel(AbstractSystemModel):
         input = {**initial_state, 'x': ground_truth['x'], 'pos': cur_pos, 'next_pos': ground_truth['next_pos'],
                  'y': ground_truth['next_pos'][mask], 'node_type': ground_truth['node_type']}
 
-        data = Preprocessing.postprocessing(Data.from_dict(input).cpu())
+        data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), False)
         keep_pc = False if self.mgn else step % self.pc_frequency == 0
         graph = Batch.from_data_list([self.build_graph(data, is_training=False, keep_point_cloud=keep_pc)]).to(device)
 
@@ -211,44 +148,3 @@ class TrapezModel(AbstractSystemModel):
             last_losses.append(mse_loss.cpu()[-1])
 
         return torch.mean(torch.stack(mse_losses)), torch.mean(torch.stack(last_losses))
-
-    @staticmethod
-    def add_noise(data: Data, sigma: float, node_type: int):
-        """
-        Adds training noise to the mesh node positions with standard deviation sigma
-        Args:
-            data: PyG data element containing (a batch of) graph(s)
-            sigma: standard deviation of used noise
-            node_type: The type of node to add noise to
-
-        Returns:
-            data: updated graph with noise
-
-        """
-        if sigma > 0.0:
-            indices = torch.where(data.node_type == node_type)[0]
-            num_node_features = data.pos.shape[1]
-            noise = (torch.randn(indices.shape[0], num_node_features) * sigma).cpu()
-            data.pos[indices, :num_node_features] = data.pos[indices, :num_node_features] + noise
-
-        return data
-
-    @staticmethod
-    def transform_position_to_edges(data: Data, euclidian_distance: bool) -> Data:
-        """
-        Transform the node positions in a homogeneous data element to the edges as relative distance together with (if needed) Euclidean norm
-        Args:
-            data: Data element
-            euclidian_distance: True if Euclidean norm included as feature
-
-        Returns:
-            out_data: Transformed data object
-        """
-        if euclidian_distance:
-            data_transform = T.Compose([T.Cartesian(norm=False, cat=True), T.Distance(norm=False, cat=True)])
-        else:
-            data_transform = T.Compose([T.Cartesian(norm=False, cat=True)])
-        out_data = data_transform(data)
-        return out_data
-
-

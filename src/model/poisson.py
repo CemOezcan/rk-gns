@@ -22,22 +22,10 @@ class PoissonModel(AbstractSystemModel):
     Model for static flag simulation.
     """
 
-    def __init__(self, params: ConfigDict):
+    def __init__(self, params: ConfigDict, recurrence: bool = False):
         super(PoissonModel, self).__init__(params)
         self.loss_fn = torch.nn.MSELoss()
-
-        self._output_normalizer = Normalizer(name='output_normalizer')
-        self._mesh_edge_normalizer = Normalizer(name='mesh_edge_normalizer')
-        self._feature_normalizer = Normalizer(name='node_normalizer')
-
-        self.message_passing_steps = params.get('message_passing_steps')
-        self.message_passing_aggregator = params.get('aggregation')
-        # TODO: integrate
-        self.recurrence = True
-
-        self._edge_sets = [''.join(('mesh', '0', 'mesh'))]
-        self._node_sets = ['mesh']
-
+        self.recurrence = recurrence
         self.learned_model = MeshGraphNets(
             output_size=1,
             latent_size=128,
@@ -50,59 +38,8 @@ class PoissonModel(AbstractSystemModel):
             use_global=True, recurrence=self.recurrence
         ).to(device)
 
-        self.euclidian_distance = True
-        self.pc_frequency = params.get('pc_frequency')
-        self.mgn = params.get('mgn')
-        self.hetero = params.get('heterogeneous')
-        self.input_mesh_noise = params.get('noise')
-        self.input_pcd_noise = params.get('pc_noise')
-
-    def build_graph(self, data: Tuple[Data, Data], is_training: bool, keep_point_cloud: Union[bool, None] = None) -> HeteroData:
-        """Builds input graph."""
-        if self.mgn:
-            data = data[1]
-        elif keep_point_cloud is None:
-            x = np.random.rand(1)
-            data = data[0] if x < (1 / self.pc_frequency) else data[1]
-        elif keep_point_cloud:
-            data = data[0]
-        else:
-            data = data[1]
-
-        if is_training:
-            data = self.add_noise(data, self.input_mesh_noise, NodeType.MESH)
-        data = self.add_noise(data, self.input_pcd_noise, NodeType.POINT)
-        data = self.transform_position_to_edges(data, self.euclidian_distance)
-
-        edge_index = data.edge_index
-        edge_attr = data.edge_attr
-        node_attr = data.x
-        node_type = data.node_type
-        edge_type = data.edge_type
-
-        # Create a HeteroData object
-        hetero_data = HeteroData().cpu()
-
-        # Add node data to the HeteroData object
-        hetero_data[self._node_sets[0]].x = node_attr
-        hetero_data[self._node_sets[0]].node_type = node_type
-        hetero_data[self._node_sets[0]].pos = data.pos
-        hetero_data[self._node_sets[0]].next_pos = data.next_pos
-
-        # Add edge data to the HeteroData object
-        hetero_data[('mesh', '0', 'mesh')].edge_index = edge_index
-        hetero_data[('mesh', '0', 'mesh')].edge_attr = edge_attr
-        hetero_data[('mesh', '0', 'mesh')].edge_type = edge_type
-
-        hetero_data.u = data.u
-        hetero_data.h = data.h
-        hetero_data.poisson = data.poisson
-        hetero_data.y = data.y
-        hetero_data.cpu()
-
-        return hetero_data
-
     def forward(self, graph: Batch, is_training: bool) -> Tuple[Tensor, Tensor]:
+        _, graph = self.split_graphs(graph)
         graph[('mesh', '0', 'mesh')].edge_attr = self._mesh_edge_normalizer(graph[('mesh', '0', 'mesh')].edge_attr, is_training)
         graph['mesh'].x = self._feature_normalizer(graph['mesh'].x, is_training)
 
@@ -110,58 +47,49 @@ class PoissonModel(AbstractSystemModel):
 
     def training_step(self, graph: Batch):
         graph.to(device)
-        pred_velocity, _ = self(graph, True)
-        target_velocity = self.get_target(graph, True)
+        pred_u, _ = self(graph, True)
+        target_u = self.get_target(graph, True)
 
-        loss = self.loss_fn(target_velocity, pred_velocity)
+        loss = self.loss_fn(target_u, pred_u)
 
         return loss
 
     def get_target(self, graph: Batch, is_training: bool) -> Tensor:
-        mask = torch.where(graph['mesh'].node_type == NodeType.MESH)[0]
-
         return self._output_normalizer(graph.poisson, is_training)
 
     @torch.no_grad()
     def validation_step(self, graph: Batch, data_frame: Dict) -> Tuple[Tensor, Tensor]:
         graph.to(device)
-        pred_velocity = self(graph, False)[0]
-        target_velocity = self.get_target(graph, False)
-        error = self.loss_fn(target_velocity, pred_velocity).cpu()
+        pred_u, _ = self(graph, False)
+        target_u = self.get_target(graph, False)
+        error = self.loss_fn(target_u, pred_u).cpu()
 
-        pred_position, _, _ = self.update(graph, pred_velocity)
-        pos_error = self.loss_fn(pred_position, graph.poisson).cpu()
+        pred_poisson, _, _ = self.update(graph, pred_u)
+        true_error = self.loss_fn(pred_poisson, graph.poisson).cpu()
 
-        return error, pos_error
+        return error, true_error
 
     def update(self, inputs: Batch, per_node_network_output: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
         """Integrate model outputs."""
-        mask = torch.where(inputs['mesh'].node_type == NodeType.MESH)[0]
-        velocity = self._output_normalizer.inverse(per_node_network_output)
+        poisson = self._output_normalizer.inverse(per_node_network_output)
 
-        # integrate forward
-        cur_position = inputs['mesh'].pos[mask]
-
-        # vel. = next_pos - cur_pos
-        position = velocity
-
-        return (position, cur_position, velocity)
+        return poisson, poisson, poisson
 
     @torch.no_grad()
     def rollout(self, trajectory: List[Dict[str, Tensor]], num_steps: int) -> Tuple[Dict[str, Tensor], Tensor]:
         """Rolls out a model trajectory."""
         num_steps = len(trajectory) if num_steps is None else num_steps
-        initial_state = trajectory[0]
+        initial_state = {'h': trajectory[0]['h']}
+        point_index = trajectory[0]['point_index']
 
         pred_trajectory = []
-        cur_pos = torch.squeeze(initial_state['pos'], 0).to(device)
         for step in range(num_steps):
-            cur_pos, hidden = self._step_fn(initial_state, cur_pos, trajectory[step], step)
+            cur_pos, hidden = self._step_fn(initial_state, None, trajectory[step], step)
             initial_state['h'] = hidden
             pred_trajectory.append(cur_pos)
 
-        prediction = torch.stack([t['pos'] for t in trajectory][:num_steps]).cpu()
-        gt_pos = torch.stack([t['pos'] for t in trajectory][:num_steps]).cpu()
+        prediction = torch.stack([t['pos'][:point_index] for t in trajectory][:num_steps]).cpu()
+        gt_pos = torch.stack([t['pos'][:point_index] for t in trajectory][:num_steps]).cpu()
 
         u_pred = torch.stack([t for t in pred_trajectory][:num_steps]).cpu()
         u_gt = torch.stack([t['poisson'] for t in trajectory][:num_steps]).cpu()
@@ -174,11 +102,7 @@ class PoissonModel(AbstractSystemModel):
             'pred_pos': prediction
         }
 
-        mask = torch.where(trajectory[0]['node_type'] == NodeType.MESH)[0].cpu()
         mse_loss_fn = torch.nn.MSELoss(reduction='none')
-
-        #mse_loss = mse_loss_fn(gt_pos[:, mask], prediction[:, mask]).cpu()
-        #mse_loss = torch.mean(torch.mean(mse_loss, dim=-1), dim=-1).detach()
 
         mse_loss = mse_loss_fn(u_pred, u_gt).cpu()
         mse_loss = torch.mean(torch.mean(mse_loss, dim=-1), dim=-1).detach()
@@ -187,22 +111,14 @@ class PoissonModel(AbstractSystemModel):
 
     @torch.no_grad()
     def _step_fn(self, initial_state, cur_pos, ground_truth, step):
-        #mask = torch.where(ground_truth['node_type'] == NodeType.MESH)[0].to(device)
-        #next_pos = copy.deepcopy(ground_truth['next_pos'])
-
         input = ground_truth
-        #{**initial_state, 'x': ground_truth['x'], 'pos': cur_pos, 'next_pos': ground_truth['next_pos'],
-         #        'y': ground_truth['next_pos'][mask]}
+        input['h'] = initial_state['h']
 
-        data = Preprocessing.postprocessing(Data.from_dict(input).cpu())
-        keep_pc = False if self.mgn else step % self.pc_frequency == 0
-        graph = Batch.from_data_list([self.build_graph(data, is_training=False, keep_point_cloud=keep_pc)]).to(device)
-        data = data[0] if keep_pc else data[1]
+        data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True)
+        graph = Batch.from_data_list([self.build_graph(data, is_training=False, keep_point_cloud=True)]).to(device)
 
         output, hidden = self(graph, False)
-
-        prediction, cur_position, cur_velocity = self.update(graph.to(device), output)
-        #next_pos[mask] = prediction
+        prediction, _, _ = self.update(graph.to(device), output)
 
         return prediction, hidden
 
@@ -221,42 +137,18 @@ class PoissonModel(AbstractSystemModel):
         return torch.mean(torch.stack(mse_losses)), torch.mean(torch.stack(last_losses))
 
     @staticmethod
-    def add_noise(data: Data, sigma: float, node_type: int):
-        """
-        Adds training noise to the mesh node positions with standard deviation sigma
-        Args:
-            data: PyG data element containing (a batch of) graph(s)
-            sigma: standard deviation of used noise
-            node_type: The type of node to add noise to
+    def split_graphs(graph):
+        pc_mask = torch.where(graph['mesh'].node_type == NodeType.POINT)[0]
+        obst_mask = torch.where(graph['mesh'].node_type == NodeType.COLLIDER)[0]
+        mesh_mask = torch.where(graph['mesh'].node_type == NodeType.MESH)[0]
 
-        Returns:
-            data: updated graph with noise
+        poisson_mask = torch.cat([pc_mask, obst_mask], dim=0)
+        mgn_mask = torch.cat([mesh_mask, obst_mask], dim=0)
 
-        """
-        if sigma > 0.0:
-            indices = torch.where(data.node_type == node_type)[0]
-            num_node_features = data.pos.shape[1]
-            noise = (torch.randn(indices.shape[0], num_node_features) * sigma).cpu()
-            data.pos[indices, :num_node_features] = data.pos[indices, :num_node_features] + noise
+        pc = graph.subgraph({'mesh': poisson_mask})
+        pc['mesh'].x = torch.cat([pc['mesh'].pos, pc['mesh'].x], dim=1)
+        mesh = graph.subgraph({'mesh': mgn_mask})
 
-        return data
-
-    @staticmethod
-    def transform_position_to_edges(data: Data, euclidian_distance: bool) -> Data:
-        """
-        Transform the node positions in a homogeneous data element to the edges as relative distance together with (if needed) Euclidean norm
-        Args:
-            data: Data element
-            euclidian_distance: True if Euclidean norm included as feature
-
-        Returns:
-            out_data: Transformed data object
-        """
-        if euclidian_distance:
-            data_transform = T.Compose([T.Cartesian(norm=False, cat=True), T.Distance(norm=False, cat=True)])
-        else:
-            data_transform = T.Compose([T.Cartesian(norm=False, cat=True)])
-        out_data = data_transform(data)
-        return out_data
+        return mesh, pc
 
 
