@@ -5,6 +5,7 @@ params:
   retrain: False # Start training a new model if True. Continue training the most recent version of the model if False.
   task:
     task: lstm
+    model: poisson
     sequence: 5
     dataset: deformable_plate
     rollout_split: valid
