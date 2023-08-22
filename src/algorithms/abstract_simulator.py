@@ -132,6 +132,21 @@ class AbstractSimulator(ABC):
         """
         raise NotImplementedError
 
+    def pretraining(self, train_dataloader: List) -> None:
+        """
+        Pretrain your algorithm if necessary. Default is no pretraining
+
+        Parameters
+        ----------
+            train_dataloader: List
+                A List containing the training data
+
+        Returns
+        -------
+
+        """
+        return
+
     @abstractmethod
     def fit_iteration(self, train_dataloader: List) -> None:
         """

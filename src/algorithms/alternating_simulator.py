@@ -53,6 +53,22 @@ class AlternatingSimulator(AbstractSimulator):
 
         super().initialize(task_information)
 
+    def pretraining(self, train_dataloader: List) -> None:
+        """
+        Pretrain your algorithm if necessary. Default is no pretraining
+
+        Parameters
+        ----------
+            train_dataloader: List
+                A List containing the training data
+
+        Returns
+        -------
+
+        """
+        for _ in range(5):
+            self.fit_poisson(train_dataloader)
+
     def fit_iteration(self, train_dataloader: List[Union[List[Data], Data]]) -> None:
         """
         Perform a training epoch, followed by a validation iteration to assess the model performance.
