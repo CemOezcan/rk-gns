@@ -92,7 +92,7 @@ class TrapezModel(AbstractSystemModel):
         point_index = initial_state['point_index']
 
         pred_trajectory = []
-        cur_pos = torch.squeeze(initial_state['pos'], 0).to(device)
+        cur_pos = torch.squeeze(initial_state['pos'], 0)
         for step in range(num_steps):
             cur_pos, hidden = self._step_fn(initial_state, cur_pos, trajectory[step], step)
             initial_state['h'] = hidden
@@ -118,7 +118,7 @@ class TrapezModel(AbstractSystemModel):
 
     @torch.no_grad()
     def _step_fn(self, initial_state, cur_pos, ground_truth, step):
-        mask = torch.where(ground_truth['node_type'] == NodeType.MESH)[0].to(device)
+        mask = torch.where(ground_truth['node_type'] == NodeType.MESH)[0].cpu()
         next_pos = copy.deepcopy(ground_truth['next_pos'])
 
         input = {**initial_state, 'x': ground_truth['x'], 'pos': cur_pos, 'next_pos': ground_truth['next_pos'],
