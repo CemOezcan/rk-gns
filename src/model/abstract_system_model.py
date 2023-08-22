@@ -1,3 +1,5 @@
+import copy
+
 import torch
 
 from typing import Tuple
@@ -262,6 +264,21 @@ class AbstractSystemModel(ABC, nn.Module):
             data_transform = T.Compose([T.Cartesian(norm=False, cat=True)])
         out_data = data_transform(data)
         return out_data
+
+    @staticmethod
+    def split_graphs(graph):
+        pc_mask = torch.where(graph['mesh'].node_type == NodeType.POINT)[0]
+        obst_mask = torch.where(graph['mesh'].node_type == NodeType.COLLIDER)[0]
+        mesh_mask = torch.where(graph['mesh'].node_type == NodeType.MESH)[0]
+
+        poisson_mask = torch.cat([pc_mask, obst_mask], dim=0)
+        mgn_mask = torch.cat([mesh_mask, obst_mask], dim=0)
+
+        pc = graph.subgraph({'mesh': poisson_mask}).clone()
+        pc['mesh'].x = torch.cat([pc['mesh'].pos, pc['mesh'].x], dim=1)
+        mesh = graph.subgraph({'mesh': mgn_mask}).clone()
+
+        return mesh, pc
 
 
 

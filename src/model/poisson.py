@@ -135,20 +135,3 @@ class PoissonModel(AbstractSystemModel):
             last_losses.append(mse_loss.cpu()[-1])
 
         return torch.mean(torch.stack(mse_losses)), torch.mean(torch.stack(last_losses))
-
-    @staticmethod
-    def split_graphs(graph):
-        pc_mask = torch.where(graph['mesh'].node_type == NodeType.POINT)[0]
-        obst_mask = torch.where(graph['mesh'].node_type == NodeType.COLLIDER)[0]
-        mesh_mask = torch.where(graph['mesh'].node_type == NodeType.MESH)[0]
-
-        poisson_mask = torch.cat([pc_mask, obst_mask], dim=0)
-        mgn_mask = torch.cat([mesh_mask, obst_mask], dim=0)
-
-        pc = graph.subgraph({'mesh': poisson_mask})
-        pc['mesh'].x = torch.cat([pc['mesh'].pos, pc['mesh'].x], dim=1)
-        mesh = graph.subgraph({'mesh': mgn_mask})
-
-        return mesh, pc
-
-

@@ -4,6 +4,7 @@ import pickle
 import time
 from typing import List, Union, Optional, Dict
 
+import numpy as np
 import pandas as pd
 import torch
 import wandb
@@ -20,6 +21,7 @@ from src.data.datasets import SequenceNoReturnDataset, RegularDataset
 from src.algorithms.abstract_simulator import AbstractSimulator
 
 from src.model.get_model import get_model
+from src.util import test
 from src.util.types import ConfigDict, NodeType
 from src.util.util import device
 
@@ -46,7 +48,7 @@ class AlternatingSimulator(AbstractSimulator):
 
     def initialize(self, task_information: ConfigDict) -> None:
         if not self._initialized:
-            self.global_model = get_model(task_information, poison=True)
+            self.global_model = get_model(task_information, poisson=True)
             self.global_optimizer = optim.Adam(self.global_model.parameters(), lr=self._learning_rate)
 
         super().initialize(task_information)
@@ -67,8 +69,24 @@ class AlternatingSimulator(AbstractSimulator):
             of the fit such as a training loss.
 
         """
-        self.fit_lstm(train_dataloader)
+        self.fit_poisson(train_dataloader)
         self.fit_gnn(train_dataloader)
+
+    def fit_poisson(self, train_dataloader: List[Data]):
+        self.global_model.train()
+        data = self.fetch_data(train_dataloader, True, mgn=True)
+
+        for i, batch in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
+            start_instance = time.time()
+            batch.to(device)
+            loss = self.global_model.training_step(batch)
+            loss.backward()
+
+            self.global_optimizer.step()
+            self.global_optimizer.zero_grad()
+
+            end_instance = time.time()
+            wandb.log({'poisson_loss': loss.detach(), 'training time per instance': end_instance - start_instance})
 
     def fit_lstm(self, train_dataloader: List[List[Data]]):
         self.global_model.train()
@@ -118,15 +136,14 @@ class AlternatingSimulator(AbstractSimulator):
 
         """
         self._network.train()
+        self.global_model.eval()
         data = self.fetch_data(train_dataloader, True, mgn=True)
 
         for i, batch in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
             start_instance = time.time()
-            batch, _ = self.split_graphs(batch)
-            batch.u = batch.poisson
             batch.to(device)
 
-            loss = self._network.training_step(batch)
+            loss = self._network.training_step(batch, self.global_model)
             loss.backward()
 
             self._optimizer.step()
@@ -134,6 +151,109 @@ class AlternatingSimulator(AbstractSimulator):
 
             end_instance = time.time()
             wandb.log({'loss': loss.detach(), 'training time per instance': end_instance - start_instance})
+        # self._network.train()
+        # self.global_model.eval()
+        # data = self.fetch_data(train_dataloader, True, mgn=True)
+        #
+        # for i, batch in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
+        #     start_instance = time.time()
+        #     batch, pc = self.split_graphs(batch)
+        #     batch.to(device)
+        #     pc.to(device)
+        #
+        #     output, _ = self.global_model(pc, False)
+        #     poisson = self.global_model._output_normalizer.inverse(output)
+        #     batch.u = poisson
+        #
+        #     loss = self._network.training_step(batch)
+        #     loss.backward()
+        #
+        #     self._optimizer.step()
+        #     self._optimizer.zero_grad()
+        #
+        #     end_instance = time.time()
+        #     wandb.log({'loss': loss.detach(), 'training time per instance': end_instance - start_instance})
+
+    @torch.no_grad()
+    def one_step_evaluator(self, ds_loader: List, instances: int, task_name: str, logging: bool = True) -> Optional[
+        Dict]:
+        """
+        Predict the system state for the next time step and evaluate the predictions over the test data.
+
+        Parameters
+        ----------
+            ds_loader : List
+                A list containing test/validation instances
+
+            instances : int
+                Number of trajectories used to estimate the one-step loss
+
+            task_name : str
+                Name of the task
+
+            logging : bool
+                Whether to log the results to wandb
+
+        Returns
+        -------
+            Optional[Dict]
+                A single result that scores the input, potentially per sample
+
+        """
+        trajectory_loss = list()
+        test_loader = self.fetch_data(ds_loader, is_training=False)
+        for i, batch in enumerate(tqdm(test_loader, desc='Validation', leave=True, position=0)):
+            batch.to(device)
+            instance_loss = self._network.validation_step(batch, i, self.global_model)
+
+            trajectory_loss.append([instance_loss])
+
+        mean = np.mean(trajectory_loss, axis=0)
+        std = np.std(trajectory_loss, axis=0)
+
+        path = os.path.join(self._out_dir, f'{task_name}_one_step.csv')
+        data_frame = pd.DataFrame.from_dict(
+            {'mean_loss': [x[0] for x in mean], 'std_loss': [x[0] for x in std],
+             'mean_pos_error': [x[1] for x in mean], 'std_pos_error': [x[1] for x in std],
+             'mean_u_loss': [x[2] for x in mean], 'std_u_loss': [x[2] for x in std],
+             'mean_poisson_error': [x[3] for x in mean], 'std_poisson_error': [x[3] for x in std]
+             }
+        )
+        data_frame.to_csv(path)
+
+        if logging:
+            table = wandb.Table(dataframe=data_frame)
+            val_loss, pos_loss, u_error, poisson_error = zip(*mean)
+            log_dict = {
+                'validation_loss':
+                    wandb.Histogram(
+                        [x for x in val_loss if np.quantile(val_loss, 0.90) > x],
+                        num_bins=256
+                    ),
+                'hist_u_loss':
+                    wandb.Histogram(
+                        [x for x in val_loss if np.quantile(val_loss, 0.90) > x],
+                        num_bins=256
+                    ),
+                'hist_poisson_loss':
+                    wandb.Histogram(
+                        [x for x in pos_loss if np.quantile(pos_loss, 0.90) > x],
+                        num_bins=256
+                    ),
+                'position_loss':
+                    wandb.Histogram(
+                        [x for x in pos_loss if np.quantile(pos_loss, 0.90) > x],
+                        num_bins=256
+                    ),
+                'validation_mean': np.mean(val_loss),
+                'position_mean': np.mean(pos_loss),
+                'u_mean': np.mean(val_loss),
+                'poisson_mean': np.mean(pos_loss),
+                f'{task_name}_one_step': table
+            }
+            return log_dict
+        else:
+            self._publish_csv(data_frame, f'one_step', path)
 
     @torch.no_grad()
     def rollout_evaluator(self, ds_loader: List, rollouts: int, task_name: str, logging: bool = True) -> Optional[Dict]:
@@ -197,10 +317,68 @@ class AlternatingSimulator(AbstractSimulator):
                     'rollout_loss': rollout_losses['mse_loss'][-1],
                     f'{task_name}_rollout_losses': table, 'rollout_hist': rollout_hist,
                     'u_loss_mean': torch.mean(torch.tensor(u_means), dim=0),
-                    'u_loss_rollout': u_means[-1],
-                    'u_loss_10': u_means[9]}
+                    'u_loss_rollout': u_means[-1]}
         else:
             self._publish_csv(data_frame, f'rollout_losses', path)
+
+    @torch.no_grad()
+    def n_step_evaluator(self, ds_loader: List, task_name: str, n_steps: int, n_traj: int, logging: bool = True) -> \
+    Optional[Dict]:
+        """
+        Predict the system state after n time steps. N step predictions are performed recursively within trajectories.
+        Evaluate the predictions over the test data.
+
+        Parameters
+        ----------
+            ds_loader : List
+                A list containing test/validation instances
+
+            task_name : str
+                Name of the task
+
+            n_steps : int
+                Value of n, with which to estimate the n-step loss
+
+            n_traj : int
+                Number of trajectories used to estimate the n-step loss
+
+        Returns
+        -------
+
+        """
+        # Take n_traj trajectories from valid set for n_step loss calculation
+        means = list()
+        lasts = list()
+        u_means = list()
+        u_lasts = list()
+        for i, trajectory in enumerate(tqdm(ds_loader, desc='N-Step', leave=True, position=0)):
+            if i >= n_traj:
+                break
+            mean_loss, last_loss, u_loss, u_last_loss = self._network.n_step_computation(trajectory, n_steps, self._time_steps, self.global_model)
+            means.append(mean_loss)
+            lasts.append(last_loss)
+            u_means.append(u_loss)
+            u_lasts.append(u_last_loss)
+
+        means = torch.mean(torch.stack(means))
+        lasts = torch.mean(torch.stack(lasts))
+        u_means = torch.mean(torch.stack(u_means))
+        u_lasts = torch.mean(torch.stack(u_lasts))
+
+        path = os.path.join(self._out_dir, f'{task_name}_n_step_losses.csv')
+        n_step_stats = {'n_step': [n_steps] * n_steps, 'mean': means, 'lasts': lasts}
+        data_frame = pd.DataFrame.from_dict(n_step_stats)
+        data_frame.to_csv(path)
+
+        if logging:
+            table = wandb.Table(dataframe=data_frame)
+            return {f'mean_{n_steps}_loss': torch.mean(torch.tensor(means), dim=0),
+                    f'{n_steps}_loss': torch.mean(torch.tensor(lasts), dim=0),
+                    f'{task_name}_n_step_losses': table,
+                    f'mean_{n_steps}_u_loss': torch.mean(torch.tensor(means), dim=0),
+                    f'{n_steps}_u_loss': torch.mean(torch.tensor(u_lasts), dim=0)}
+        else:
+            self._publish_csv(data_frame, f'n_step_losses', path)
 
     def fetch_data(self, trajectory: List[Union[List[Data], Data]], is_training: bool, seq=None, mgn=False) -> DataLoader:
         """
