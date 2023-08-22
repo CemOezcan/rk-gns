@@ -119,7 +119,7 @@ class TrapezModel(AbstractSystemModel):
     @torch.no_grad()
     def _step_fn(self, initial_state, cur_pos, ground_truth, step):
         mask = torch.where(ground_truth['node_type'] == NodeType.MESH)[0].cpu()
-        next_pos = copy.deepcopy(ground_truth['next_pos'])
+        next_pos = copy.deepcopy(ground_truth['next_pos']).to(device)
 
         input = {**initial_state, 'x': ground_truth['x'], 'pos': cur_pos, 'next_pos': ground_truth['next_pos'],
                  'y': ground_truth['next_pos'][mask], 'node_type': ground_truth['node_type']}
