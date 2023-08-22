@@ -12,7 +12,7 @@ params:
     batch_size: 30
     epochs: 200
     n_timesteps: 50
-    trajectories: 10
+    trajectories: 675
     mode: all
     prefetch_factor: 1
     test:
@@ -21,7 +21,7 @@ params:
       n_step_rollouts: 1 # Number of trajectories that are going to be used to compute the n_step_loss during evaluation
       n_steps: 10
     validation:
-      interval: 1
+      interval: 10
       trajectories: 135 # Number of trajectories that are going to be used to compute the validation loss during training
       rollouts: 135 # Number of trajectories that are going to be used to compute the rollout loss during training
       n_steps: 10
