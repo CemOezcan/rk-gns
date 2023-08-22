@@ -4,15 +4,15 @@ import_path: "default.yaml"
 params:
   retrain: False # Start training a new model if True. Continue training the most recent version of the model if False.
   task:
-    task: lstm
-    model: poisson
-    sequence: 50
+    task: alternating
+    model: trapez
+    sequence: 5
     dataset: deformable_plate
     rollout_split: valid
-    batch_size: 25
-    epochs: 300
+    batch_size: 30
+    epochs: 200
     n_timesteps: 50
-    trajectories: 675
+    trajectories: 10
     mode: all
     prefetch_factor: 1
     test:
@@ -21,7 +21,7 @@ params:
       n_step_rollouts: 1 # Number of trajectories that are going to be used to compute the n_step_loss during evaluation
       n_steps: 10
     validation:
-      interval: 15
+      interval: 1
       trajectories: 135 # Number of trajectories that are going to be used to compute the validation loss during training
       rollouts: 135 # Number of trajectories that are going to be used to compute the rollout loss during training
       n_steps: 10
@@ -31,14 +31,14 @@ params:
     size: 2
     noise: 0.01
     pc_noise: 0.0
-    pc_frequency: 2
+    pc_frequency: 1
     mgn: False
     poisson_ratio: False
     scheduler_epoch: 10
     aggregation: pna
-    learning_rate: 5.0e-4
+    learning_rate: 1.0e-4
     message_passing_steps: 5
-    use_global: False
+    use_global: True
     heterogeneous: False
   logging:
     wandb_mode: online

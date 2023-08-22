@@ -354,10 +354,10 @@ class Preprocessing:
         data_mgn = copy.deepcopy(data)
         old_edges = data_mgn.edge_type.shape[0]
 
-        cp_edges = torch_cluster.radius(data.pos[point_index:], data.pos[obst_mask], r=0.3, max_num_neighbors=100)
-        Preprocessing.add_edge_set(data, cp_edges, (len(mask), point_index), 3, False)
-
         if triangulate:
+            cp_edges = torch_cluster.radius(data.pos[point_index:], data.pos[obst_mask], r=0.3, max_num_neighbors=100)
+            Preprocessing.add_edge_set(data, cp_edges, (len(mask), point_index), 3, False)
+
             triangles = scipy.spatial.Delaunay(data.pos[point_mask])
             pc_edges = set()
             for simplex in triangles.simplices:
@@ -381,6 +381,9 @@ class Preprocessing:
             pc_edges = torch.tensor(list(pc_edges), dtype=torch.long)
             Preprocessing.add_edge_set(data, pc_edges, (point_index, point_index), 4, False)
         else:
+            cp_edges = torch_cluster.radius(data.pos[point_index:], data.pos[obst_mask], r=0.1, max_num_neighbors=100)
+            Preprocessing.add_edge_set(data, cp_edges, (len(mask), point_index), 3, False)
+
             grounding_edges = torch_cluster.radius(data.pos[mask], data.pos[point_index:], r=0.1, max_num_neighbors=100)
             Preprocessing.add_edge_set(data, grounding_edges, (point_index, 0), 4, False)
             # TODO: Integrate GGNS into Poisson
