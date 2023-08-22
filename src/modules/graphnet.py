@@ -10,12 +10,12 @@ class GraphNet(nn.Module):
     """Multi-Edge Interaction Network with residual connections."""
 
     def __init__(self, model_fn: Callable, output_size: int, message_passing_aggregator: str,
-                 node_sets: List[str], edge_sets: List[str], use_global: bool = True):
+                 node_sets: List[str], edge_sets: List[str], use_global: bool = True, poisson: bool = False):
         super().__init__()
-        self.res = output_size > 1
+        self.poisson = poisson
         self.node_models = nn.ModuleDict({name: model_fn(output_size) for name in node_sets})
         self.edge_models = nn.ModuleDict({name: model_fn(output_size) for name in edge_sets})
-        self.global_model = model_fn(output_size) if use_global else None
+        self.global_model = model_fn(output_size) if use_global and self.poisson else None
 
         self._use_global = use_global
         self.message_passing_aggregator = message_passing_aggregator
@@ -81,10 +81,10 @@ class GraphNet(nn.Module):
         aggregated_node_features = torch.cat(node_feature_list, 1)
 
         aggregated_features = torch.cat([aggregated_node_features, aggregated_edge_features, graph.u], 1)
-        if self.res:
-            graph.u = torch.add(graph.u, self.global_model(aggregated_features))
-        else:
+        if self.poisson:
             graph.u = self.global_model(aggregated_features)
+        else:
+            graph.u = torch.add(graph.u, self.global_model(aggregated_features))
 
     def aggregation(self, edge_features, indices, num_nodes: int) -> Tensor:
         if self.message_passing_aggregator == 'pna':
@@ -104,7 +104,7 @@ class GraphNet(nn.Module):
 
         self._update_edges(graph)
         self._update_nodes(graph)
-        if self._use_global:
+        if self._use_global and self.poisson:
             self._update_global(graph)
 
         return graph

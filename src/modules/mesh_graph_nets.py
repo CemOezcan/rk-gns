@@ -37,7 +37,8 @@ class MeshGraphNets(nn.Module):
                                    node_sets=node_sets,
                                    edge_sets=edge_sets,
                                    graphnet_block=graphnet_block,
-                                   use_global=use_global)
+                                   use_global=use_global,
+                                   poisson=self._output_size == 1)
         self.decoder = Decoder(make_mlp=functools.partial(self._make_mlp, layer_norm=False),
                                output_size=self._output_size, node_type=dec, latent_size=latent_size, recurrence=recurrence)
 

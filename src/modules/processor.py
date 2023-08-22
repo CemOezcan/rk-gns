@@ -11,14 +11,15 @@ class Processor(nn.Module):
     """
 
     def __init__(self, make_mlp: Callable, output_size: int, message_passing_steps: int,
-                 message_passing_aggregator: str, node_sets: List[str], edge_sets: List[str], graphnet_block: Type[GraphNet], use_global: bool):
+                 message_passing_aggregator: str, node_sets: List[str], edge_sets: List[str], graphnet_block: Type[GraphNet],
+                 use_global: bool, poisson: bool):
         super().__init__()
         blocks = []
         for _ in range(message_passing_steps):
             blocks.append(
                 graphnet_block(model_fn=make_mlp, output_size=output_size,
                                message_passing_aggregator=message_passing_aggregator,
-                               node_sets=node_sets, edge_sets=edge_sets, use_global=use_global
+                               node_sets=node_sets, edge_sets=edge_sets, use_global=use_global, poisson=poisson
                                )
             )
         self.graphnet_blocks = nn.Sequential(*blocks)
