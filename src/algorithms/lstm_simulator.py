@@ -108,6 +108,7 @@ class LSTMSimulator(AbstractSimulator):
         else:
             dataset = RegularDataset(trajectory, partial(self._network.build_graph, is_training=False))
 
-        batches = DataLoader(dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True, num_workers=8, prefetch_factor=2)
+        batches = DataLoader(dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True, num_workers=8,
+                             prefetch_factor=2, worker_init_fn=self.seed_worker)
 
         return batches
