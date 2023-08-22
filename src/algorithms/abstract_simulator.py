@@ -57,6 +57,7 @@ class AbstractSimulator(ABC):
         self._wandb_run = None
         self._wandb_url = None
         self._initialized = False
+        self.random_seed, self.np_seed, self.torch_seed = None, None, None
 
         self.loss_function = F.mse_loss
         self._learning_rate = self._network_config.get('learning_rate')
@@ -112,6 +113,13 @@ class AbstractSimulator(ABC):
             self._network = get_model(task_information)
             self._optimizer = optim.Adam(self._network.parameters(), lr=self._learning_rate)
             self._initialized = True
+        else:
+            self.set_seed()
+
+    def set_seed(self):
+        random.setstate(self.random_seed)
+        np.random.set_state(self.np_seed)
+        torch.set_rng_state(self.torch_seed)
 
     @abstractmethod
     def fetch_data(self, trajectory: List, is_training: bool) -> DataLoader:
@@ -351,6 +359,9 @@ class AbstractSimulator(ABC):
             name : str
                 The name under which to store this mesh simulator
         """
+        self.random_seed = random.getstate()
+        self.np_seed = np.random.get_state()
+        self.torch_seed = torch.get_rng_state()
         with open(os.path.join(self._out_dir, f'model_{name}.pkl'), 'wb') as file:
             pickle.dump(self, file)
 
