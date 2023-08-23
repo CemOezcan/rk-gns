@@ -10,7 +10,7 @@ params:
     dataset: deformable_plate
     rollout_split: valid
     batch_size: 30
-    epochs: 200
+    epochs: 1000
     n_timesteps: 50
     trajectories: 675
     mode: all
