@@ -99,8 +99,7 @@ class TrapezModel(AbstractSystemModel):
             pred_trajectory.append(cur_pos)
 
         prediction = torch.stack([x[:point_index] for x in pred_trajectory][:num_steps]).cpu()
-        gt_pos = torch.stack([t['pos'][:point_index] for t in trajectory][:num_steps]).cpu()
-        gt_target = torch.stack([t['y'] for t in trajectory][:num_steps]).cpu()
+        gt_pos = torch.stack([t['next_pos'][:point_index] for t in trajectory][:num_steps]).cpu()
 
         traj_ops = {
             'cells': trajectory[0]['cells'],
@@ -112,7 +111,7 @@ class TrapezModel(AbstractSystemModel):
 
         mask = torch.where(trajectory[0]['node_type'] == NodeType.MESH)[0].cpu()
         mse_loss_fn = torch.nn.MSELoss(reduction='none')
-        mse_loss = mse_loss_fn(gt_target, prediction[:, mask]).cpu()
+        mse_loss = mse_loss_fn(gt_pos[:, mask], prediction[:, mask]).cpu()
         mse_loss = torch.mean(torch.mean(mse_loss, dim=-1), dim=-1).detach()
 
         return traj_ops, mse_loss
