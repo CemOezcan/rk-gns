@@ -51,7 +51,7 @@ def visualize_graph(data):
     #ax.scatter(gt_pos[collider_mask][:, 0], gt_pos[collider_mask][:, 1], label='Ground Truth Position', c='dimgrey', alpha=0.5, s=5)
     #ax.scatter(gt_pos[point_index:][:, 0], gt_pos[point_index:][:, 1], label='Ground Truth Position', c='green', s=5)
 
-    colors = ['dimgrey', 'red', 'blue', 'green', 'yellow', 'red', 'brown', 'blue']
+    colors = ['dimgrey', 'red', 'blue', 'green', 'yellow', 'red', 'brown', 'blue', 'dimgrey', 'red', 'blue', 'green', 'yellow', 'red', 'brown', 'blue']
     for i, (x, y) in enumerate(zip(subgraph[('mesh', '0', 'mesh')].edge_index[0], subgraph[('mesh', '0', 'mesh')].edge_index[1])):
         if int(subgraph[('mesh', '0', 'mesh')].edge_type[i]) <= 100:
             fst = gt_pos[x]

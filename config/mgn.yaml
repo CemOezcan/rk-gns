@@ -9,7 +9,7 @@ params:
     sequence: 5
     dataset: deformable_plate
     rollout_split: valid
-    batch_size: 30
+    batch_size: 32
     epochs: 1000
     n_timesteps: 50
     trajectories: 675
@@ -35,8 +35,8 @@ params:
     mgn: False
     poisson_ratio: False
     scheduler_epoch: 10
-    aggregation: pna
-    learning_rate: 1.0e-4
+    aggregation: mean
+    learning_rate: 5.0e-4
     message_passing_steps: 5
     use_global: False
     heterogeneous: False

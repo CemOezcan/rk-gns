@@ -346,6 +346,8 @@ class Preprocessing:
         # Add collision edges
         collision_edges = torch_cluster.radius(data.pos[mask], data.pos[obst_mask], r=0.3, max_num_neighbors=100)
         Preprocessing.add_edge_set(data, collision_edges, (len(mask), 0), 2, False)
+        collision_edges = torch_cluster.radius(data.pos[obst_mask], data.pos[mask], r=0.3, max_num_neighbors=100)
+        Preprocessing.add_edge_set(data, collision_edges, (0, len(mask)), 3, False)
 
         # Add world edges
         # world_edges = torch_cluster.radius(data.pos[mask], data.pos[mask], r=0.3, max_num_neighbors=100)
@@ -356,7 +358,7 @@ class Preprocessing:
 
         if triangulate:
             cp_edges = torch_cluster.radius(data.pos[point_index:], data.pos[obst_mask], r=0.3, max_num_neighbors=100)
-            Preprocessing.add_edge_set(data, cp_edges, (len(mask), point_index), 3, False)
+            Preprocessing.add_edge_set(data, cp_edges, (len(mask), point_index), 4, False)
 
             triangles = scipy.spatial.Delaunay(data.pos[point_mask])
             pc_edges = set()
@@ -379,18 +381,26 @@ class Preprocessing:
 
             # Convert edge indices to PyTorch tensor
             pc_edges = torch.tensor(list(pc_edges), dtype=torch.long)
-            Preprocessing.add_edge_set(data, pc_edges, (point_index, point_index), 4, False)
+            Preprocessing.add_edge_set(data, pc_edges, (point_index, point_index), 5, False)
+            num = 6
         else:
             cp_edges = torch_cluster.radius(data.pos[point_index:], data.pos[obst_mask], r=0.1, max_num_neighbors=100)
-            Preprocessing.add_edge_set(data, cp_edges, (len(mask), point_index), 3, False)
+            Preprocessing.add_edge_set(data, cp_edges, (len(mask), point_index), 4, False)
+
+            cp_edges_1 = torch_cluster.radius(data.pos[obst_mask], data.pos[point_index:], r=0.1, max_num_neighbors=100)
+            Preprocessing.add_edge_set(data, cp_edges_1, (point_index, len(mask)), 5, False)
 
             grounding_edges = torch_cluster.radius(data.pos[mask], data.pos[point_index:], r=0.1, max_num_neighbors=100)
-            Preprocessing.add_edge_set(data, grounding_edges, (point_index, 0), 4, False)
-            # TODO: Integrate GGNS into Poisson
-            #pc_edges = torch_cluster.radius_graph(data.pos[point_index:], r=0.08, max_num_neighbors=100)
-            #Preprocessing.add_edge_set(data, pc_edges, (point_index, point_index), 5, False)
+            Preprocessing.add_edge_set(data, grounding_edges, (point_index, 0), 6, False)
 
-        values = [0] * 5
+            grounding_edges_1 = torch_cluster.radius(data.pos[point_index:], data.pos[mask], r=0.1, max_num_neighbors=100)
+            Preprocessing.add_edge_set(data, grounding_edges_1, (0, point_index), 7, False)
+            # TODO: Integrate GGNS into Poisson
+            pc_edges = torch_cluster.radius_graph(data.pos[point_index:], r=0.1, max_num_neighbors=100)
+            Preprocessing.add_edge_set(data, pc_edges, (point_index, point_index), 8, False)
+            num = 9
+
+        values = [0] * num
         for key in data.edge_type:
             values[int(key)] += 1
 
