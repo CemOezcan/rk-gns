@@ -85,7 +85,7 @@ class TrapezModel(AbstractSystemModel):
         return (position, cur_position, velocity)
 
     @torch.no_grad()
-    def rollout(self, trajectory: List[Dict[str, Tensor]], num_steps: int) -> Tuple[Dict[str, Tensor], Tensor]:
+    def rollout(self, trajectory: List[Dict[str, Tensor]], num_steps: int, freq: int) -> Tuple[Dict[str, Tensor], Tensor]:
         """Rolls out a model trajectory."""
         num_steps = len(trajectory) if num_steps is None else num_steps
         initial_state = trajectory[0]
@@ -94,7 +94,7 @@ class TrapezModel(AbstractSystemModel):
         pred_trajectory = []
         cur_pos = torch.squeeze(initial_state['pos'], 0)
         for step in range(num_steps):
-            cur_pos, hidden = self._step_fn(initial_state, cur_pos, trajectory[step], step)
+            cur_pos, hidden = self._step_fn(initial_state, cur_pos, trajectory[step], step, freq)
             initial_state['h'] = hidden
             pred_trajectory.append(cur_pos)
 
@@ -117,13 +117,13 @@ class TrapezModel(AbstractSystemModel):
         return traj_ops, mse_loss
 
     @torch.no_grad()
-    def _step_fn(self, initial_state, cur_pos, ground_truth, step):
+    def _step_fn(self, initial_state, cur_pos, ground_truth, step, freq):
         mask = torch.where(ground_truth['node_type'] == NodeType.MESH)[0].cpu()
         next_pos = copy.deepcopy(ground_truth['next_pos']).to(device)
         input = {**initial_state, 'x': ground_truth['x'], 'pos': cur_pos, 'next_pos': ground_truth['next_pos'],
                  'y': ground_truth['next_pos'][mask], 'node_type': ground_truth['node_type']}
 
-        keep_pc = False if self.mgn else step % self.pc_frequency == 0
+        keep_pc = False if self.mgn else step % freq == 0
         index = 0 if keep_pc else 1
 
         data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), False)[index]
@@ -137,14 +137,14 @@ class TrapezModel(AbstractSystemModel):
         return next_pos, hidden
 
     @torch.no_grad()
-    def n_step_computation(self, trajectory: List[Dict[str, Tensor]], n_step: int, num_timesteps=None) -> Tuple[Tensor, Tensor]:
+    def n_step_computation(self, trajectory: List[Dict[str, Tensor]], n_step: int, num_timesteps=None, freq=1) -> Tuple[Tensor, Tensor]:
         mse_losses = list()
         last_losses = list()
         num_timesteps = len(trajectory) if num_timesteps is None else num_timesteps
         for step in range(num_timesteps - n_step):
             # TODO: clusters/balancers are reset when computing n_step loss
             eval_traj = trajectory[step: step + n_step + 1]
-            prediction_trajectory, mse_loss = self.rollout(eval_traj, n_step + 1)
+            prediction_trajectory, mse_loss = self.rollout(eval_traj, n_step + 1, freq)
             mse_losses.append(torch.mean(mse_loss).cpu())
             last_losses.append(mse_loss.cpu()[-1])
 

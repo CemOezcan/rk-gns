@@ -104,6 +104,9 @@ class MeshTask(AbstractTask):
         """
         assert isinstance(self._algorithm, AbstractSimulator), 'Need a classifier to train on a classification task'
         start_epoch = self._current_epoch
+        mgn = get_from_nested_dict(self._config, ['model', 'mgn'])
+        frequency_list = [1] if mgn else [1, 2, 5]
+
         if start_epoch == 0:
             self._algorithm.pretraining(train_dataloader=self.train_loader)
         for e in trange(start_epoch, self._epochs, desc='Epochs', leave=True):
@@ -112,13 +115,17 @@ class MeshTask(AbstractTask):
 
             if (e + 1) % self._validation_interval == 0:
                 one_step = self._algorithm.one_step_evaluator(self._valid_loader, self._num_val_trajectories, task_name)
-                rollout = self._algorithm.rollout_evaluator(self._rollout_loader, self._num_val_rollouts, task_name)
-                n_step = self._algorithm.n_step_evaluator(self._rollout_loader, task_name, n_steps=self._val_n_steps, n_traj=self._num_val_n_step_rollouts)
+                rollouts = list()
+                n_steps = list()
+                for freq in frequency_list:
+                    rollouts.append(self._algorithm.rollout_evaluator(self._rollout_loader, self._num_val_rollouts, task_name, freq=freq))
+                    #n_steps.append(self._algorithm.n_step_evaluator(self._rollout_loader, task_name, n_steps=self._val_n_steps, n_traj=self._num_val_n_step_rollouts, freq=freq))
 
-                dir_dict = self.select_plotting(task_name)
+                dir_dict = self.select_plotting(task_name, frequency_list)
 
                 animation = {f"video_{key}": wandb.Video(value, fps=10, format="gif") for key, value in dir_dict.items()}
-                data = {k: v for dictionary in [one_step, rollout, n_step, animation] for k, v in dictionary.items()}
+                evaluation_data = [one_step] + rollouts + n_steps + [animation]
+                data = {k: v for dictionary in evaluation_data for k, v in dictionary.items()}
                 data['epoch'] = e + 1
                 self._algorithm.save(task_name)
                 self._algorithm.log_epoch(data)
@@ -137,18 +144,20 @@ class MeshTask(AbstractTask):
         task_name = f'{self._task_name}final'
 
         self._algorithm.one_step_evaluator(self._test_loader, self._num_test_trajectories, task_name, logging=False)
-        self._algorithm.rollout_evaluator(self._test_rollout_loader, self._num_test_rollouts, task_name, logging=False)
-        self._algorithm.n_step_evaluator(self._test_rollout_loader, task_name, n_steps=self._n_steps, n_traj=self._num_n_step_rollouts, logging=False)
+        self._algorithm.rollout_evaluator(self._test_rollout_loader, self._num_test_rollouts, task_name, logging=False, freq=1)
+        self._algorithm.n_step_evaluator(self._test_rollout_loader, task_name, n_steps=self._n_steps, n_traj=self._num_n_step_rollouts, logging=False, freq=1)
 
-        self.select_plotting(task_name)
+        self.select_plotting(task_name, freq_list=[1])
 
-    def select_plotting(self, task_name: str):
-        a, w = self.plot(task_name)
-        dir_1 = self._save_plot(a, w, task_name)
+    def select_plotting(self, task_name: str, freq_list: list):
+        out = dict.fromkeys(freq_list)
+        for freq in freq_list:
+            a, w = self.plot(task_name, freq)
+            out[freq] = self._save_plot(a, w, task_name, freq)
 
-        return {'': dir_1}
+        return out
 
-    def plot(self, task_name: str) -> Tuple[FuncAnimation, PillowWriter]:
+    def plot(self, task_name: str, freq: int) -> Tuple[FuncAnimation, PillowWriter]:
         """
         Simulates and visualizes predicted trajectories as well as their respective ground truth trajectories.
         The predicted trajectories are produced by the current state of the mesh simulator.
@@ -164,7 +173,7 @@ class MeshTask(AbstractTask):
                 The simulations
 
         """
-        rollouts = os.path.join(self._out_dir, f'{task_name}_rollouts.pkl')
+        rollouts = os.path.join(self._out_dir, f'{task_name}_rollouts_k={freq}.pkl')
         with open(rollouts, 'rb') as fp:
             rollout_data = pickle.load(fp)[:self.n_viz]
 
@@ -223,7 +232,7 @@ class MeshTask(AbstractTask):
 
         return anima, writergif
 
-    def _save_plot(self, animation: FuncAnimation, writer_video: PillowWriter, task_name: str) -> str:
+    def _save_plot(self, animation: FuncAnimation, writer_video: PillowWriter, task_name: str, freq: int) -> str:
         """
         Saves a simulation as a .gif file.
 
@@ -242,7 +251,7 @@ class MeshTask(AbstractTask):
                 The path to the .gif file
 
         """
-        dir = os.path.join(self._out_dir, f'{task_name}_animation.gif')
+        dir = os.path.join(self._out_dir, f'{task_name}_animation_k={freq}.gif')
         animation.save(dir, writer=writer_video)
         plt.show(block=True)
         return dir

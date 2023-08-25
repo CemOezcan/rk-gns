@@ -76,7 +76,7 @@ class PoissonModel(AbstractSystemModel):
         return poisson, poisson, poisson
 
     @torch.no_grad()
-    def rollout(self, trajectory: List[Dict[str, Tensor]], num_steps: int) -> Tuple[Dict[str, Tensor], Tensor]:
+    def rollout(self, trajectory: List[Dict[str, Tensor]], num_steps: int, freq: int) -> Tuple[Dict[str, Tensor], Tensor]:
         """Rolls out a model trajectory."""
         num_steps = len(trajectory) if num_steps is None else num_steps
         initial_state = {'h': trajectory[0]['h']}
@@ -84,7 +84,7 @@ class PoissonModel(AbstractSystemModel):
 
         pred_trajectory = []
         for step in range(num_steps):
-            cur_pos, hidden = self._step_fn(initial_state, None, trajectory[step], step)
+            cur_pos, hidden = self._step_fn(initial_state, None, trajectory[step], step, freq)
             initial_state['h'] = hidden
             pred_trajectory.append(cur_pos)
 
@@ -110,11 +110,11 @@ class PoissonModel(AbstractSystemModel):
         return traj_ops, mse_loss
 
     @torch.no_grad()
-    def _step_fn(self, initial_state, cur_pos, ground_truth, step):
+    def _step_fn(self, initial_state, cur_pos, ground_truth, step, freq):
         input = ground_truth
         input['h'] = initial_state['h']
 
-        keep_pc = False if self.mgn else step % self.pc_frequency == 0
+        keep_pc = False if self.mgn else step % freq == 0
         index = 0 if keep_pc else 1
 
         data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True)[index]
@@ -126,14 +126,14 @@ class PoissonModel(AbstractSystemModel):
         return prediction, hidden
 
     @torch.no_grad()
-    def n_step_computation(self, trajectory: List[Dict[str, Tensor]], n_step: int, num_timesteps=None) -> Tuple[Tensor, Tensor]:
+    def n_step_computation(self, trajectory: List[Dict[str, Tensor]], n_step: int, num_timesteps=None, freq: int = 1) -> Tuple[Tensor, Tensor]:
         mse_losses = list()
         last_losses = list()
         num_timesteps = len(trajectory) if num_timesteps is None else num_timesteps
         for step in range(num_timesteps - n_step):
             # TODO: clusters/balancers are reset when computing n_step loss
             eval_traj = trajectory[step: step + n_step + 1]
-            prediction_trajectory, mse_loss = self.rollout(eval_traj, n_step + 1)
+            prediction_trajectory, mse_loss = self.rollout(eval_traj, n_step + 1, freq)
             mse_losses.append(torch.mean(mse_loss).cpu())
             last_losses.append(mse_loss.cpu()[-1])
 

@@ -272,7 +272,7 @@ class AlternatingSimulator(AbstractSimulator):
             self._publish_csv(data_frame, f'one_step', path)
 
     @torch.no_grad()
-    def rollout_evaluator(self, ds_loader: List, rollouts: int, task_name: str, logging: bool = True) -> Optional[Dict]:
+    def rollout_evaluator(self, ds_loader: List, rollouts: int, task_name: str, logging: bool = True, freq=1) -> Optional[Dict]:
         """
         Recursive prediction of the system state at the end of trajectories.
         Evaluate the predictions over the test data.
@@ -305,7 +305,7 @@ class AlternatingSimulator(AbstractSimulator):
         for i, trajectory in enumerate(tqdm(ds_loader, desc='Rollouts', leave=True, position=0)):
             if i >= rollouts:
                 break
-            prediction_trajectory, mse_loss, u_loss = self._network.rollout(trajectory, self._time_steps, self.global_model)
+            prediction_trajectory, mse_loss, u_loss = self._network.rollout(trajectory, self._time_steps, self.global_model, freq=freq)
             trajectories.append(prediction_trajectory)
             mse_losses.append(mse_loss.cpu())
             u_losses.append(u_loss.cpu())
@@ -321,24 +321,24 @@ class AlternatingSimulator(AbstractSimulator):
             'mse_std': [mse.item() for mse in mse_stds]
         }
 
-        self.save_rollouts(trajectories, task_name)
+        self.save_rollouts(trajectories, task_name, freq)
 
-        path = os.path.join(self._out_dir, f'{task_name}_rollout_losses.csv')
+        path = os.path.join(self._out_dir, f'{task_name}_rollout_losses_k={freq}.csv')
         data_frame = pd.DataFrame.from_dict(rollout_losses)
         data_frame.to_csv(path)
 
         if logging:
             table = wandb.Table(dataframe=data_frame)
-            return {'mean_rollout_loss': torch.mean(torch.tensor(rollout_losses['mse_loss']), dim=0),
-                    'rollout_loss': rollout_losses['mse_loss'][-1],
-                    f'{task_name}_rollout_losses': table, 'rollout_hist': rollout_hist,
-                    'u_loss_mean': torch.mean(torch.tensor(u_means), dim=0),
-                    'u_loss_rollout': u_means[-1]}
+            return {f'mean_rollout_loss_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_loss']), dim=0),
+                    f'rollout_loss_k={freq}': rollout_losses['mse_loss'][-1],
+                    f'{task_name}_rollout_losses_k={freq}': table, 'rollout_hist': rollout_hist,
+                    f'u_loss_mean_k={freq}': torch.mean(torch.tensor(u_means), dim=0),
+                    f'u_loss_rollout_k={freq}': u_means[-1]}
         else:
-            self._publish_csv(data_frame, f'rollout_losses', path)
+            self._publish_csv(data_frame, f'rollout_losses_k={freq}', path)
 
     @torch.no_grad()
-    def n_step_evaluator(self, ds_loader: List, task_name: str, n_steps: int, n_traj: int, logging: bool = True) -> \
+    def n_step_evaluator(self, ds_loader: List, task_name: str, n_steps: int, n_traj: int, logging: bool = True, freq=1) -> \
     Optional[Dict]:
         """
         Predict the system state after n time steps. N step predictions are performed recursively within trajectories.
@@ -370,7 +370,7 @@ class AlternatingSimulator(AbstractSimulator):
         for i, trajectory in enumerate(tqdm(ds_loader, desc='N-Step', leave=True, position=0)):
             if i >= n_traj:
                 break
-            mean_loss, last_loss, u_loss, u_last_loss = self._network.n_step_computation(trajectory, n_steps, self._time_steps, self.global_model)
+            mean_loss, last_loss, u_loss, u_last_loss = self._network.n_step_computation(trajectory, n_steps, self._time_steps, self.global_model, freq)
             means.append(mean_loss)
             lasts.append(last_loss)
             u_means.append(u_loss)
@@ -381,20 +381,22 @@ class AlternatingSimulator(AbstractSimulator):
         u_means = torch.mean(torch.stack(u_means))
         u_lasts = torch.mean(torch.stack(u_lasts))
 
-        path = os.path.join(self._out_dir, f'{task_name}_n_step_losses.csv')
+        path = os.path.join(self._out_dir, f'{task_name}_n_step_losses_k={freq}.csv')
         n_step_stats = {'n_step': [n_steps] * n_steps, 'mean': means, 'lasts': lasts}
         data_frame = pd.DataFrame.from_dict(n_step_stats)
         data_frame.to_csv(path)
 
         if logging:
             table = wandb.Table(dataframe=data_frame)
-            return {f'mean_{n_steps}_loss': torch.mean(torch.tensor(means), dim=0),
-                    f'{n_steps}_loss': torch.mean(torch.tensor(lasts), dim=0),
-                    f'{task_name}_n_step_losses': table,
-                    f'mean_{n_steps}_u_loss': torch.mean(torch.tensor(means), dim=0),
-                    f'{n_steps}_u_loss': torch.mean(torch.tensor(u_lasts), dim=0)}
+            return {
+                f'mean_{n_steps}_loss_k={freq}': torch.mean(torch.tensor(means), dim=0),
+                f'{n_steps}_loss_k={freq}': torch.mean(torch.tensor(lasts), dim=0),
+                f'{task_name}_n_step_losses_k={freq}': table,
+                f'mean_{n_steps}_u_loss_k={freq}': torch.mean(torch.tensor(means), dim=0),
+                f'{n_steps}_u_loss_k={freq}': torch.mean(torch.tensor(u_lasts), dim=0)
+            }
         else:
-            self._publish_csv(data_frame, f'n_step_losses', path)
+            self._publish_csv(data_frame, f'n_step_losses_k={freq}', path)
 
     def fetch_data(self, trajectory: List[Union[List[Data], Data]], is_training: bool, seq=None, mgn=False) -> DataLoader:
         """
