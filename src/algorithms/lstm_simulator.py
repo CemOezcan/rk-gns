@@ -99,6 +99,7 @@ class LSTMSimulator(AbstractSimulator):
             DataLoader
                 Collection of batched graphs.
         """
+        mgn = self._config.get('model').get('mgn')
         if is_training:
             trajectories = [list() for _ in range(len(trajectory) // self._time_steps)]
             for i, graph in enumerate(trajectory):
@@ -106,7 +107,7 @@ class LSTMSimulator(AbstractSimulator):
                 trajectories[index].append(graph)
             dataset = SequenceNoReturnDataset(trajectories, self._seq_len, partial(self._network.build_graph, is_training=True))
         else:
-            dataset = RegularDataset(trajectory, partial(self._network.build_graph, is_training=False))
+            dataset = RegularDataset(trajectory, partial(self._network.build_graph, is_training=False), mgn)
 
         batches = DataLoader(dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True, num_workers=8,
                              prefetch_factor=2, worker_init_fn=self.seed_worker)

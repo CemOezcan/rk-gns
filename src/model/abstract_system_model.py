@@ -106,7 +106,7 @@ class AbstractSystemModel(ABC, nn.Module):
 
         raise NotImplementedError
 
-    def build_graph(self, data: Tuple[Data, Data], is_training: bool, keep_point_cloud: Union[bool, None] = None) -> HeteroData:
+    def build_graph(self, data: Data, is_training: bool) -> HeteroData:
         """
         Constructs the input graph given a system state.
 
@@ -126,16 +126,6 @@ class AbstractSystemModel(ABC, nn.Module):
             The system state represented by a graph
 
         """
-        if self.mgn:
-            data = data[1]
-        elif keep_point_cloud is None:
-            x = np.random.rand(1)
-            data = data[0] if x < (1 / self.pc_frequency) else data[1]
-        elif keep_point_cloud:
-            data = data[0]
-        else:
-            data = data[1]
-
         if is_training:
             data = self.add_noise(data, self.input_mesh_noise, NodeType.MESH)
         data = self.add_noise(data, self.input_pcd_noise, NodeType.POINT)

@@ -114,8 +114,11 @@ class PoissonModel(AbstractSystemModel):
         input = ground_truth
         input['h'] = initial_state['h']
 
-        data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True)
-        graph = Batch.from_data_list([self.build_graph(data, is_training=False, keep_point_cloud=True)]).to(device)
+        keep_pc = False if self.mgn else step % self.pc_frequency == 0
+        index = 0 if keep_pc else 1
+
+        data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True)[index]
+        graph = Batch.from_data_list([self.build_graph(data, is_training=False)]).to(device)
 
         output, hidden = self(graph, False)
         prediction, _, _ = self.update(graph.to(device), output)

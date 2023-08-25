@@ -115,7 +115,7 @@ class TrapezModel(AbstractSystemModel):
             pred_trajectory.append(cur_pos)
 
         prediction = torch.stack([x[:point_index] for x in pred_trajectory][:num_steps]).cpu()
-        gt_pos = torch.stack([t['pos'][:point_index] for t in trajectory][:num_steps]).cpu()
+        gt_pos = torch.stack([t['next_pos'][:point_index] for t in trajectory][:num_steps]).cpu()
 
         u_pred = torch.stack([t for t in pred_u][:num_steps]).cpu()
         u_gt = torch.stack([t['poisson'] for t in trajectory][:num_steps]).cpu()
@@ -143,13 +143,14 @@ class TrapezModel(AbstractSystemModel):
     def _step_fn(self, initial_state, cur_pos, ground_truth, step, poisson_model=None):
         mask = torch.where(ground_truth['node_type'] == NodeType.MESH)[0].cpu()
         next_pos = copy.deepcopy(ground_truth['next_pos']).to(device)
-
         input = {**initial_state, 'x': ground_truth['x'], 'pos': cur_pos, 'next_pos': ground_truth['next_pos'],
                  'y': ground_truth['next_pos'][mask], 'node_type': ground_truth['node_type']}
 
-        data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True)
         keep_pc = False if self.mgn else step % self.pc_frequency == 0
-        graph = Batch.from_data_list([self.build_graph(data, is_training=False, keep_point_cloud=keep_pc)]).to(device)
+        index = 0 if keep_pc else 1
+
+        data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True)[index]
+        graph = Batch.from_data_list([self.build_graph(data, is_training=False)]).to(device)
 
         output, hidden = poisson_model(graph, False)
         poisson, _, _ = poisson_model.update(graph, output)
