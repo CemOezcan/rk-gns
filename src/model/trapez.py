@@ -94,7 +94,7 @@ class TrapezModel(AbstractSystemModel):
         point_index = initial_state['point_index']
 
         pred_trajectory = []
-        cur_pos = torch.squeeze(initial_state['pos'], 0)
+        cur_pos = initial_state['pos']
         for step in range(num_steps):
             cur_pos, hidden = self._step_fn(initial_state, cur_pos, trajectory[step], step, freq)
             initial_state['h'] = hidden
@@ -123,10 +123,9 @@ class TrapezModel(AbstractSystemModel):
         mask = torch.where(ground_truth['node_type'] == NodeType.MESH)[0].cpu()
         next_pos = copy.deepcopy(ground_truth['next_pos']).to(device)
 
-        input = {**initial_state, 'x': ground_truth['x'], 'pos': cur_pos, 'next_pos': ground_truth['next_pos'],
-                 'y': ground_truth['next_pos'][mask], 'node_type': ground_truth['node_type']}
+        input = {**ground_truth, 'pos': cur_pos}
 
-        keep_pc = False if self.mgn else step % freq == 0
+        keep_pc = False if self.mgn else (step + 1) % freq == 0
         index = 0 if keep_pc else 1
 
         data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), False)[index]
