@@ -47,9 +47,11 @@ class TrapezModel(AbstractSystemModel):
     def training_step(self, graph: Batch):
         graph.to(device)
         pred_velocity, _ = self(graph, True)
-        target_velocity = self.get_target(graph, True)
+        #target_velocity = self.get_target(graph, True)
 
-        loss = self.loss_fn(target_velocity, pred_velocity)
+        pred_position, _, _ = self.update(graph, pred_velocity)
+
+        loss = self.loss_fn(graph.y, pred_position)
 
         return loss
 
@@ -57,7 +59,7 @@ class TrapezModel(AbstractSystemModel):
         mask = torch.where(graph['mesh'].node_type == NodeType.MESH)[0]
         target_velocity = graph.y - graph['mesh'].pos[mask]
 
-        return self._output_normalizer(target_velocity, is_training)
+        return target_velocity
 
     @torch.no_grad()
     def validation_step(self, graph: Batch, data_frame: Dict) -> Tuple[Tensor, Tensor]:
@@ -74,7 +76,7 @@ class TrapezModel(AbstractSystemModel):
     def update(self, inputs: Batch, per_node_network_output: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
         """Integrate model outputs."""
         mask = torch.where(inputs['mesh'].node_type == NodeType.MESH)[0]
-        velocity = self._output_normalizer.inverse(per_node_network_output)
+        velocity = per_node_network_output
 
         # integrate forward
         cur_position = inputs['mesh'].pos[mask]
@@ -120,6 +122,7 @@ class TrapezModel(AbstractSystemModel):
     def _step_fn(self, initial_state, cur_pos, ground_truth, step, freq):
         mask = torch.where(ground_truth['node_type'] == NodeType.MESH)[0].cpu()
         next_pos = copy.deepcopy(ground_truth['next_pos']).to(device)
+
         input = {**initial_state, 'x': ground_truth['x'], 'pos': cur_pos, 'next_pos': ground_truth['next_pos'],
                  'y': ground_truth['next_pos'][mask], 'node_type': ground_truth['node_type']}
 

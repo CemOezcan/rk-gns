@@ -48,7 +48,7 @@ class MeshGraphNets(nn.Module):
         latent_graph = self.processor(latent_graph)
         return self.decoder(latent_graph)
 
-    def _make_mlp(self, output_size: int, layer_norm=True) -> nn.Module:
+    def _make_mlp(self, output_size: int, layer_norm=False) -> nn.Module:
         """Builds an MLP."""
         widths = [self._latent_size] * self._num_layers + [output_size]
         network = LazyMLP(widths)
@@ -68,7 +68,7 @@ class LazyMLP(nn.Module):
             self._layers_ordered_dict["linear_" +
                                       str(index)] = nn.LazyLinear(output_size)
             if index < (num_layers - 1):
-                self._layers_ordered_dict["relu_" + str(index)] = nn.ReLU()
+                self._layers_ordered_dict["leakyrelu_" + str(index)] = nn.LeakyReLU()
         self.layers = nn.Sequential(self._layers_ordered_dict)
 
     def forward(self, input: Tensor) -> Tensor:
