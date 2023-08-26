@@ -42,4 +42,4 @@ params:
     heterogeneous: False
   logging:
     wandb_mode: online
-  random_seed: 115
+  random_seed: 42
