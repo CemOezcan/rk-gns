@@ -16,18 +16,18 @@ from src.util.util import device
 from src.util.types import NodeType
 from src.util.types import ConfigDict
 
-
-class TrapezModel(AbstractSystemModel):
+# TODO: integrate
+class PoissonModel(AbstractSystemModel):
     """
     Model for static flag simulation.
     """
 
     def __init__(self, params: ConfigDict, recurrence: bool = False):
-        super(TrapezModel, self).__init__(params)
-
+        super(PoissonModel, self).__init__(params)
+        self.loss_fn = torch.nn.MSELoss()
         self.recurrence = recurrence
         self.learned_model = MeshGraphNets(
-            output_size=params.get('size'),
+            output_size=1,
             latent_size=128,
             num_layers=1,
             message_passing_steps=self.message_passing_steps,
@@ -35,48 +35,61 @@ class TrapezModel(AbstractSystemModel):
             edge_sets=self._edge_sets,
             node_sets=self._node_sets,
             dec=self._node_sets[0],
-            use_global=params.get('use_global'), recurrence=self.recurrence
+            use_global=True, recurrence=self.recurrence
         ).to(device)
 
     def forward(self, graph: Batch, is_training: bool) -> Tuple[Tensor, Tensor]:
+        _, graph = self.split_graphs(graph)
+
         return self.learned_model(graph)
 
     def training_step(self, graph: Batch):
         graph.to(device)
-        pred_velocity, _ = self(graph, True)
-        target_velocity = self.get_target(graph, True)
+        pred_u, _ = self(graph, True)
+        target_u = self.get_target(graph, True)
 
-        loss = self.loss_fn(target_velocity, pred_velocity)
+        loss = self.loss_fn(target_u, pred_u)
 
         return loss
+
+    def get_target(self, graph: Batch, is_training: bool) -> Tensor:
+        return self._output_normalizer(graph.poisson, is_training)
 
     @torch.no_grad()
     def validation_step(self, graph: Batch, data_frame: Dict) -> Tuple[Tensor, Tensor]:
         graph.to(device)
-        pred_velocity = self(graph, False)[0]
-        target_velocity = self.get_target(graph, False)
-        error = self.loss_fn(target_velocity, pred_velocity).cpu()
+        pred_u, _ = self(graph, False)
+        target_u = self.get_target(graph, False)
+        error = self.loss_fn(target_u, pred_u).cpu()
 
-        pred_position, _, _ = self.update(graph, pred_velocity)
-        pos_error = self.loss_fn(pred_position, graph.y).cpu()
+        pred_poisson, _, _ = self.update(graph, pred_u)
+        true_error = self.loss_fn(pred_poisson, graph.poisson).cpu()
 
-        return error, pos_error
+        return error, true_error
+
+    def update(self, inputs: Batch, per_node_network_output: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+        """Integrate model outputs."""
+        poisson = self._output_normalizer.inverse(per_node_network_output)
+
+        return poisson, poisson, poisson
 
     @torch.no_grad()
     def rollout(self, trajectory: List[Dict[str, Tensor]], num_steps: int, freq: int) -> Tuple[Dict[str, Tensor], Tensor]:
         """Rolls out a model trajectory."""
         num_steps = len(trajectory) if num_steps is None else num_steps
+        hidden = trajectory[0]
+        point_index = trajectory[0]['point_index']
 
         pred_trajectory = []
-        cur_pos = trajectory[0]['pos']
-        hidden = trajectory[0]['h']
         for step in range(num_steps):
-            cur_pos, hidden = self._step_fn(hidden, cur_pos, trajectory[step], step, freq)
+            cur_pos, hidden = self._step_fn(hidden, None, trajectory[step], step, freq)
             pred_trajectory.append(cur_pos)
 
-        point_index = trajectory[0]['point_index']
-        prediction = torch.stack([x[:point_index] for x in pred_trajectory][:num_steps]).cpu()
-        gt_pos = torch.stack([t['next_pos'][:point_index] for t in trajectory][:num_steps]).cpu()
+        prediction = torch.stack([t['pos'][:point_index] for t in trajectory][:num_steps]).cpu()
+        gt_pos = torch.stack([t['pos'][:point_index] for t in trajectory][:num_steps]).cpu()
+
+        u_pred = torch.stack([t for t in pred_trajectory][:num_steps]).cpu()
+        u_gt = torch.stack([t['poisson'] for t in trajectory][:num_steps]).cpu()
 
         traj_ops = {
             'cells': trajectory[0]['cells'],
@@ -86,40 +99,34 @@ class TrapezModel(AbstractSystemModel):
             'pred_pos': prediction
         }
 
-        mask = torch.where(trajectory[0]['node_type'] == NodeType.MESH)[0].cpu()
         mse_loss_fn = torch.nn.MSELoss(reduction='none')
-        mse_loss = mse_loss_fn(gt_pos[:, mask], prediction[:, mask]).cpu()
+
+        mse_loss = mse_loss_fn(u_pred, u_gt).cpu()
         mse_loss = torch.mean(torch.mean(mse_loss, dim=-1), dim=-1).detach()
 
         return traj_ops, mse_loss
 
     @torch.no_grad()
     def _step_fn(self, hidden, cur_pos, ground_truth, step, freq):
-        mask = torch.where(ground_truth['node_type'] == NodeType.MESH)[0].cpu()
-        next_pos = copy.deepcopy(ground_truth['next_pos']).to(device)
-
-        input = {**ground_truth, 'pos': cur_pos, 'h': hidden}
+        input = {**ground_truth, 'h': hidden}
 
         keep_pc = False if self.mgn else step % freq == 0
         index = 0 if keep_pc else 1
 
-        data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), False)[index]
+        data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True)[index]
         graph = Batch.from_data_list([self.build_graph(data, is_training=False)]).to(device)
 
         output, hidden = self(graph, False)
+        prediction, _, _ = self.update(graph.to(device), output)
 
-        prediction, cur_position, cur_velocity = self.update(graph.to(device), output[mask])
-        next_pos[mask] = prediction
-
-        return next_pos, hidden
+        return prediction, hidden
 
     @torch.no_grad()
-    def n_step_computation(self, trajectory: List[Dict[str, Tensor]], n_step: int, num_timesteps=None, freq=1) -> Tuple[Tensor, Tensor]:
+    def n_step_computation(self, trajectory: List[Dict[str, Tensor]], n_step: int, num_timesteps=None, freq: int = 1) -> Tuple[Tensor, Tensor]:
         mse_losses = list()
         last_losses = list()
         num_timesteps = len(trajectory) if num_timesteps is None else num_timesteps
         for step in range(num_timesteps - n_step):
-            # TODO: clusters/balancers are reset when computing n_step loss
             eval_traj = trajectory[step: step + n_step + 1]
             prediction_trajectory, mse_loss = self.rollout(eval_traj, n_step + 1, freq)
             mse_losses.append(torch.mean(mse_loss).cpu())

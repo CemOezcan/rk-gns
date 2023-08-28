@@ -5,11 +5,12 @@ params:
   retrain: False # Start training a new model if True. Continue training the most recent version of the model if False.
   task:
     task: mesh
-    sequence: 10
+    model: trapez
+    sequence: 5
     dataset: deformable_plate
     rollout_split: valid
-    batch_size: 25
-    epochs: 300
+    batch_size: 32
+    epochs: 200
     n_timesteps: 50
     trajectories: 675
     mode: all
@@ -20,7 +21,7 @@ params:
       n_step_rollouts: 1 # Number of trajectories that are going to be used to compute the n_step_loss during evaluation
       n_steps: 10
     validation:
-      interval: 15
+      interval: 10
       trajectories: 135 # Number of trajectories that are going to be used to compute the validation loss during training
       rollouts: 135 # Number of trajectories that are going to be used to compute the rollout loss during training
       n_steps: 10
@@ -30,15 +31,15 @@ params:
     size: 2
     noise: 0.01
     pc_noise: 0.0
-    pc_frequency: 2
-    mgn: False
+    pc_frequency: 1
+    mgn: True
     poisson_ratio: True
     scheduler_epoch: 10
-    aggregation: pna
+    aggregation: mean
     learning_rate: 5.0e-4
     message_passing_steps: 5
     use_global: True
     heterogeneous: False
   logging:
     wandb_mode: online
-  random_seed: 0
+  random_seed: 115

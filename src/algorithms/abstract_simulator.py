@@ -1,5 +1,7 @@
 import os
 import pickle
+import random
+
 import torch
 import wandb
 
@@ -55,6 +57,7 @@ class AbstractSimulator(ABC):
         self._wandb_run = None
         self._wandb_url = None
         self._initialized = False
+        self.random_seed, self.np_seed, self.torch_seed = None, None, None
 
         self.loss_function = F.mse_loss
         self._learning_rate = self._network_config.get('learning_rate')
@@ -110,6 +113,13 @@ class AbstractSimulator(ABC):
             self._network = get_model(task_information)
             self._optimizer = optim.Adam(self._network.parameters(), lr=self._learning_rate)
             self._initialized = True
+        else:
+            self.set_seed()
+
+    def set_seed(self):
+        random.setstate(self.random_seed)
+        np.random.set_state(self.np_seed)
+        torch.set_rng_state(self.torch_seed)
 
     @abstractmethod
     def fetch_data(self, trajectory: List, is_training: bool) -> DataLoader:
@@ -129,6 +139,21 @@ class AbstractSimulator(ABC):
                 Collection of batched graphs.
         """
         raise NotImplementedError
+
+    def pretraining(self, train_dataloader: List) -> None:
+        """
+        Pretrain your algorithm if necessary. Default is no pretraining
+
+        Parameters
+        ----------
+            train_dataloader: List
+                A List containing the training data
+
+        Returns
+        -------
+
+        """
+        return
 
     @abstractmethod
     def fit_iteration(self, train_dataloader: List) -> None:
@@ -186,38 +211,29 @@ class AbstractSimulator(ABC):
         mean = np.mean(trajectory_loss, axis=0)
         std = np.std(trajectory_loss, axis=0)
 
-        path = os.path.join(self._out_dir, f'{task_name}_one_step.csv')
-        data_frame = pd.DataFrame.from_dict(
-            {'mean_loss': [x[0] for x in mean], 'std_loss': [x[0] for x in std],
-             'mean_pos_error': [x[1] for x in mean], 'std_pos_error': [x[1] for x in std]
-             }
-        )
-        data_frame.to_csv(path)
+        val_loss, pos_loss = zip(*mean)
+        val_std, pos_std = zip(*std)
 
-        if logging:
-            table = wandb.Table(dataframe=data_frame)
-            val_loss, pos_loss = zip(*mean)
-            log_dict = {
-                'validation_loss':
-                    wandb.Histogram(
-                        [x for x in val_loss if np.quantile(val_loss, 0.90) > x],
-                        num_bins=256
-                    ),
-                'position_loss':
-                    wandb.Histogram(
-                        [x for x in pos_loss if np.quantile(pos_loss, 0.90) > x],
-                        num_bins=256
-                    ),
-                'validation_mean': np.mean(val_loss),
-                'position_mean': np.mean(pos_loss),
-                f'{task_name}_one_step': table
-            }
-            return log_dict
-        else:
-            self._publish_csv(data_frame, f'one_step', path)
+        log_dict = {
+            'single-step error/velocity_historgram':
+                wandb.Histogram(
+                    [x for x in val_loss],
+                    num_bins=20
+                ),
+            'single-step error/position_historgram':
+                wandb.Histogram(
+                    [x for x in pos_loss],
+                    num_bins=20
+                ),
+            'single-step error/velocity_error': np.mean(val_loss),
+            'single-step error/position_error': np.mean(pos_loss),
+            'single-step error/velocity_std': np.mean(val_std),
+            'single-step error/position_std': np.mean(pos_std)
+        }
+        return log_dict
 
     @torch.no_grad()
-    def n_step_evaluator(self, ds_loader: List, task_name: str, n_steps: int, n_traj: int, logging: bool = True) -> Optional[Dict]:
+    def n_step_evaluator(self, ds_loader: List, task_name: str, n_steps: int, n_traj: int, logging: bool = True, freq: int = 1) -> Optional[Dict]:
         """
         Predict the system state after n time steps. N step predictions are performed recursively within trajectories.
         Evaluate the predictions over the test data.
@@ -246,28 +262,20 @@ class AbstractSimulator(ABC):
         for i, trajectory in enumerate(tqdm(ds_loader, desc='N-Step', leave=True, position=0)):
             if i >= n_traj:
                 break
-            mean_loss, last_loss = self._network.n_step_computation(trajectory, n_steps, self._time_steps)
+            mean_loss, last_loss = self._network.n_step_computation(trajectory, n_steps, self._time_steps, freq=freq)
             means.append(mean_loss)
             lasts.append(last_loss)
 
         means = torch.mean(torch.stack(means))
         lasts = torch.mean(torch.stack(lasts))
 
-        path = os.path.join(self._out_dir, f'{task_name}_n_step_losses.csv')
-        n_step_stats = {'n_step': [n_steps] * n_steps, 'mean': means, 'lasts': lasts}
-        data_frame = pd.DataFrame.from_dict(n_step_stats)
-        data_frame.to_csv(path)
-
-        if logging:
-            table = wandb.Table(dataframe=data_frame)
-            return {f'mean_{n_steps}_loss': torch.mean(torch.tensor(means), dim=0),
-                    f'{n_steps}_loss': torch.mean(torch.tensor(lasts), dim=0),
-                    f'{task_name}_n_step_losses': table}
-        else:
-            self._publish_csv(data_frame, f'n_step_losses', path)
+        return {
+            f'{n_steps}-step error/mean_k={freq}': torch.mean(torch.tensor(means), dim=0),
+            f'{n_steps}-step error/last_k={freq}': torch.mean(torch.tensor(lasts), dim=0)
+        }
 
     @torch.no_grad()
-    def rollout_evaluator(self, ds_loader: List, rollouts: int, task_name: str, logging: bool = True) -> Optional[Dict]:
+    def rollout_evaluator(self, ds_loader: List, rollouts: int, task_name: str, logging: bool = True, freq: int = 1) -> Optional[Dict]:
         """
         Recursive prediction of the system state at the end of trajectories.
         Evaluate the predictions over the test data.
@@ -297,11 +305,11 @@ class AbstractSimulator(ABC):
         for i, trajectory in enumerate(tqdm(ds_loader, desc='Rollouts', leave=True, position=0)):
             if i >= rollouts:
                 break
-            prediction_trajectory, mse_loss = self._network.rollout(trajectory, num_steps=self._time_steps)
+            prediction_trajectory, mse_loss = self._network.rollout(trajectory, num_steps=self._time_steps, freq=freq)
             trajectories.append(prediction_trajectory)
             mse_losses.append(mse_loss.cpu())
 
-        rollout_hist = wandb.Histogram([x for x in torch.mean(torch.stack(mse_losses), dim=1)], num_bins=10)
+        rollout_hist = wandb.Histogram([x for x in torch.mean(torch.stack(mse_losses), dim=1)], num_bins=20)
 
         mse_means = torch.mean(torch.stack(mse_losses), dim=0)
         mse_stds = torch.std(torch.stack(mse_losses), dim=0)
@@ -311,19 +319,14 @@ class AbstractSimulator(ABC):
             'mse_std': [mse.item() for mse in mse_stds]
         }
 
-        self.save_rollouts(trajectories, task_name)
+        self.save_rollouts(trajectories, task_name, freq)
 
-        path = os.path.join(self._out_dir, f'{task_name}_rollout_losses.csv')
-        data_frame = pd.DataFrame.from_dict(rollout_losses)
-        data_frame.to_csv(path)
-
-        if logging:
-            table = wandb.Table(dataframe=data_frame)
-            return {'mean_rollout_loss': torch.mean(torch.tensor(rollout_losses['mse_loss']), dim=0),
-                    'rollout_loss': rollout_losses['mse_loss'][-1],
-                    f'{task_name}_rollout_losses': table, 'rollout_hist': rollout_hist}
-        else:
-            self._publish_csv(data_frame, f'rollout_losses', path)
+        return {
+            f'rollout error/mean_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_loss']), dim=0),
+            f'rollout error/std_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_std']), dim=0),
+            f'rollout error/last_k={freq}': rollout_losses['mse_loss'][-1],
+            f'rollout error/histogram_k={freq}': rollout_hist
+        }
 
     def save(self, name: str) -> None:
         """
@@ -334,10 +337,13 @@ class AbstractSimulator(ABC):
             name : str
                 The name under which to store this mesh simulator
         """
+        self.random_seed = random.getstate()
+        self.np_seed = np.random.get_state()
+        self.torch_seed = torch.get_rng_state()
         with open(os.path.join(self._out_dir, f'model_{name}.pkl'), 'wb') as file:
             pickle.dump(self, file)
 
-    def save_rollouts(self, rollouts: List[Dict[str, Tensor]], task_name: str) -> None:
+    def save_rollouts(self, rollouts: List[Dict[str, Tensor]], task_name: str, freq: int) -> None:
         """
         Save predicted and ground truth trajectories.
 
@@ -350,7 +356,7 @@ class AbstractSimulator(ABC):
                 The task name
         """
         rollouts = [{key: value.to('cpu') for key, value in x.items()} for x in rollouts]
-        with open(os.path.join(self._out_dir, f'{task_name}_rollouts.pkl'), 'wb') as file:
+        with open(os.path.join(self._out_dir, f'{task_name}_rollouts_k={freq}.pkl'), 'wb') as file:
             pickle.dump(rollouts, file)
 
     @staticmethod
@@ -386,3 +392,47 @@ class AbstractSimulator(ABC):
 
         """
         wandb.log(data)
+
+    def log_gradients(self, model):
+        grad_first_layer = self.calculate_gradients(model, 0)
+        grad_last_layer = self.calculate_gradients(model, -1)
+        grad_enc = torch.cat([param.grad.view(-1) for param in model.learned_model.encoder.parameters()]).abs().mean()
+        grad_dec = torch.cat([param.grad.view(-1) for param in model.learned_model.decoder.parameters()]).abs().mean()
+
+        grad = []
+        for param in model.parameters():
+            if param.grad is not None:
+                grad.append(param.grad.view(-1))
+        grad = torch.cat(grad).abs().mean()
+        return {"gradients/first_layer": grad_first_layer,
+                "gradients/last_layer": grad_last_layer,
+                "gradients/encoder": grad_enc,
+                "gradients/decoder": grad_dec,
+                "gradients/all_layers": grad}
+
+    def calculate_gradients(self, model, layer):
+        """
+        Calculates the mean gradient of our GNN for a given layer
+        Args:
+            GNN: gnn_base object
+            layer: layer number
+
+        Returns:
+            Mean gradient for the layer
+        """
+        grad = []
+        for name, edge_parameter in model.learned_model.processor.graphnet_blocks[
+            layer].edge_models['mesh0mesh'].layers.named_parameters():
+            grad.append(edge_parameter.grad.view(-1))
+        for name, node_parameter in model.learned_model.processor.graphnet_blocks[
+            layer].node_models['mesh'].layers.named_parameters():
+            grad.append(node_parameter.grad.view(-1))
+        grad = torch.cat(grad).abs().mean()
+
+        return grad
+
+    @staticmethod
+    def seed_worker(worker_id):
+        worker_seed = torch.initial_seed() % 2**32
+        np.random.seed(worker_seed)
+        random.seed(worker_seed)

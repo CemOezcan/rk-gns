@@ -2,6 +2,9 @@ import functools
 
 from collections import OrderedDict
 from typing import List, Type, Tuple
+
+import numpy as np
+import torch
 from torch import nn, Tensor
 from torch_geometric.data import Batch
 
@@ -26,7 +29,7 @@ class MeshGraphNets(nn.Module):
         self._message_passing_aggregator = message_passing_aggregator
         graphnet_block = GraphNet
 
-        self.encoder = Encoder(make_mlp=self._make_mlp,
+        self.encoder = Encoder(make_mlp=nn.LazyLinear,
                                latent_size=self._latent_size,
                                node_sets=node_sets,
                                edge_sets=edge_sets,
@@ -37,8 +40,9 @@ class MeshGraphNets(nn.Module):
                                    node_sets=node_sets,
                                    edge_sets=edge_sets,
                                    graphnet_block=graphnet_block,
-                                   use_global=use_global)
-        self.decoder = Decoder(make_mlp=functools.partial(self._make_mlp, layer_norm=False),
+                                   use_global=use_global,
+                                   poisson=self._output_size == 1)
+        self.decoder = Decoder(make_mlp=self._make_mlp,
                                output_size=self._output_size, node_type=dec, latent_size=latent_size, recurrence=recurrence)
 
     def forward(self, graph: Batch) -> Tensor:
@@ -47,9 +51,9 @@ class MeshGraphNets(nn.Module):
         latent_graph = self.processor(latent_graph)
         return self.decoder(latent_graph)
 
-    def _make_mlp(self, output_size: int, layer_norm=True) -> nn.Module:
+    def _make_mlp(self, output_size: int, layer_norm=False) -> nn.Module:
         """Builds an MLP."""
-        widths = [self._latent_size] * self._num_layers + [output_size]
+        widths = [self._latent_size] * self._num_layers #+ [output_size]
         network = LazyMLP(widths)
         if layer_norm:
             network = nn.Sequential(
@@ -66,8 +70,9 @@ class LazyMLP(nn.Module):
         for index, output_size in enumerate(output_sizes):
             self._layers_ordered_dict["linear_" +
                                       str(index)] = nn.LazyLinear(output_size)
-            if index < (num_layers - 1):
-                self._layers_ordered_dict["relu_" + str(index)] = nn.ReLU()
+            #if index < (num_layers - 1):
+            #    self._layers_ordered_dict["leakyrelu_" + str(index)] = nn.LeakyReLU()
+            self._layers_ordered_dict["leakyrelu_" + str(index)] = nn.LeakyReLU()
         self.layers = nn.Sequential(self._layers_ordered_dict)
 
     def forward(self, input: Tensor) -> Tensor:

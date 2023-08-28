@@ -12,9 +12,9 @@ class Encoder(nn.Module):
         self._latent_size = latent_size
         self._use_global = use_global
 
-        self.node_models = nn.ModuleDict({name: self._make_mlp(latent_size) for name in node_sets})
-        self.edge_models = nn.ModuleDict({name: self._make_mlp(latent_size) for name in edge_sets})
-        self.global_model = self._make_mlp(latent_size) if use_global else None
+        self.node_models = nn.ModuleDict({name: nn.LazyLinear(latent_size) for name in node_sets})
+        self.edge_models = nn.ModuleDict({name: nn.LazyLinear(latent_size) for name in edge_sets})
+        self.global_model = nn.LazyLinear(latent_size) if use_global else None
 
     def forward(self, graph: Batch) -> Batch:
         for position, node_type in enumerate(graph.node_types):

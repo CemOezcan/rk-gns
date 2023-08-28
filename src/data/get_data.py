@@ -21,7 +21,7 @@ def get_directories(dataset_name):
     return in_dir, out_dir
 
 
-def get_data(config: ConfigDict, split='train', split_and_preprocess=True, add_targets=True, raw=False):
+def get_data(config: ConfigDict, split='train', raw=False):
     dataset_name = get_from_nested_dict(config, list_of_keys=['task', 'dataset'], raise_error=True)
     in_dir, _ = get_directories(dataset_name)
 

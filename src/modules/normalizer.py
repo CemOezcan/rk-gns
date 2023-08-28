@@ -8,7 +8,7 @@ class Normalizer(nn.Module):
     Feature normalizer that accumulates statistics online.
     """
 
-    def __init__(self, size: int, name: str, device=None, max_accumulations=10 ** 6, std_epsilon=1e-8) -> None:
+    def __init__(self, name: str, device=None, max_accumulations=10 ** 6, std_epsilon=1e-8) -> None:
         """
         Initialize the normalizer.
 
@@ -37,11 +37,22 @@ class Normalizer(nn.Module):
 
         self._acc_count = torch.zeros(1, dtype=torch.float32, requires_grad=False).to(self.device)
         self._num_accumulations = torch.zeros(1, dtype=torch.float32, requires_grad=False).to(self.device)
+
+        self.initialized = False
+        self._acc_sum = None
+        self._acc_sum_squared = None
+
+    def initialize(self, size):
         self._acc_sum = torch.zeros(size, dtype=torch.float32, requires_grad=False).to(self.device)
         self._acc_sum_squared = torch.zeros(size, dtype=torch.float32, requires_grad=False).to(self.device)
 
+        self.initialized = True
+
     def forward(self, batched_data: Tensor, accumulate=True) -> Tensor:
         """Normalizes input data and accumulates statistics."""
+        if not self.initialized:
+            self.initialize(batched_data.shape[1])
+
         if accumulate and self._num_accumulations < self._max_accumulations:
             # stop accumulating after a million updates, to prevent accuracy issues
             self._accumulate(batched_data)
