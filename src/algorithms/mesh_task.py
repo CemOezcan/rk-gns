@@ -105,7 +105,7 @@ class MeshTask(AbstractTask):
         assert isinstance(self._algorithm, AbstractSimulator), 'Need a classifier to train on a classification task'
         start_epoch = self._current_epoch
         mgn = get_from_nested_dict(self._config, ['model', 'mgn'])
-        frequency_list = [1] if mgn else [5]
+        frequency_list = [1] if mgn else [1, 5]
 
         if start_epoch == 0:
             self._algorithm.pretraining(train_dataloader=self.train_loader)
