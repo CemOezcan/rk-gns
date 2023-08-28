@@ -57,7 +57,7 @@ class AbstractSimulator(ABC):
         self._wandb_run = None
         self._wandb_url = None
         self._initialized = False
-        self.random_seed, self.np_seed, self.torch_seed, self.cuda_seed = None, None, None, None
+        self.random_seed, self.np_seed, self.torch_seed = None, None, None
 
         self.loss_function = F.mse_loss
         self._learning_rate = self._network_config.get('learning_rate')
@@ -120,7 +120,6 @@ class AbstractSimulator(ABC):
         random.setstate(self.random_seed)
         np.random.set_state(self.np_seed)
         torch.set_rng_state(self.torch_seed)
-        torch.cuda.set_rng_state(self.cuda_seed)
 
     @abstractmethod
     def fetch_data(self, trajectory: List, is_training: bool) -> DataLoader:
@@ -212,35 +211,26 @@ class AbstractSimulator(ABC):
         mean = np.mean(trajectory_loss, axis=0)
         std = np.std(trajectory_loss, axis=0)
 
-        path = os.path.join(self._out_dir, f'{task_name}_one_step.csv')
-        data_frame = pd.DataFrame.from_dict(
-            {'mean_loss': [x[0] for x in mean], 'std_loss': [x[0] for x in std],
-             'mean_pos_error': [x[1] for x in mean], 'std_pos_error': [x[1] for x in std]
-             }
-        )
-        data_frame.to_csv(path)
+        val_loss, pos_loss = zip(*mean)
+        val_std, pos_std = zip(*std)
 
-        if logging:
-            table = wandb.Table(dataframe=data_frame)
-            val_loss, pos_loss = zip(*mean)
-            log_dict = {
-                'validation_loss':
-                    wandb.Histogram(
-                        [x for x in val_loss if np.quantile(val_loss, 0.90) > x],
-                        num_bins=256
-                    ),
-                'position_loss':
-                    wandb.Histogram(
-                        [x for x in pos_loss if np.quantile(pos_loss, 0.90) > x],
-                        num_bins=256
-                    ),
-                'validation_mean': np.mean(val_loss),
-                'position_mean': np.mean(pos_loss),
-                f'{task_name}_one_step': table
-            }
-            return log_dict
-        else:
-            self._publish_csv(data_frame, f'one_step', path)
+        log_dict = {
+            'single-step error/velocity_historgram':
+                wandb.Histogram(
+                    [x for x in val_loss],
+                    num_bins=20
+                ),
+            'single-step error/position_historgram':
+                wandb.Histogram(
+                    [x for x in pos_loss],
+                    num_bins=20
+                ),
+            'single-step error/velocity_error': np.mean(val_loss),
+            'single-step error/position_error': np.mean(pos_loss),
+            'single-step error/velocity_std': np.mean(val_std),
+            'single-step error/position_std': np.mean(pos_std)
+        }
+        return log_dict
 
     @torch.no_grad()
     def n_step_evaluator(self, ds_loader: List, task_name: str, n_steps: int, n_traj: int, logging: bool = True, freq: int = 1) -> Optional[Dict]:
@@ -279,20 +269,10 @@ class AbstractSimulator(ABC):
         means = torch.mean(torch.stack(means))
         lasts = torch.mean(torch.stack(lasts))
 
-        path = os.path.join(self._out_dir, f'{task_name}_n_step_losses_k={freq}.csv')
-        n_step_stats = {'n_step': [n_steps] * n_steps, 'mean': means, 'lasts': lasts}
-        data_frame = pd.DataFrame.from_dict(n_step_stats)
-        data_frame.to_csv(path)
-
-        if logging:
-            table = wandb.Table(dataframe=data_frame)
-            return {
-                f'mean_{n_steps}_loss_k={freq}': torch.mean(torch.tensor(means), dim=0),
-                f'{n_steps}_loss_k={freq}': torch.mean(torch.tensor(lasts), dim=0),
-                f'{task_name}_n_step_losses_k={freq}': table
-            }
-        else:
-            self._publish_csv(data_frame, f'n_step_losses_k={freq}', path)
+        return {
+            f'{n_steps}-step error/mean_k={freq}': torch.mean(torch.tensor(means), dim=0),
+            f'{n_steps}-step error/last_k={freq}': torch.mean(torch.tensor(lasts), dim=0)
+        }
 
     @torch.no_grad()
     def rollout_evaluator(self, ds_loader: List, rollouts: int, task_name: str, logging: bool = True, freq: int = 1) -> Optional[Dict]:
@@ -329,7 +309,7 @@ class AbstractSimulator(ABC):
             trajectories.append(prediction_trajectory)
             mse_losses.append(mse_loss.cpu())
 
-        rollout_hist = wandb.Histogram([x for x in torch.mean(torch.stack(mse_losses), dim=1)], num_bins=10)
+        rollout_hist = wandb.Histogram([x for x in torch.mean(torch.stack(mse_losses), dim=1)], num_bins=20)
 
         mse_means = torch.mean(torch.stack(mse_losses), dim=0)
         mse_stds = torch.std(torch.stack(mse_losses), dim=0)
@@ -341,20 +321,12 @@ class AbstractSimulator(ABC):
 
         self.save_rollouts(trajectories, task_name, freq)
 
-        path = os.path.join(self._out_dir, f'{task_name}_rollout_losses_k={freq}.csv')
-        data_frame = pd.DataFrame.from_dict(rollout_losses)
-        data_frame.to_csv(path)
-
-        if logging:
-            table = wandb.Table(dataframe=data_frame)
-            return {
-                f'mean_rollout_loss_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_loss']), dim=0),
-                f'rollout_loss_k={freq}': rollout_losses['mse_loss'][-1],
-                f'{task_name}_rollout_losses_k={freq}': table,
-                f'rollout_hist_k={freq}': rollout_hist
-            }
-        else:
-            self._publish_csv(data_frame, f'rollout_losses_k={freq}', path)
+        return {
+            f'rollout error/mean_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_loss']), dim=0),
+            f'rollout error/std_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_std']), dim=0),
+            f'rollout error/last_k={freq}': rollout_losses['mse_loss'][-1],
+            f'rollout error/histogram_k={freq}': rollout_hist
+        }
 
     def save(self, name: str) -> None:
         """
@@ -368,7 +340,6 @@ class AbstractSimulator(ABC):
         self.random_seed = random.getstate()
         self.np_seed = np.random.get_state()
         self.torch_seed = torch.get_rng_state()
-        self.cuda_seed = torch.cuda.get_rng_state()
         with open(os.path.join(self._out_dir, f'model_{name}.pkl'), 'wb') as file:
             pickle.dump(self, file)
 

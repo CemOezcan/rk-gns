@@ -119,7 +119,7 @@ class MeshTask(AbstractTask):
                 n_steps = list()
                 for freq in frequency_list:
                     rollouts.append(self._algorithm.rollout_evaluator(self._rollout_loader, self._num_val_rollouts, task_name, freq=freq))
-                    #n_steps.append(self._algorithm.n_step_evaluator(self._rollout_loader, task_name, n_steps=self._val_n_steps, n_traj=self._num_val_n_step_rollouts, freq=freq))
+                    n_steps.append(self._algorithm.n_step_evaluator(self._rollout_loader, task_name, n_steps=self._val_n_steps, n_traj=self._num_val_n_step_rollouts, freq=freq))
 
                 dir_dict = self.select_plotting(task_name, frequency_list)
 
@@ -142,10 +142,11 @@ class MeshTask(AbstractTask):
         """
         assert isinstance(self._algorithm, MeshSimulator)
         task_name = f'{self._task_name}final'
+        # TODO: properly implement
 
-        self._algorithm.one_step_evaluator(self._test_loader, self._num_test_trajectories, task_name, logging=False)
-        self._algorithm.rollout_evaluator(self._test_rollout_loader, self._num_test_rollouts, task_name, logging=False, freq=1)
-        self._algorithm.n_step_evaluator(self._test_rollout_loader, task_name, n_steps=self._n_steps, n_traj=self._num_n_step_rollouts, logging=False, freq=1)
+        self._algorithm.one_step_evaluator(self._test_loader, self._num_test_trajectories, task_name)
+        self._algorithm.rollout_evaluator(self._test_rollout_loader, self._num_test_rollouts, task_name, freq=1)
+        self._algorithm.n_step_evaluator(self._test_rollout_loader, task_name, n_steps=self._n_steps, n_traj=self._num_n_step_rollouts, freq=1)
 
         self.select_plotting(task_name, freq_list=[1])
 

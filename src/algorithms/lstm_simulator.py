@@ -80,7 +80,7 @@ class LSTMSimulator(AbstractSimulator):
             self._optimizer.zero_grad()
 
             end_instance = time.time()
-            wandb.log({'loss': loss.detach(), 'training time per instance': end_instance - start_instance})
+            wandb.log({'training/loss': loss.detach(), 'training/sequence_time': end_instance - start_instance})
             start_instance = time.time()
 
     def fetch_data(self, trajectory: List[Union[List[Data], Data]], is_training: bool) -> DataLoader:

@@ -60,7 +60,7 @@ class MeshSimulator(AbstractSimulator):
             self._optimizer.zero_grad()
 
             end_instance = time.time()
-            wandb.log({'loss': loss.detach(), 'training time per instance': end_instance - start_instance})
+            wandb.log({'training/loss': loss.detach(), 'training/instance_time': end_instance - start_instance})
 
     def fetch_data(self, trajectory: List[Data], is_training: bool) -> DataLoader:
         """

@@ -102,12 +102,13 @@ class AlternatingSimulator(AbstractSimulator):
             self.global_optimizer.zero_grad()
 
             end_instance = time.time()
-            wandb.log({'poisson_loss': loss.detach(), 'training time per instance': end_instance - start_instance})
+            wandb.log({'training/material_loss': loss.detach(), 'training/material_instance_time': end_instance - start_instance})
 
     def fit_lstm(self, train_dataloader: List[List[Data]]):
         self.global_model.train()
         data = self.fetch_data(train_dataloader, True)
 
+        start_instance = time.time()
         for i, sequence in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
             target_list = list()
             pred_list = list()
@@ -133,7 +134,10 @@ class AlternatingSimulator(AbstractSimulator):
 
             self.global_optimizer.step()
             self.global_optimizer.zero_grad()
-            wandb.log({'poisson_loss': loss.detach()})
+
+            end_instance = time.time()
+            wandb.log({'training/material_loss': loss.detach(), 'training/material_sequence_time': end_instance - start_instance})
+            start_instance = time.time()
 
     def fit_gnn(self, train_dataloader: List[Data]) -> None:
         """
@@ -166,7 +170,7 @@ class AlternatingSimulator(AbstractSimulator):
             self._optimizer.zero_grad()
 
             end_instance = time.time()
-            wandb.log({'loss': loss.detach(), 'training time per instance': end_instance - start_instance})
+            wandb.log({'training/loss': loss.detach(), 'training/instance_time': end_instance - start_instance})
         # self._network.train()
         # self.global_model.eval()
         # data = self.fetch_data(train_dataloader, True, mgn=True)
@@ -227,49 +231,39 @@ class AlternatingSimulator(AbstractSimulator):
         mean = np.mean(trajectory_loss, axis=0)
         std = np.std(trajectory_loss, axis=0)
 
-        path = os.path.join(self._out_dir, f'{task_name}_one_step.csv')
-        data_frame = pd.DataFrame.from_dict(
-            {'mean_loss': [x[0] for x in mean], 'std_loss': [x[0] for x in std],
-             'mean_pos_error': [x[1] for x in mean], 'std_pos_error': [x[1] for x in std],
-             'mean_u_loss': [x[2] for x in mean], 'std_u_loss': [x[2] for x in std],
-             'mean_poisson_error': [x[3] for x in mean], 'std_poisson_error': [x[3] for x in std]
-             }
-        )
-        data_frame.to_csv(path)
-
-        if logging:
-            table = wandb.Table(dataframe=data_frame)
-            val_loss, pos_loss, u_error, poisson_error = zip(*mean)
-            log_dict = {
-                'validation_loss':
-                    wandb.Histogram(
-                        [x for x in val_loss if np.quantile(val_loss, 0.90) > x],
-                        num_bins=256
-                    ),
-                'hist_u_loss':
-                    wandb.Histogram(
-                        [x for x in val_loss if np.quantile(val_loss, 0.90) > x],
-                        num_bins=256
-                    ),
-                'hist_poisson_loss':
-                    wandb.Histogram(
-                        [x for x in pos_loss if np.quantile(pos_loss, 0.90) > x],
-                        num_bins=256
-                    ),
-                'position_loss':
-                    wandb.Histogram(
-                        [x for x in pos_loss if np.quantile(pos_loss, 0.90) > x],
-                        num_bins=256
-                    ),
-                'validation_mean': np.mean(val_loss),
-                'position_mean': np.mean(pos_loss),
-                'u_mean': np.mean(val_loss),
-                'poisson_mean': np.mean(pos_loss),
-                f'{task_name}_one_step': table
-            }
-            return log_dict
-        else:
-            self._publish_csv(data_frame, f'one_step', path)
+        val_loss, pos_loss, u_error, poisson_error = zip(*mean)
+        val_std, pos_std, u_std, poisson_std = zip(*std)
+        log_dict = {
+            'single-step error/velocity_historgram':
+                wandb.Histogram(
+                    [x for x in val_loss],
+                    num_bins=20
+                ),
+            'single-step error/material_historgram':
+                wandb.Histogram(
+                    [x for x in val_loss],
+                    num_bins=20
+                ),
+            'single-step error/poisson_historgram':
+                wandb.Histogram(
+                    [x for x in pos_loss],
+                    num_bins=20
+                ),
+            'single-step error/position_historgram':
+                wandb.Histogram(
+                    [x for x in pos_loss],
+                    num_bins=20
+                ),
+            'single-step error/material_error': np.mean(u_error),
+            'single-step error/poisson_error': np.mean(poisson_error),
+            'single-step error/velocity_error': np.mean(val_loss),
+            'single-step error/position_error': np.mean(pos_loss),
+            'single-step error/velocity_std': np.mean(val_std),
+            'single-step error/position_std': np.mean(pos_std),
+            'single-step error/material_std': np.mean(u_std),
+            'single-step error/poisson_std': np.mean(poisson_std)
+        }
+        return log_dict
 
     @torch.no_grad()
     def rollout_evaluator(self, ds_loader: List, rollouts: int, task_name: str, logging: bool = True, freq=1) -> Optional[Dict]:
@@ -310,7 +304,7 @@ class AlternatingSimulator(AbstractSimulator):
             mse_losses.append(mse_loss.cpu())
             u_losses.append(u_loss.cpu())
 
-        rollout_hist = wandb.Histogram([x for x in torch.mean(torch.stack(mse_losses), dim=1)], num_bins=10)
+        rollout_hist = wandb.Histogram([x for x in torch.mean(torch.stack(mse_losses), dim=1)], num_bins=20)
 
         mse_means = torch.mean(torch.stack(mse_losses), dim=0)
         u_means = [x.item() for x in torch.mean(torch.stack(u_losses), dim=0)]
@@ -323,19 +317,14 @@ class AlternatingSimulator(AbstractSimulator):
 
         self.save_rollouts(trajectories, task_name, freq)
 
-        path = os.path.join(self._out_dir, f'{task_name}_rollout_losses_k={freq}.csv')
-        data_frame = pd.DataFrame.from_dict(rollout_losses)
-        data_frame.to_csv(path)
+        return {f'rollout error/mean_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_loss']), dim=0),
+                f'rollout error/std_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_std']), dim=0),
+                f'rollout error/last_k={freq}': rollout_losses['mse_loss'][-1],
+                f'rollout error/histogram_k={freq}': rollout_hist,
 
-        if logging:
-            table = wandb.Table(dataframe=data_frame)
-            return {f'mean_rollout_loss_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_loss']), dim=0),
-                    f'rollout_loss_k={freq}': rollout_losses['mse_loss'][-1],
-                    f'{task_name}_rollout_losses_k={freq}': table, 'rollout_hist': rollout_hist,
-                    f'u_loss_mean_k={freq}': torch.mean(torch.tensor(u_means), dim=0),
-                    f'u_loss_rollout_k={freq}': u_means[-1]}
-        else:
-            self._publish_csv(data_frame, f'rollout_losses_k={freq}', path)
+                f'rollout error/material_mean_k={freq}': torch.mean(torch.tensor(u_means), dim=0),
+                f'rollout error/material_middle_k={freq}': u_means[int(len(u_means) / 2)],
+                f'rollout error/material_last_k={freq}': u_means[-1]}
 
     @torch.no_grad()
     def n_step_evaluator(self, ds_loader: List, task_name: str, n_steps: int, n_traj: int, logging: bool = True, freq=1) -> \
@@ -381,22 +370,12 @@ class AlternatingSimulator(AbstractSimulator):
         u_means = torch.mean(torch.stack(u_means))
         u_lasts = torch.mean(torch.stack(u_lasts))
 
-        path = os.path.join(self._out_dir, f'{task_name}_n_step_losses_k={freq}.csv')
-        n_step_stats = {'n_step': [n_steps] * n_steps, 'mean': means, 'lasts': lasts}
-        data_frame = pd.DataFrame.from_dict(n_step_stats)
-        data_frame.to_csv(path)
-
-        if logging:
-            table = wandb.Table(dataframe=data_frame)
-            return {
-                f'mean_{n_steps}_loss_k={freq}': torch.mean(torch.tensor(means), dim=0),
-                f'{n_steps}_loss_k={freq}': torch.mean(torch.tensor(lasts), dim=0),
-                f'{task_name}_n_step_losses_k={freq}': table,
-                f'mean_{n_steps}_u_loss_k={freq}': torch.mean(torch.tensor(means), dim=0),
-                f'{n_steps}_u_loss_k={freq}': torch.mean(torch.tensor(u_lasts), dim=0)
-            }
-        else:
-            self._publish_csv(data_frame, f'n_step_losses_k={freq}', path)
+        return {
+            f'{n_steps}-step error/mean_k={freq}': torch.mean(torch.tensor(means), dim=0),
+            f'{n_steps}-step error/last_k={freq}': torch.mean(torch.tensor(lasts), dim=0),
+            f'{n_steps}-step error/material_mean_k={freq}': torch.mean(torch.tensor(u_means), dim=0),
+            f'{n_steps}-step error/material_last_k={freq}': torch.mean(torch.tensor(u_lasts), dim=0)
+        }
 
     def fetch_data(self, trajectory: List[Union[List[Data], Data]], is_training: bool, seq=None, mgn=False) -> DataLoader:
         """
