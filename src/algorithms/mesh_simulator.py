@@ -56,11 +56,13 @@ class MeshSimulator(AbstractSimulator):
             loss = self._network.training_step(batch)
             loss.backward()
 
+            gradients = self.log_gradients()
+
             self._optimizer.step()
             self._optimizer.zero_grad()
 
             end_instance = time.time()
-            wandb.log({'training/loss': loss.detach(), 'training/instance_time': end_instance - start_instance})
+            wandb.log({**gradients, 'training/loss': loss.detach(), 'training/instance_time': end_instance - start_instance})
 
     def fetch_data(self, trajectory: List[Data], is_training: bool) -> DataLoader:
         """

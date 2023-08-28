@@ -393,6 +393,44 @@ class AbstractSimulator(ABC):
         """
         wandb.log(data)
 
+    def log_gradients(self):
+        grad_first_layer = self.calculate_gradients(0)
+        grad_last_layer = self.calculate_gradients(-1)
+        grad_enc = torch.cat([param.grad.view(-1) for param in self._network.learned_model.encoder.parameters()]).abs().mean()
+        grad_dec = torch.cat([param.grad.view(-1) for param in self._network.learned_model.decoder.parameters()]).abs().mean()
+
+        grad = []
+        for param in self._network.parameters():
+            if param.grad is not None:
+                grad.append(param.grad.view(-1))
+        grad = torch.cat(grad).abs().mean()
+        return {"gradients/first_layer": grad_first_layer,
+                "gradients/last_layer": grad_last_layer,
+                "gradients/encoder": grad_enc,
+                "gradients/decoder": grad_dec,
+                "gradients/all_layers": grad}
+
+    def calculate_gradients(self, layer):
+        """
+        Calculates the mean gradient of our GNN for a given layer
+        Args:
+            GNN: gnn_base object
+            layer: layer number
+
+        Returns:
+            Mean gradient for the layer
+        """
+        grad = []
+        for name, edge_parameter in self._network.learned_model.processor.graphnet_blocks[
+            layer].edge_models['mesh0mesh'].layers.named_parameters():
+            grad.append(edge_parameter.grad.view(-1))
+        for name, node_parameter in self._network.learned_model.processor.graphnet_blocks[
+            layer].node_models['mesh'].layers.named_parameters():
+            grad.append(node_parameter.grad.view(-1))
+        grad = torch.cat(grad).abs().mean()
+
+        return grad
+
     @staticmethod
     def seed_worker(worker_id):
         worker_seed = torch.initial_seed() % 2**32

@@ -76,11 +76,13 @@ class LSTMSimulator(AbstractSimulator):
             loss = self._network.loss_fn(target, pred)
             loss.backward()
 
+            gradients = self.log_gradients()
+
             self._optimizer.step()
             self._optimizer.zero_grad()
 
             end_instance = time.time()
-            wandb.log({'training/loss': loss.detach(), 'training/sequence_time': end_instance - start_instance})
+            wandb.log({**gradients, 'training/loss': loss.detach(), 'training/sequence_time': end_instance - start_instance})
             start_instance = time.time()
 
     def fetch_data(self, trajectory: List[Union[List[Data], Data]], is_training: bool) -> DataLoader:

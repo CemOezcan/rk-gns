@@ -98,11 +98,13 @@ class AlternatingSimulator(AbstractSimulator):
             loss = self.global_model.training_step(batch)
             loss.backward()
 
+            gradients = self.log_gradients()
+
             self.global_optimizer.step()
             self.global_optimizer.zero_grad()
 
             end_instance = time.time()
-            wandb.log({'training/material_loss': loss.detach(), 'training/material_instance_time': end_instance - start_instance})
+            wandb.log({**gradients, 'training/material_loss': loss.detach(), 'training/material_instance_time': end_instance - start_instance})
 
     def fit_lstm(self, train_dataloader: List[List[Data]]):
         self.global_model.train()
@@ -132,11 +134,13 @@ class AlternatingSimulator(AbstractSimulator):
             loss = self.global_model.loss_fn(target, pred)
             loss.backward()
 
+            gradients = self.log_gradients()
+
             self.global_optimizer.step()
             self.global_optimizer.zero_grad()
 
             end_instance = time.time()
-            wandb.log({'training/material_loss': loss.detach(), 'training/material_sequence_time': end_instance - start_instance})
+            wandb.log({**gradients, 'training/material_loss': loss.detach(), 'training/material_sequence_time': end_instance - start_instance})
             start_instance = time.time()
 
     def fit_gnn(self, train_dataloader: List[Data]) -> None:
@@ -166,11 +170,13 @@ class AlternatingSimulator(AbstractSimulator):
             loss = self._network.training_step(batch, self.global_model)
             loss.backward()
 
+            gradients = self.log_gradients()
+
             self._optimizer.step()
             self._optimizer.zero_grad()
 
             end_instance = time.time()
-            wandb.log({'training/loss': loss.detach(), 'training/instance_time': end_instance - start_instance})
+            wandb.log({**gradients, 'training/loss': loss.detach(), 'training/instance_time': end_instance - start_instance})
         # self._network.train()
         # self.global_model.eval()
         # data = self.fetch_data(train_dataloader, True, mgn=True)
