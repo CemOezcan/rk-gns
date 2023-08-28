@@ -400,7 +400,7 @@ class AlternatingSimulator(AbstractSimulator):
                 Collection of batched graphs.
         """
         if mgn:
-            dataset = RegularDataset(trajectory, partial(self._network.build_graph, is_training=True), mgn)
+            dataset = RegularDataset(trajectory, partial(self._network.build_graph, is_training=True), 'mgn')
             batches = DataLoader(dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True, num_workers=8,
                                  prefetch_factor=2, worker_init_fn=self.seed_worker)
 
@@ -414,9 +414,9 @@ class AlternatingSimulator(AbstractSimulator):
             for i, graph in enumerate(trajectory):
                 index = i // self._time_steps
                 trajectories[index].append(graph)
-            dataset = SequenceNoReturnDataset(trajectories, seq, partial(self._network.build_graph, is_training=True))
+            dataset = SequenceNoReturnDataset(trajectories, seq, partial(self._network.build_graph, is_training=True), 'poisson')
         else:
-            dataset = RegularDataset(trajectory, partial(self._network.build_graph, is_training=False), mgn)
+            dataset = RegularDataset(trajectory, partial(self._network.build_graph, is_training=False), 'poisson')
 
         batches = DataLoader(dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True,
                              num_workers=8, prefetch_factor=2, worker_init_fn=self.seed_worker)

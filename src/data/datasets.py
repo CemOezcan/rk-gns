@@ -53,14 +53,16 @@ class RegularDataset(Dataset):
     """
         Implements a dataset containing Graphs
     """
-    def __init__(self, trajectory_list: list, preprocessing: Callable, mgn: bool):
+    def __init__(self, trajectory_list: list, preprocessing: Callable, mode=None):
         """
         Args:
             trajectory_list: List of lists of (PyG) data objects
             sequence_length: Length of the drawn sequence from a trajectory
         """
-        if mgn:
+        if mode == 'mgn':
             self.trajectory_list = [x[1] for x in trajectory_list]
+        elif mode == 'poisson':
+            self.trajectory_list = [x[0] for x in trajectory_list]
         else:
             self.trajectory_list = list(zip(*trajectory_list))
             self.trajectory_list = list(self.trajectory_list[0]) + list(self.trajectory_list[1])

@@ -77,7 +77,7 @@ class PoissonModel(AbstractSystemModel):
     def rollout(self, trajectory: List[Dict[str, Tensor]], num_steps: int, freq: int) -> Tuple[Dict[str, Tensor], Tensor]:
         """Rolls out a model trajectory."""
         num_steps = len(trajectory) if num_steps is None else num_steps
-        hidden = trajectory[0]
+        hidden = trajectory[0]['h']
         point_index = trajectory[0]['point_index']
 
         pred_trajectory = []

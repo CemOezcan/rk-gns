@@ -102,14 +102,30 @@ class LSTMSimulator(AbstractSimulator):
                 Collection of batched graphs.
         """
         mgn = self._config.get('model').get('mgn')
+        poisson = self._config.get('task').get('model').lower() == 'poisson'
+
+        if mgn:
+            mode = 'mgn'
+        elif poisson:
+            mode = 'poisson'
+        else:
+            mode = None
+
         if is_training:
             trajectories = [list() for _ in range(len(trajectory) // self._time_steps)]
             for i, graph in enumerate(trajectory):
                 index = i // self._time_steps
                 trajectories[index].append(graph)
+
+            idx = 1 if mode == 'mgn' else 0
+
+            for i in range(len(trajectories)):
+                for j in range(len(trajectories[i])):
+                    trajectories[i][j] = trajectories[i][j][idx]
+
             dataset = SequenceNoReturnDataset(trajectories, self._seq_len, partial(self._network.build_graph, is_training=True))
         else:
-            dataset = RegularDataset(trajectory, partial(self._network.build_graph, is_training=False), mgn)
+            dataset = RegularDataset(trajectory, partial(self._network.build_graph, is_training=False), mode)
 
         batches = DataLoader(dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True, num_workers=8,
                              prefetch_factor=2, worker_init_fn=self.seed_worker)
