@@ -56,7 +56,7 @@ class MeshSimulator(AbstractSimulator):
             loss = self._network.training_step(batch)
             loss.backward()
 
-            gradients = self.log_gradients()
+            gradients = self.log_gradients(self._network)
 
             self._optimizer.step()
             self._optimizer.zero_grad()

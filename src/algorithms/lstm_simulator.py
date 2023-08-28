@@ -76,7 +76,7 @@ class LSTMSimulator(AbstractSimulator):
             loss = self._network.loss_fn(target, pred)
             loss.backward()
 
-            gradients = self.log_gradients()
+            gradients = self.log_gradients(self._network)
 
             self._optimizer.step()
             self._optimizer.zero_grad()

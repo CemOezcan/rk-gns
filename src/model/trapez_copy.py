@@ -39,8 +39,8 @@ class TrapezModel(AbstractSystemModel):
 
     def forward(self, graph: Batch, is_training: bool) -> Tuple[Tensor, Tensor]:
         graph, _ = self.split_graphs(graph)
-        graph[('mesh', '0', 'mesh')].edge_attr = self._mesh_edge_normalizer(graph[('mesh', '0', 'mesh')].edge_attr, is_training)
-        graph['mesh'].x = self._feature_normalizer(graph['mesh'].x, is_training)
+        #graph[('mesh', '0', 'mesh')].edge_attr = self._mesh_edge_normalizer(graph[('mesh', '0', 'mesh')].edge_attr, is_training)
+        #graph['mesh'].x = self._feature_normalizer(graph['mesh'].x, is_training)
 
         return self.learned_model(graph)
 
@@ -57,12 +57,6 @@ class TrapezModel(AbstractSystemModel):
         loss = self.loss_fn(target, prediction)
 
         return loss
-
-    def get_target(self, graph: Batch, is_training: bool) -> Tensor:
-        mask = torch.where(graph['mesh'].node_type == NodeType.MESH)[0]
-        target_velocity = graph.y - graph['mesh'].pos[mask]
-
-        return self._output_normalizer(target_velocity, is_training)
 
     @torch.no_grad()
     def validation_step(self, graph: Batch, data_frame: Dict, poisson_model) -> Tuple[Tensor, Tensor]:
@@ -85,35 +79,21 @@ class TrapezModel(AbstractSystemModel):
 
         return error, pos_error, u_error, poisson_error
 
-    def update(self, inputs: Batch, per_node_network_output: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
-        """Integrate model outputs."""
-        mask = torch.where(inputs['mesh'].node_type == NodeType.MESH)[0]
-        velocity = self._output_normalizer.inverse(per_node_network_output)
-
-        # integrate forward
-        cur_position = inputs['mesh'].pos[mask]
-
-        # vel. = next_pos - cur_pos
-        position = cur_position + velocity
-
-        return (position, cur_position, velocity)
-
     @torch.no_grad()
     def rollout(self, trajectory: List[Dict[str, Tensor]], num_steps: int, poisson_model, freq) -> Tuple[Dict[str, Tensor], Tensor]:
         """Rolls out a model trajectory."""
         num_steps = len(trajectory) if num_steps is None else num_steps
-        initial_state = trajectory[0]
-        point_index = initial_state['point_index']
 
         pred_trajectory = []
         pred_u = list()
-        cur_pos = torch.squeeze(initial_state['pos'], 0)
+        cur_pos = trajectory[0]['pos']
+        hidden = trajectory[0]['h']
         for step in range(num_steps):
-            cur_pos, hidden, u = self._step_fn(initial_state, cur_pos, trajectory[step], step, poisson_model, freq)
-            initial_state['h'] = hidden
+            cur_pos, hidden, u = self._step_fn(hidden, cur_pos, trajectory[step], step, poisson_model, freq)
             pred_u.append(u)
             pred_trajectory.append(cur_pos)
 
+        point_index = trajectory[0]['point_index']
         prediction = torch.stack([x[:point_index] for x in pred_trajectory][:num_steps]).cpu()
         gt_pos = torch.stack([t['next_pos'][:point_index] for t in trajectory][:num_steps]).cpu()
 
@@ -140,11 +120,11 @@ class TrapezModel(AbstractSystemModel):
         return traj_ops, mse_loss, u_loss
 
     @torch.no_grad()
-    def _step_fn(self, initial_state, cur_pos, ground_truth, step, poisson_model=None, freq=1):
+    def _step_fn(self, hidden, cur_pos, ground_truth, step, poisson_model=None, freq=1):
         mask = torch.where(ground_truth['node_type'] == NodeType.MESH)[0].cpu()
         next_pos = copy.deepcopy(ground_truth['next_pos']).to(device)
-        input = {**initial_state, 'x': ground_truth['x'], 'pos': cur_pos, 'next_pos': ground_truth['next_pos'],
-                 'y': ground_truth['next_pos'][mask], 'node_type': ground_truth['node_type']}
+
+        input = {**ground_truth, 'pos': cur_pos, 'h': hidden}
 
         keep_pc = False if self.mgn else step % freq == 0
         index = 0 if keep_pc else 1
@@ -171,7 +151,6 @@ class TrapezModel(AbstractSystemModel):
         u_last_losses = list()
         num_timesteps = len(trajectory) if num_timesteps is None else num_timesteps
         for step in range(num_timesteps - n_step):
-            # TODO: clusters/balancers are reset when computing n_step loss
             eval_traj = trajectory[step: step + n_step + 1]
             prediction_trajectory, mse_loss, u_loss = self.rollout(eval_traj, n_step + 1, poisson_model, freq)
 
@@ -183,44 +162,3 @@ class TrapezModel(AbstractSystemModel):
 
         return torch.mean(torch.stack(mse_losses)), torch.mean(torch.stack(last_losses)), \
             torch.mean(torch.stack(u_losses)), torch.mean(torch.stack(u_last_losses))
-
-    @staticmethod
-    def add_noise(data: Data, sigma: float, node_type: int):
-        """
-        Adds training noise to the mesh node positions with standard deviation sigma
-        Args:
-            data: PyG data element containing (a batch of) graph(s)
-            sigma: standard deviation of used noise
-            node_type: The type of node to add noise to
-
-        Returns:
-            data: updated graph with noise
-
-        """
-        if sigma > 0.0:
-            indices = torch.where(data.node_type == node_type)[0]
-            num_node_features = data.pos.shape[1]
-            noise = (torch.randn(indices.shape[0], num_node_features) * sigma).cpu()
-            data.pos[indices, :num_node_features] = data.pos[indices, :num_node_features] + noise
-
-        return data
-
-    @staticmethod
-    def transform_position_to_edges(data: Data, euclidian_distance: bool) -> Data:
-        """
-        Transform the node positions in a homogeneous data element to the edges as relative distance together with (if needed) Euclidean norm
-        Args:
-            data: Data element
-            euclidian_distance: True if Euclidean norm included as feature
-
-        Returns:
-            out_data: Transformed data object
-        """
-        if euclidian_distance:
-            data_transform = T.Compose([T.Cartesian(norm=False, cat=True), T.Distance(norm=False, cat=True)])
-        else:
-            data_transform = T.Compose([T.Cartesian(norm=False, cat=True)])
-        out_data = data_transform(data)
-        return out_data
-
-

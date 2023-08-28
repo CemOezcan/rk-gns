@@ -40,53 +40,31 @@ class AbstractSystemModel(ABC, nn.Module):
         self.input_mesh_noise = params.get('noise')
         self.input_pcd_noise = params.get('pc_noise')
 
-    @abstractmethod
-    def training_step(self, graph: Batch) -> Tensor:
+
+
+    def get_target(self, graph: Batch, is_training: bool) -> Tensor:
         """
-        Perform a single training step.
+        Computes and normalizes the target variable.
 
         Parameters
         ----------
-            graph : MultiGraph
-                The current system state represented by a (heterogeneous hyper-) graph
+            graph : Batch
+                A data instance
 
-            data_frame : Dict[str, Tensor]
-                Additional information on the instance and the target system state
-
-        Returns
-        -------
-            Tensor
-                The training loss
-        """
-
-        raise NotImplementedError
-
-    @abstractmethod
-    @torch.no_grad()
-    def validation_step(self, graph: Batch, data_frame: Dict[str, Tensor]) -> Tuple[Tensor, Tensor]:
-        """
-        Evaluate given input data and potentially auxiliary information to create a dictionary of resulting values.
-        What kinds of things are scored/evaluated depends on the concrete algorithm.
-
-        Parameters
-        ----------
-            graph : MultiGraph
-                The current system state represented by a (heterogeneous hyper-) graph
-
-            data_frame : Dict[str, Tensor]
-                Additional information on the instance and the target system state
+            is_training : bool
+                Whether the input is a training instance or not
 
         Returns
         -------
-            Tensor
-                A dictionary with different values that are evaluated from the given input data. May e.g., the
-                accuracy of the model.
+        Normalized velocity
+
         """
+        mask = torch.where(graph['mesh'].node_type == NodeType.MESH)[0]
+        target_velocity = graph.y - graph['mesh'].pos[mask]
 
-        raise NotImplementedError
+        return self._output_normalizer(target_velocity, is_training)
 
-    @abstractmethod
-    def update(self, inputs: Batch, per_node_network_output: Tensor) -> Tensor:
+    def update(self, inputs: Batch, per_node_network_output: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
         """
         Makes a prediction for the given input data and uses it to compute the predicted system state.
 
@@ -103,8 +81,16 @@ class AbstractSystemModel(ABC, nn.Module):
             Tensor
                 Some representation of the predicted system state
         """
+        mask = torch.where(inputs['mesh'].node_type == NodeType.MESH)[0]
+        velocity = self._output_normalizer.inverse(per_node_network_output)
 
-        raise NotImplementedError
+        # integrate forward
+        cur_position = inputs['mesh'].pos[mask]
+
+        # vel. = next_pos - cur_pos
+        position = cur_position + velocity
+
+        return (position, cur_position, velocity)
 
     def build_graph(self, data: Data, is_training: bool) -> HeteroData:
         """
@@ -158,6 +144,51 @@ class AbstractSystemModel(ABC, nn.Module):
         hetero_data.cpu()
 
         return hetero_data
+
+    @abstractmethod
+    def training_step(self, graph: Batch) -> Tensor:
+        """
+        Perform a single training step.
+
+        Parameters
+        ----------
+            graph : MultiGraph
+                The current system state represented by a (heterogeneous hyper-) graph
+
+            data_frame : Dict[str, Tensor]
+                Additional information on the instance and the target system state
+
+        Returns
+        -------
+            Tensor
+                The training loss
+        """
+
+        raise NotImplementedError
+
+    @abstractmethod
+    @torch.no_grad()
+    def validation_step(self, graph: Batch, data_frame: Dict[str, Tensor]) -> Tuple[Tensor, Tensor]:
+        """
+        Evaluate given input data and potentially auxiliary information to create a dictionary of resulting values.
+        What kinds of things are scored/evaluated depends on the concrete algorithm.
+
+        Parameters
+        ----------
+            graph : MultiGraph
+                The current system state represented by a (heterogeneous hyper-) graph
+
+            data_frame : Dict[str, Tensor]
+                Additional information on the instance and the target system state
+
+        Returns
+        -------
+            Tensor
+                A dictionary with different values that are evaluated from the given input data. May e.g., the
+                accuracy of the model.
+        """
+
+        raise NotImplementedError
 
     @abstractmethod
     @torch.no_grad()

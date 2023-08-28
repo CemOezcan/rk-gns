@@ -98,7 +98,7 @@ class AlternatingSimulator(AbstractSimulator):
             loss = self.global_model.training_step(batch)
             loss.backward()
 
-            gradients = self.log_gradients()
+            gradients = self.log_gradients(self.global_model)
 
             self.global_optimizer.step()
             self.global_optimizer.zero_grad()
@@ -134,7 +134,7 @@ class AlternatingSimulator(AbstractSimulator):
             loss = self.global_model.loss_fn(target, pred)
             loss.backward()
 
-            gradients = self.log_gradients()
+            gradients = self.log_gradients(self.global_model)
 
             self.global_optimizer.step()
             self.global_optimizer.zero_grad()
@@ -170,7 +170,7 @@ class AlternatingSimulator(AbstractSimulator):
             loss = self._network.training_step(batch, self.global_model)
             loss.backward()
 
-            gradients = self.log_gradients()
+            gradients = self.log_gradients(self._network)
 
             self._optimizer.step()
             self._optimizer.zero_grad()

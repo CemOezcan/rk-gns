@@ -39,9 +39,6 @@ class TrapezModel(AbstractSystemModel):
         ).to(device)
 
     def forward(self, graph: Batch, is_training: bool) -> Tuple[Tensor, Tensor]:
-        #graph[('mesh', '0', 'mesh')].edge_attr = self._mesh_edge_normalizer(graph[('mesh', '0', 'mesh')].edge_attr, is_training)
-        #graph['mesh'].x = self._feature_normalizer(graph['mesh'].x, is_training)
-
         return self.learned_model(graph)
 
     def training_step(self, graph: Batch):
@@ -52,12 +49,6 @@ class TrapezModel(AbstractSystemModel):
         loss = self.loss_fn(target_velocity, pred_velocity)
 
         return loss
-
-    def get_target(self, graph: Batch, is_training: bool) -> Tensor:
-        mask = torch.where(graph['mesh'].node_type == NodeType.MESH)[0]
-        target_velocity = graph.y - graph['mesh'].pos[mask]
-
-        return self._output_normalizer(target_velocity, is_training)
 
     @torch.no_grad()
     def validation_step(self, graph: Batch, data_frame: Dict) -> Tuple[Tensor, Tensor]:
@@ -71,33 +62,19 @@ class TrapezModel(AbstractSystemModel):
 
         return error, pos_error
 
-    def update(self, inputs: Batch, per_node_network_output: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
-        """Integrate model outputs."""
-        mask = torch.where(inputs['mesh'].node_type == NodeType.MESH)[0]
-        velocity = self._output_normalizer.inverse(per_node_network_output)
-
-        # integrate forward
-        cur_position = inputs['mesh'].pos[mask]
-
-        # vel. = next_pos - cur_pos
-        position = cur_position + velocity
-
-        return (position, cur_position, velocity)
-
     @torch.no_grad()
     def rollout(self, trajectory: List[Dict[str, Tensor]], num_steps: int, freq: int) -> Tuple[Dict[str, Tensor], Tensor]:
         """Rolls out a model trajectory."""
         num_steps = len(trajectory) if num_steps is None else num_steps
-        initial_state = trajectory[0]
-        point_index = initial_state['point_index']
 
         pred_trajectory = []
-        cur_pos = initial_state['pos']
+        cur_pos = trajectory[0]['pos']
+        hidden = trajectory[0]['h']
         for step in range(num_steps):
-            cur_pos, hidden = self._step_fn(initial_state, cur_pos, trajectory[step], step, freq)
-            initial_state['h'] = hidden
+            cur_pos, hidden = self._step_fn(hidden, cur_pos, trajectory[step], step, freq)
             pred_trajectory.append(cur_pos)
 
+        point_index = trajectory[0]['point_index']
         prediction = torch.stack([x[:point_index] for x in pred_trajectory][:num_steps]).cpu()
         gt_pos = torch.stack([t['next_pos'][:point_index] for t in trajectory][:num_steps]).cpu()
 
@@ -117,13 +94,13 @@ class TrapezModel(AbstractSystemModel):
         return traj_ops, mse_loss
 
     @torch.no_grad()
-    def _step_fn(self, initial_state, cur_pos, ground_truth, step, freq):
+    def _step_fn(self, hidden, cur_pos, ground_truth, step, freq):
         mask = torch.where(ground_truth['node_type'] == NodeType.MESH)[0].cpu()
         next_pos = copy.deepcopy(ground_truth['next_pos']).to(device)
 
-        input = {**ground_truth, 'pos': cur_pos}
+        input = {**ground_truth, 'pos': cur_pos, 'h': hidden}
 
-        keep_pc = False if self.mgn else (step + 1) % freq == 0
+        keep_pc = False if self.mgn else step % freq == 0
         index = 0 if keep_pc else 1
 
         data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), False)[index]

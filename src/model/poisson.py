@@ -40,8 +40,6 @@ class PoissonModel(AbstractSystemModel):
 
     def forward(self, graph: Batch, is_training: bool) -> Tuple[Tensor, Tensor]:
         _, graph = self.split_graphs(graph)
-        graph[('mesh', '0', 'mesh')].edge_attr = self._mesh_edge_normalizer(graph[('mesh', '0', 'mesh')].edge_attr, is_training)
-        graph['mesh'].x = self._feature_normalizer(graph['mesh'].x, is_training)
 
         return self.learned_model(graph)
 
@@ -79,13 +77,12 @@ class PoissonModel(AbstractSystemModel):
     def rollout(self, trajectory: List[Dict[str, Tensor]], num_steps: int, freq: int) -> Tuple[Dict[str, Tensor], Tensor]:
         """Rolls out a model trajectory."""
         num_steps = len(trajectory) if num_steps is None else num_steps
-        initial_state = {'h': trajectory[0]['h']}
+        hidden = trajectory[0]
         point_index = trajectory[0]['point_index']
 
         pred_trajectory = []
         for step in range(num_steps):
-            cur_pos, hidden = self._step_fn(initial_state, None, trajectory[step], step, freq)
-            initial_state['h'] = hidden
+            cur_pos, hidden = self._step_fn(hidden, None, trajectory[step], step, freq)
             pred_trajectory.append(cur_pos)
 
         prediction = torch.stack([t['pos'][:point_index] for t in trajectory][:num_steps]).cpu()
@@ -110,9 +107,8 @@ class PoissonModel(AbstractSystemModel):
         return traj_ops, mse_loss
 
     @torch.no_grad()
-    def _step_fn(self, initial_state, cur_pos, ground_truth, step, freq):
-        input = ground_truth
-        input['h'] = initial_state['h']
+    def _step_fn(self, hidden, cur_pos, ground_truth, step, freq):
+        input = {**ground_truth, 'h': hidden}
 
         keep_pc = False if self.mgn else step % freq == 0
         index = 0 if keep_pc else 1
@@ -131,7 +127,6 @@ class PoissonModel(AbstractSystemModel):
         last_losses = list()
         num_timesteps = len(trajectory) if num_timesteps is None else num_timesteps
         for step in range(num_timesteps - n_step):
-            # TODO: clusters/balancers are reset when computing n_step loss
             eval_traj = trajectory[step: step + n_step + 1]
             prediction_trajectory, mse_loss = self.rollout(eval_traj, n_step + 1, freq)
             mse_losses.append(torch.mean(mse_loss).cpu())
