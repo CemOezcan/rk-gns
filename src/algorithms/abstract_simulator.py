@@ -57,7 +57,7 @@ class AbstractSimulator(ABC):
         self._wandb_run = None
         self._wandb_url = None
         self._initialized = False
-        self.random_seed, self.np_seed, self.torch_seed = None, None, None
+        self.random_seed, self.np_seed, self.torch_seed, self.cuda_seed = None, None, None, None
 
         self.loss_function = F.mse_loss
         self._learning_rate = self._network_config.get('learning_rate')
@@ -120,6 +120,7 @@ class AbstractSimulator(ABC):
         random.setstate(self.random_seed)
         np.random.set_state(self.np_seed)
         torch.set_rng_state(self.torch_seed)
+        torch.cuda.set_rng_state(self.cuda_seed)
 
     @abstractmethod
     def fetch_data(self, trajectory: List, is_training: bool) -> DataLoader:
@@ -367,6 +368,7 @@ class AbstractSimulator(ABC):
         self.random_seed = random.getstate()
         self.np_seed = np.random.get_state()
         self.torch_seed = torch.get_rng_state()
+        self.cuda_seed = torch.cuda.get_rng_state()
         with open(os.path.join(self._out_dir, f'model_{name}.pkl'), 'wb') as file:
             pickle.dump(self, file)
 
