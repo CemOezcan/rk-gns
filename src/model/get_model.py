@@ -13,9 +13,9 @@ def get_model(config: ConfigDict, poisson=False) -> AbstractSystemModel:
     model_name = config.get('task').get('model').lower()
 
     if poisson:
-        return PoissonModel(config.get('model'), recurrence=False)
+        return PoissonModel(config.get('model'), recurrence=task == 'lstm')
     elif task == 'alternating':
-        return trapez_copy.TrapezModel(config.get('model'), recurrence=False)
+        return trapez_copy.TrapezModel(config.get('model'), recurrence=task == 'lstm')
 
     if 'trapez' == model_name:
         return trapez.TrapezModel(config.get('model'), recurrence=task == 'lstm')

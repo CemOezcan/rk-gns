@@ -35,7 +35,7 @@ class PoissonModel(AbstractSystemModel):
             edge_sets=self._edge_sets,
             node_sets=self._node_sets,
             dec=self._node_sets[0],
-            use_global=True, recurrence=self.recurrence
+            use_global=True, recurrence=self.recurrence, layer_norm=self.layer_norm
         ).to(device)
 
     def forward(self, graph: Batch, is_training: bool) -> Tuple[Tensor, Tensor]:
