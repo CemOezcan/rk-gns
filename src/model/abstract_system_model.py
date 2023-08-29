@@ -39,6 +39,9 @@ class AbstractSystemModel(ABC, nn.Module):
         self.hetero = params.get('heterogeneous')
         self.input_mesh_noise = params.get('noise')
         self.input_pcd_noise = params.get('pc_noise')
+        self.feature_norm = params.get('feature_norm')
+        self.layer_norm = params.get('layer_norm')
+        self.num_layers = params.get('layers')
 
 
 

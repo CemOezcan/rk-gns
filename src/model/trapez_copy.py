@@ -28,7 +28,7 @@ class TrapezModel(AbstractSystemModel):
         self.learned_model = MeshGraphNets(
             output_size=params.get('size'),
             latent_size=128,
-            num_layers=1,
+            num_layers=self.num_layers,
             message_passing_steps=self.message_passing_steps,
             message_passing_aggregator=self.message_passing_aggregator,
             edge_sets=self._edge_sets,
@@ -39,8 +39,9 @@ class TrapezModel(AbstractSystemModel):
 
     def forward(self, graph: Batch, is_training: bool) -> Tuple[Tensor, Tensor]:
         graph, _ = self.split_graphs(graph)
-        #graph[('mesh', '0', 'mesh')].edge_attr = self._mesh_edge_normalizer(graph[('mesh', '0', 'mesh')].edge_attr, is_training)
-        #graph['mesh'].x = self._feature_normalizer(graph['mesh'].x, is_training)
+        if self.feature_norm:
+            graph[('mesh', '0', 'mesh')].edge_attr = self._mesh_edge_normalizer(graph[('mesh', '0', 'mesh')].edge_attr, is_training)
+            graph['mesh'].x = self._feature_normalizer(graph['mesh'].x, is_training)
 
         return self.learned_model(graph)
 

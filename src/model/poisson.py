@@ -29,7 +29,7 @@ class PoissonModel(AbstractSystemModel):
         self.learned_model = MeshGraphNets(
             output_size=1,
             latent_size=128,
-            num_layers=1,
+            num_layers=self.num_layers,
             message_passing_steps=self.message_passing_steps,
             message_passing_aggregator=self.message_passing_aggregator,
             edge_sets=self._edge_sets,
@@ -40,6 +40,9 @@ class PoissonModel(AbstractSystemModel):
 
     def forward(self, graph: Batch, is_training: bool) -> Tuple[Tensor, Tensor]:
         _, graph = self.split_graphs(graph)
+        if self.feature_norm:
+            graph[('mesh', '0', 'mesh')].edge_attr = self._mesh_edge_normalizer(graph[('mesh', '0', 'mesh')].edge_attr, is_training)
+            graph['mesh'].x = self._feature_normalizer(graph['mesh'].x, is_training)
 
         return self.learned_model(graph)
 

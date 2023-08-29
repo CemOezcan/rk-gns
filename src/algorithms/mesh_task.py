@@ -67,16 +67,19 @@ class MeshTask(AbstractTask):
 
         self._mp = get_from_nested_dict(config, ['model', 'message_passing_steps'])
         aggr = get_from_nested_dict(config, ['model', 'aggregation'])
+        model = get_from_nested_dict(config, ['task', 'model'])
         lr = get_from_nested_dict(config, ['model', 'learning_rate'])
         use_global = get_from_nested_dict(config, ['model', 'use_global'])
-        heterogeneous = get_from_nested_dict(config, ['model', 'heterogeneous'])
+        feature_norm = get_from_nested_dict(config, ['model', 'feature_norm'])
+        layer_norm = get_from_nested_dict(config, ['model', 'layer_norm'])
+        layers = get_from_nested_dict(config, ['model', 'layers'])
         poisson = get_from_nested_dict(config, ['model', 'poisson_ratio'])
         mgn = get_from_nested_dict(config, ['model', 'mgn'])
         freq = get_from_nested_dict(config, ['model', 'pc_frequency'])
         task = get_from_nested_dict(config, ['task', 'task'])
         seq = get_from_nested_dict(config, ['task', 'sequence'])
         batch_size = config.get('task').get('batch_size')
-        self._task_name = f'b:{batch_size}_t:{task}_a:{aggr}_lr:{lr}_g:{use_global}_seq:{seq}_mgn:{mgn}_freq:{freq}_poisson:{poisson}_mp:{self._mp}_epoch:'
+        self._task_name = f'm:{model}_l:{layers}_norm:{feature_norm}_b:{batch_size}_t:{task}_a:{aggr}_lr:{lr}_g:{use_global}_seq:{seq}_mgn:{mgn}_freq:{freq}_poisson:{poisson}_mp:{self._mp}_epoch:'
 
         retrain = config.get('retrain')
         epochs = list() if retrain else [
