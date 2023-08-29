@@ -79,7 +79,7 @@ class MeshTask(AbstractTask):
         task = get_from_nested_dict(config, ['task', 'task'])
         seq = get_from_nested_dict(config, ['task', 'sequence'])
         batch_size = config.get('task').get('batch_size')
-        self._task_name = f'm:{model}_l:{layers}_norm:{feature_norm}_b:{batch_size}_t:{task}_a:{aggr}_lr:{lr}_g:{use_global}_seq:{seq}_mgn:{mgn}_freq:{freq}_poisson:{poisson}_mp:{self._mp}_epoch:'
+        self._task_name = f'm:{model}_l:{layers}_fn:{feature_norm}_ln:{layer_norm}_b:{batch_size}_t:{task}_a:{aggr}_lr:{lr}_g:{use_global}_seq:{seq}_mgn:{mgn}_freq:{freq}_poisson:{poisson}_mp:{self._mp}_epoch:'
 
         retrain = config.get('retrain')
         epochs = list() if retrain else [
