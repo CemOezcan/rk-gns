@@ -433,7 +433,7 @@ class AlternatingSimulator(AbstractSimulator):
         mgn_mask = torch.cat([mesh_mask, obst_mask], dim=0)
 
         pc = copy.deepcopy(graph.subgraph({'mesh': poisson_mask}))
-        pc['mesh'] = torch.cat([pc['mesh'].pos, pc['mesh'].x], dim=1)
+        #pc['mesh'] = torch.cat([pc['mesh'].pos, pc['mesh'].x], dim=1)
         mesh = copy.deepcopy(graph.subgraph({'mesh': mgn_mask}))
 
         return mesh, pc

@@ -299,7 +299,7 @@ class AbstractSystemModel(ABC, nn.Module):
         mgn_mask = torch.cat([mesh_mask, obst_mask], dim=0)
 
         pc = graph.subgraph({'mesh': poisson_mask}).clone()
-        pc['mesh'].x = torch.cat([pc['mesh'].pos, pc['mesh'].x], dim=1)
+        #pc['mesh'].x = torch.cat([pc['mesh'].pos, pc['mesh'].x], dim=1)
         mesh = graph.subgraph({'mesh': mgn_mask}).clone()
 
         return mesh, pc
