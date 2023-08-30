@@ -28,7 +28,7 @@ params:
       n_step_rollouts: 10
       n_viz: 1
   model:
-    feature_norm: False
+    feature_norm: True
     layer_norm: False
     layers: 2
     size: 2
@@ -39,7 +39,7 @@ params:
     poisson_ratio: False
     scheduler_epoch: 10
     aggregation: mean
-    learning_rate: 1.0e-4
+    learning_rate: 1.0e-5
     message_passing_steps: 5
     use_global: True
     heterogeneous: False
