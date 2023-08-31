@@ -4,9 +4,9 @@ import_path: "default.yaml"
 params:
   retrain: False # Start training a new model if True. Continue training the most recent version of the model if False.
   task:
-    task: lstm
+    task: mesh
     model: poisson
-    sequence: 50
+    sequence: 5
     dataset: deformable_plate
     rollout_split: valid
     batch_size: 32
