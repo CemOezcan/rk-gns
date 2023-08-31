@@ -6,7 +6,7 @@ params:
   task:
     task: mesh
     model: poisson
-    sequence: 5
+    sequence: 1
     dataset: deformable_plate
     rollout_split: valid
     batch_size: 32
