@@ -117,13 +117,7 @@ class LSTMSimulator(AbstractSimulator):
                 index = i // self._time_steps
                 trajectories[index].append(graph)
 
-            idx = 1 if mode == 'mgn' else 0
-
-            for i in range(len(trajectories)):
-                for j in range(len(trajectories[i])):
-                    trajectories[i][j] = trajectories[i][j][idx]
-
-            dataset = SequenceNoReturnDataset(trajectories, self._seq_len, partial(self._network.build_graph, is_training=True))
+            dataset = SequenceNoReturnDataset(trajectories, self._seq_len, partial(self._network.build_graph, is_training=True), mode)
         else:
             dataset = RegularDataset(trajectory, partial(self._network.build_graph, is_training=False), mode)
 

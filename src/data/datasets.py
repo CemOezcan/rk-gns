@@ -1,6 +1,7 @@
 import itertools
 
 from copy import deepcopy
+from random import randint
 from typing import Callable
 
 from torch.utils.data import Dataset
@@ -11,7 +12,7 @@ class SequenceNoReturnDataset(Dataset):
         Dataset that draws sequences of specific length from a list of trajectories without replacement.
         In this case, we can still define a training epoch, if all samples are used once.
     """
-    def __init__(self, trajectory_list: list, sequence_length: int, preprocessing: Callable):
+    def __init__(self, trajectory_list: list, sequence_length: int, preprocessing: Callable, mode):
         """
         Args:
             trajectory_list: List of lists of (PyG) data objects
@@ -20,6 +21,7 @@ class SequenceNoReturnDataset(Dataset):
         self.trajectory_list = trajectory_list
         self.sequence_length = sequence_length
         self.preprocessing = preprocessing
+        self.mode = mode
 
         # create index list of tuples (i, t_i), where i indicates the index for the trajectory and t_i for the starting time step of the sequence
         self.indices = []
@@ -43,7 +45,8 @@ class SequenceNoReturnDataset(Dataset):
         data_list = self.trajectory_list[self.index[0]][self.startpoint: self.startpoint + self.sequence_length]
         copy = list()
         for x in data_list:
-            data = deepcopy(x)
+            i = 1 if self.mode == 'mgn' else randint(0, 1)
+            data = deepcopy(x[i])
             copy.append(self.preprocessing(data))
 
         return copy
