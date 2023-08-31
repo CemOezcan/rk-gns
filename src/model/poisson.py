@@ -44,8 +44,6 @@ class PoissonModel(AbstractSystemModel):
             graph[('mesh', '0', 'mesh')].edge_attr = self._mesh_edge_normalizer(graph[('mesh', '0', 'mesh')].edge_attr, is_training)
             graph['mesh'].x = self._feature_normalizer(graph['mesh'].x, is_training)
 
-        test.visualize_graph(graph)
-
         return self.learned_model(graph)
 
     def training_step(self, graph: Batch):
