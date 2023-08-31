@@ -11,7 +11,7 @@ from src.util.util import get_from_nested_dict
 def get_model(config: ConfigDict, poisson=False) -> AbstractSystemModel:
     task = config.get('task').get('task').lower()
     model_name = config.get('task').get('model').lower()
-
+    # TODO: Alternating
     if poisson:
         return PoissonModel(config.get('model'), recurrence=task == 'lstm')
     elif task == 'alternating':
