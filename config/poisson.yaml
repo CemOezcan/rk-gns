@@ -26,7 +26,7 @@ params:
       rollouts: 135 # Number of trajectories that are going to be used to compute the rollout loss during training
       n_steps: 10
       n_step_rollouts: 20
-      n_viz: 1
+      n_viz: 5
   model:
     feature_norm: False
     layer_norm: False
