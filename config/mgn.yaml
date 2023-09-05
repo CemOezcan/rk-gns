@@ -4,12 +4,12 @@ import_path: "default.yaml"
 params:
   retrain: False # Start training a new model if True. Continue training the most recent version of the model if False.
   task:
-    task: mesh
+    task: lstm
     model: trapez
-    sequence: 1
+    sequence: 25
     dataset: deformable_plate
     rollout_split: valid
-    batch_size: 32
+    batch_size: 30
     epochs: 200
     n_timesteps: 50
     trajectories: 675
@@ -32,10 +32,10 @@ params:
     layer_norm: False
     layers: 1
     size: 2
-    noise: 0.01
+    noise: 0.001
     pc_noise: 0.0
     pc_frequency: 1
-    mgn: True
+    mgn: False
     poisson_ratio: False
     scheduler_epoch: 10
     aggregation: mean
