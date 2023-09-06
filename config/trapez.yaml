@@ -35,7 +35,7 @@ params:
     noise: 0.01
     pc_noise: 0.0
     pc_frequency: 1
-    mgn: True
+    mgn: False
     poisson_ratio: False
     scheduler_epoch: 10
     aggregation: mean

@@ -127,7 +127,7 @@ class TrapezModel(AbstractSystemModel):
 
         input = {**ground_truth, 'pos': cur_pos, 'h': hidden}
 
-        keep_pc = False if self.mgn else step % freq == 0
+        keep_pc = step % freq == 0
         index = 0 if keep_pc else 1
 
         data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True)[index]
