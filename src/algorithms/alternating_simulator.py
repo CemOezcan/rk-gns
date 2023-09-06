@@ -49,7 +49,7 @@ class AlternatingSimulator(AbstractSimulator):
     def initialize(self, task_information: ConfigDict) -> None:
         if not self._initialized:
             self.global_model = get_model(task_information, poisson=True)
-            self.global_optimizer = optim.Adam(self.global_model.parameters(), lr=self._learning_rate)
+            self.global_optimizer = optim.Adam(self.global_model.parameters(), lr=1e-4)
 
         super().initialize(task_information)
 
@@ -66,7 +66,7 @@ class AlternatingSimulator(AbstractSimulator):
         -------
 
         """
-        for _ in range(5):
+        for _ in range(150):
             self.fit_poisson(train_dataloader)
 
     def fit_iteration(self, train_dataloader: List[Union[List[Data], Data]]) -> None:
@@ -85,7 +85,7 @@ class AlternatingSimulator(AbstractSimulator):
             of the fit such as a training loss.
 
         """
-        self.fit_poisson(train_dataloader)
+        #self.fit_poisson(train_dataloader)
         self.fit_gnn(train_dataloader)
 
     def fit_poisson(self, train_dataloader: List[Data]):

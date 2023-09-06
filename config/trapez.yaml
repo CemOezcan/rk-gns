@@ -4,7 +4,7 @@ import_path: "default.yaml"
 params:
   retrain: False # Start training a new model if True. Continue training the most recent version of the model if False.
   task:
-    task: mesh
+    task: alternating
     model: trapez
     sequence: 1
     dataset: deformable_plate
@@ -35,8 +35,8 @@ params:
     noise: 0.01
     pc_noise: 0.0
     pc_frequency: 1
-    mgn: False
-    poisson_ratio: True
+    mgn: True
+    poisson_ratio: False
     scheduler_epoch: 10
     aggregation: mean
     learning_rate: 5.0e-4
