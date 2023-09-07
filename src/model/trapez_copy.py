@@ -89,8 +89,9 @@ class TrapezModel(AbstractSystemModel):
         pred_u = list()
         cur_pos = trajectory[0]['pos']
         hidden = trajectory[0]['h']
+        u = trajectory[0]['u']
         for step in range(num_steps):
-            cur_pos, hidden, u = self._step_fn(hidden, cur_pos, trajectory[step], step, poisson_model, freq)
+            cur_pos, hidden, u = self._step_fn(hidden, cur_pos, trajectory[step], step, u, poisson_model, freq)
             pred_u.append(u)
             pred_trajectory.append(cur_pos)
 
@@ -121,7 +122,7 @@ class TrapezModel(AbstractSystemModel):
         return traj_ops, mse_loss, u_loss
 
     @torch.no_grad()
-    def _step_fn(self, hidden, cur_pos, ground_truth, step, poisson_model=None, freq=1):
+    def _step_fn(self, hidden, cur_pos, ground_truth, step, cur_poisson, poisson_model=None, freq=1):
         mask = torch.where(ground_truth['node_type'] == NodeType.MESH)[0].cpu()
         next_pos = copy.deepcopy(ground_truth['next_pos']).to(device)
 
@@ -133,8 +134,11 @@ class TrapezModel(AbstractSystemModel):
         data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True)[index]
         graph = Batch.from_data_list([self.build_graph(data, is_training=False)]).to(device)
 
-        output, hidden = poisson_model(graph, False)
-        poisson, _, _ = poisson_model.update(graph, output)
+        if keep_pc and not self.recurrence:
+            output, hidden = poisson_model(graph, False)
+            poisson, _, _ = poisson_model.update(graph, output)
+        else:
+            poisson = cur_poisson
         graph.u = poisson
 
         output, hidden = self(graph, False)
