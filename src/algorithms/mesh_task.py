@@ -62,9 +62,6 @@ class MeshTask(AbstractTask):
         self._rollout_loader = get_data(config=config, split='eval', raw=True)
         self._valid_loader = get_data(config=config, split='eval')
 
-        self._test_rollout_loader = self._rollout_loader#get_data(config=config, split='test', raw=True)
-        self._test_loader = self._valid_loader#get_data(config=config, split='test')
-
         self._mp = get_from_nested_dict(config, ['model', 'message_passing_steps'])
         aggr = get_from_nested_dict(config, ['model', 'aggregation'])
         self.model_type = get_from_nested_dict(config, ['task', 'model'])
@@ -80,6 +77,8 @@ class MeshTask(AbstractTask):
         seq = get_from_nested_dict(config, ['task', 'sequence'])
         batch_size = config.get('task').get('batch_size')
         self._task_name = f'm:{self.model_type}_l:{layers}_fn:{feature_norm}_ln:{layer_norm}_b:{batch_size}_t:{self.task_type}_a:{aggr}_lr:{lr}_g:{use_global}_seq:{seq}_mgn:{mgn}_freq:{freq}_poisson:{poisson}_mp:{self._mp}_epoch:'
+
+        self.frequency_list = [1] if mgn else [1, 2, 5]
 
         retrain = config.get('retrain')
         epochs = list() if retrain else [
@@ -107,8 +106,6 @@ class MeshTask(AbstractTask):
         """
         assert isinstance(self._algorithm, AbstractSimulator), 'Need a classifier to train on a classification task'
         start_epoch = self._current_epoch
-        mgn = get_from_nested_dict(self._config, ['model', 'mgn'])
-        frequency_list = [1] if mgn else [1, 2, 5]
 
         if start_epoch == 0:
             self._algorithm.pretraining(train_dataloader=self.train_loader)
@@ -120,11 +117,11 @@ class MeshTask(AbstractTask):
                 one_step = self._algorithm.one_step_evaluator(self._valid_loader, self._num_val_trajectories, task_name)
                 rollouts = list()
                 n_steps = list()
-                for freq in frequency_list:
+                for freq in self.frequency_list:
                     rollouts.append(self._algorithm.rollout_evaluator(self._rollout_loader, self._num_val_rollouts, task_name, freq=freq))
                     n_steps.append(self._algorithm.n_step_evaluator(self._rollout_loader, task_name, n_steps=self._val_n_steps, n_traj=self._num_val_n_step_rollouts, freq=freq))
 
-                dir_dict = self.select_plotting(task_name, frequency_list)
+                dir_dict = self.select_plotting(task_name, self.frequency_list)
 
                 animation = {f"video_{key}": wandb.Video(value, fps=10, format="gif") for key, value in dir_dict.items()}
                 evaluation_data = [one_step] + rollouts + n_steps + [animation]
@@ -145,13 +142,21 @@ class MeshTask(AbstractTask):
         """
         assert isinstance(self._algorithm, MeshSimulator)
         task_name = f'{self._task_name}final'
-        # TODO: properly implement
 
-        self._algorithm.one_step_evaluator(self._test_loader, self._num_test_trajectories, task_name)
-        self._algorithm.rollout_evaluator(self._test_rollout_loader, self._num_test_rollouts, task_name, freq=1)
-        self._algorithm.n_step_evaluator(self._test_rollout_loader, task_name, n_steps=self._n_steps, n_traj=self._num_n_step_rollouts, freq=1)
+        self._test_rollout_loader = get_data(config=self._config, split='test', raw=True)
+        self._test_loader = get_data(config=self._config, split='test')
 
-        self.select_plotting(task_name, freq_list=[1])
+        one_step = self._algorithm.one_step_evaluator(self._test_loader, self._num_test_trajectories, task_name)
+        rollout = [self._algorithm.rollout_evaluator(self._test_rollout_loader, self._num_test_rollouts, task_name, freq=freq) for freq in self.frequency_list]
+        n_step = [self._algorithm.n_step_evaluator(self._test_rollout_loader, task_name, n_steps=self._n_steps, n_traj=self._num_n_step_rollouts, freq=freq) for freq in self.frequency_list]
+
+        dir_dict = self.select_plotting(task_name, self.frequency_list)
+        animation = {f"video_{key}": wandb.Video(value, fps=10, format="gif") for key, value in dir_dict.items()}
+
+        evaluation_data = [one_step] + rollout + n_step + [animation]
+        data = {'test/' + k: v for dictionary in evaluation_data for k, v in dictionary.items()}
+
+        self._algorithm.log_epoch(data)
 
     def select_plotting(self, task_name: str, freq_list: list):
         if self.model_type == 'poisson' and self.task_type != 'alternating':
