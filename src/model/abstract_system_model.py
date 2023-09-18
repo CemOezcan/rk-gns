@@ -39,6 +39,9 @@ class AbstractSystemModel(ABC, nn.Module):
         self.hetero = params.get('heterogeneous')
         self.input_mesh_noise = params.get('noise')
         self.input_pcd_noise = params.get('pc_noise')
+        self.feature_norm = params.get('feature_norm')
+        self.layer_norm = params.get('layer_norm')
+        self.num_layers = params.get('layers')
 
 
 
@@ -296,7 +299,7 @@ class AbstractSystemModel(ABC, nn.Module):
         mgn_mask = torch.cat([mesh_mask, obst_mask], dim=0)
 
         pc = graph.subgraph({'mesh': poisson_mask}).clone()
-        pc['mesh'].x = torch.cat([pc['mesh'].pos, pc['mesh'].x], dim=1)
+        #pc['mesh'].x = torch.cat([pc['mesh'].pos, pc['mesh'].x], dim=1)
         mesh = graph.subgraph({'mesh': mgn_mask}).clone()
 
         return mesh, pc

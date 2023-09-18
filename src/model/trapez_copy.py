@@ -28,7 +28,7 @@ class TrapezModel(AbstractSystemModel):
         self.learned_model = MeshGraphNets(
             output_size=params.get('size'),
             latent_size=128,
-            num_layers=1,
+            num_layers=self.num_layers,
             message_passing_steps=self.message_passing_steps,
             message_passing_aggregator=self.message_passing_aggregator,
             edge_sets=self._edge_sets,
@@ -39,8 +39,9 @@ class TrapezModel(AbstractSystemModel):
 
     def forward(self, graph: Batch, is_training: bool) -> Tuple[Tensor, Tensor]:
         graph, _ = self.split_graphs(graph)
-        #graph[('mesh', '0', 'mesh')].edge_attr = self._mesh_edge_normalizer(graph[('mesh', '0', 'mesh')].edge_attr, is_training)
-        #graph['mesh'].x = self._feature_normalizer(graph['mesh'].x, is_training)
+        if self.feature_norm:
+            graph[('mesh', '0', 'mesh')].edge_attr = self._mesh_edge_normalizer(graph[('mesh', '0', 'mesh')].edge_attr, is_training)
+            graph['mesh'].x = self._feature_normalizer(graph['mesh'].x, is_training)
 
         return self.learned_model(graph)
 
@@ -88,8 +89,9 @@ class TrapezModel(AbstractSystemModel):
         pred_u = list()
         cur_pos = trajectory[0]['pos']
         hidden = trajectory[0]['h']
+        u = trajectory[0]['u']
         for step in range(num_steps):
-            cur_pos, hidden, u = self._step_fn(hidden, cur_pos, trajectory[step], step, poisson_model, freq)
+            cur_pos, hidden, u = self._step_fn(hidden, cur_pos, trajectory[step], step, u, poisson_model, freq)
             pred_u.append(u)
             pred_trajectory.append(cur_pos)
 
@@ -120,20 +122,23 @@ class TrapezModel(AbstractSystemModel):
         return traj_ops, mse_loss, u_loss
 
     @torch.no_grad()
-    def _step_fn(self, hidden, cur_pos, ground_truth, step, poisson_model=None, freq=1):
+    def _step_fn(self, hidden, cur_pos, ground_truth, step, cur_poisson, poisson_model=None, freq=1):
         mask = torch.where(ground_truth['node_type'] == NodeType.MESH)[0].cpu()
         next_pos = copy.deepcopy(ground_truth['next_pos']).to(device)
 
         input = {**ground_truth, 'pos': cur_pos, 'h': hidden}
 
-        keep_pc = False if self.mgn else step % freq == 0
+        keep_pc = step % freq == 0
         index = 0 if keep_pc else 1
 
         data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True)[index]
         graph = Batch.from_data_list([self.build_graph(data, is_training=False)]).to(device)
 
-        output, hidden = poisson_model(graph, False)
-        poisson, _, _ = poisson_model.update(graph, output)
+        if keep_pc and not self.recurrence:
+            output, hidden = poisson_model(graph, False)
+            poisson, _, _ = poisson_model.update(graph, output)
+        else:
+            poisson = cur_poisson
         graph.u = poisson
 
         output, hidden = self(graph, False)

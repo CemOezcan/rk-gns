@@ -49,7 +49,7 @@ class AlternatingSimulator(AbstractSimulator):
     def initialize(self, task_information: ConfigDict) -> None:
         if not self._initialized:
             self.global_model = get_model(task_information, poisson=True)
-            self.global_optimizer = optim.Adam(self.global_model.parameters(), lr=self._learning_rate)
+            self.global_optimizer = optim.Adam(self.global_model.parameters(), lr=1e-4)
 
         super().initialize(task_information)
 
@@ -66,7 +66,7 @@ class AlternatingSimulator(AbstractSimulator):
         -------
 
         """
-        for _ in range(5):
+        for _ in range(150):
             self.fit_poisson(train_dataloader)
 
     def fit_iteration(self, train_dataloader: List[Union[List[Data], Data]]) -> None:
@@ -85,12 +85,12 @@ class AlternatingSimulator(AbstractSimulator):
             of the fit such as a training loss.
 
         """
-        self.fit_poisson(train_dataloader)
+        #self.fit_poisson(train_dataloader)
         self.fit_gnn(train_dataloader)
 
     def fit_poisson(self, train_dataloader: List[Data]):
         self.global_model.train()
-        data = self.fetch_data(train_dataloader, True, mgn=True)
+        data = self.fetch_data(train_dataloader, True, poisson=True)
 
         for i, batch in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
             start_instance = time.time()
@@ -161,7 +161,7 @@ class AlternatingSimulator(AbstractSimulator):
         """
         self._network.train()
         self.global_model.eval()
-        data = self.fetch_data(train_dataloader, True, mgn=True)
+        data = self.fetch_data(train_dataloader, True, poisson=True)
 
         for i, batch in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
             start_instance = time.time()
@@ -227,7 +227,7 @@ class AlternatingSimulator(AbstractSimulator):
 
         """
         trajectory_loss = list()
-        test_loader = self.fetch_data(ds_loader, is_training=False)
+        test_loader = self.fetch_data(ds_loader, is_training=False, poisson=True)
         for i, batch in enumerate(tqdm(test_loader, desc='Validation', leave=True, position=0)):
             batch.to(device)
             instance_loss = self._network.validation_step(batch, i, self.global_model)
@@ -383,7 +383,7 @@ class AlternatingSimulator(AbstractSimulator):
             f'{n_steps}-step error/material_last_k={freq}': torch.mean(torch.tensor(u_lasts), dim=0)
         }
 
-    def fetch_data(self, trajectory: List[Union[List[Data], Data]], is_training: bool, seq=None, mgn=False) -> DataLoader:
+    def fetch_data(self, trajectory: List[Union[List[Data], Data]], is_training: bool, seq=None, mgn=False, poisson=False) -> DataLoader:
         """
         Transform a collection of system states into batched graphs.
 
@@ -400,26 +400,16 @@ class AlternatingSimulator(AbstractSimulator):
                 Collection of batched graphs.
         """
         if mgn:
-            dataset = RegularDataset(trajectory, partial(self._network.build_graph, is_training=True), mgn)
-            batches = DataLoader(dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True, num_workers=8,
-                                 prefetch_factor=2, worker_init_fn=self.seed_worker)
-
-            return batches
-
-        if seq is None:
-            seq = self._seq_len
-
-        if is_training:
-            trajectories = [list() for _ in range(len(trajectory) // self._time_steps)]
-            for i, graph in enumerate(trajectory):
-                index = i // self._time_steps
-                trajectories[index].append(graph)
-            dataset = SequenceNoReturnDataset(trajectories, seq, partial(self._network.build_graph, is_training=True))
+            mode = 'mgn'
+        elif poisson:
+            mode = 'poisson'
         else:
-            dataset = RegularDataset(trajectory, partial(self._network.build_graph, is_training=False), mgn)
+            mode = None
 
-        batches = DataLoader(dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True,
-                             num_workers=8, prefetch_factor=2, worker_init_fn=self.seed_worker)
+        dataset = RegularDataset(trajectory, partial(self._network.build_graph, is_training=is_training), mode)
+
+        batches = DataLoader(dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True, num_workers=8,
+                             prefetch_factor=2, worker_init_fn=self.seed_worker)
 
         return batches
 
@@ -433,7 +423,7 @@ class AlternatingSimulator(AbstractSimulator):
         mgn_mask = torch.cat([mesh_mask, obst_mask], dim=0)
 
         pc = copy.deepcopy(graph.subgraph({'mesh': poisson_mask}))
-        pc['mesh'] = torch.cat([pc['mesh'].pos, pc['mesh'].x], dim=1)
+        #pc['mesh'] = torch.cat([pc['mesh'].pos, pc['mesh'].x], dim=1)
         mesh = copy.deepcopy(graph.subgraph({'mesh': mgn_mask}))
 
         return mesh, pc

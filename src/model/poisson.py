@@ -29,17 +29,20 @@ class PoissonModel(AbstractSystemModel):
         self.learned_model = MeshGraphNets(
             output_size=1,
             latent_size=128,
-            num_layers=1,
+            num_layers=self.num_layers,
             message_passing_steps=self.message_passing_steps,
             message_passing_aggregator=self.message_passing_aggregator,
             edge_sets=self._edge_sets,
             node_sets=self._node_sets,
             dec=self._node_sets[0],
-            use_global=True, recurrence=self.recurrence
+            use_global=True, recurrence=self.recurrence, layer_norm=self.layer_norm
         ).to(device)
 
     def forward(self, graph: Batch, is_training: bool) -> Tuple[Tensor, Tensor]:
         _, graph = self.split_graphs(graph)
+        if self.feature_norm:
+            graph[('mesh', '0', 'mesh')].edge_attr = self._mesh_edge_normalizer(graph[('mesh', '0', 'mesh')].edge_attr, is_training)
+            graph['mesh'].x = self._feature_normalizer(graph['mesh'].x, is_training)
 
         return self.learned_model(graph)
 
@@ -77,12 +80,13 @@ class PoissonModel(AbstractSystemModel):
     def rollout(self, trajectory: List[Dict[str, Tensor]], num_steps: int, freq: int) -> Tuple[Dict[str, Tensor], Tensor]:
         """Rolls out a model trajectory."""
         num_steps = len(trajectory) if num_steps is None else num_steps
-        hidden = trajectory[0]
+        hidden = trajectory[0]['h']
+        cur_pos = trajectory[0]['u']
         point_index = trajectory[0]['point_index']
 
         pred_trajectory = []
         for step in range(num_steps):
-            cur_pos, hidden = self._step_fn(hidden, None, trajectory[step], step, freq)
+            cur_pos, hidden = self._step_fn(hidden, cur_pos, trajectory[step], step, freq)
             pred_trajectory.append(cur_pos)
 
         prediction = torch.stack([t['pos'][:point_index] for t in trajectory][:num_steps]).cpu()
@@ -113,11 +117,14 @@ class PoissonModel(AbstractSystemModel):
         keep_pc = False if self.mgn else step % freq == 0
         index = 0 if keep_pc else 1
 
-        data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True)[index]
-        graph = Batch.from_data_list([self.build_graph(data, is_training=False)]).to(device)
+        if not keep_pc and not self.recurrence:
+            prediction = cur_pos
+        else:
+            data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True)[index]
+            graph = Batch.from_data_list([self.build_graph(data, is_training=False)]).to(device)
 
-        output, hidden = self(graph, False)
-        prediction, _, _ = self.update(graph.to(device), output)
+            output, hidden = self(graph, False)
+            prediction, _, _ = self.update(graph.to(device), output)
 
         return prediction, hidden
 

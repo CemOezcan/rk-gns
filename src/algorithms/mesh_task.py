@@ -67,16 +67,19 @@ class MeshTask(AbstractTask):
 
         self._mp = get_from_nested_dict(config, ['model', 'message_passing_steps'])
         aggr = get_from_nested_dict(config, ['model', 'aggregation'])
+        self.model_type = get_from_nested_dict(config, ['task', 'model'])
         lr = get_from_nested_dict(config, ['model', 'learning_rate'])
         use_global = get_from_nested_dict(config, ['model', 'use_global'])
-        heterogeneous = get_from_nested_dict(config, ['model', 'heterogeneous'])
+        feature_norm = get_from_nested_dict(config, ['model', 'feature_norm'])
+        layer_norm = get_from_nested_dict(config, ['model', 'layer_norm'])
+        layers = get_from_nested_dict(config, ['model', 'layers'])
         poisson = get_from_nested_dict(config, ['model', 'poisson_ratio'])
         mgn = get_from_nested_dict(config, ['model', 'mgn'])
         freq = get_from_nested_dict(config, ['model', 'pc_frequency'])
-        task = get_from_nested_dict(config, ['task', 'task'])
+        self.task_type = get_from_nested_dict(config, ['task', 'task'])
         seq = get_from_nested_dict(config, ['task', 'sequence'])
         batch_size = config.get('task').get('batch_size')
-        self._task_name = f'b:{batch_size}_t:{task}_a:{aggr}_lr:{lr}_g:{use_global}_seq:{seq}_mgn:{mgn}_freq:{freq}_poisson:{poisson}_mp:{self._mp}_epoch:'
+        self._task_name = f'm:{self.model_type}_l:{layers}_fn:{feature_norm}_ln:{layer_norm}_b:{batch_size}_t:{self.task_type}_a:{aggr}_lr:{lr}_g:{use_global}_seq:{seq}_mgn:{mgn}_freq:{freq}_poisson:{poisson}_mp:{self._mp}_epoch:'
 
         retrain = config.get('retrain')
         epochs = list() if retrain else [
@@ -105,7 +108,7 @@ class MeshTask(AbstractTask):
         assert isinstance(self._algorithm, AbstractSimulator), 'Need a classifier to train on a classification task'
         start_epoch = self._current_epoch
         mgn = get_from_nested_dict(self._config, ['model', 'mgn'])
-        frequency_list = [1] if mgn else [5]
+        frequency_list = [1] if mgn else [1, 2, 5]
 
         if start_epoch == 0:
             self._algorithm.pretraining(train_dataloader=self.train_loader)
@@ -151,6 +154,9 @@ class MeshTask(AbstractTask):
         self.select_plotting(task_name, freq_list=[1])
 
     def select_plotting(self, task_name: str, freq_list: list):
+        if self.model_type == 'poisson' and self.task_type != 'alternating':
+            return {}
+
         out = dict.fromkeys(freq_list)
         for freq in freq_list:
             a, w = self.plot(task_name, freq)

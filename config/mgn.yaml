@@ -4,13 +4,13 @@ import_path: "default.yaml"
 params:
   retrain: False # Start training a new model if True. Continue training the most recent version of the model if False.
   task:
-    task: mesh
+    task: lstm
     model: trapez
-    sequence: 5
+    sequence: 25
     dataset: deformable_plate
     rollout_split: valid
-    batch_size: 32
-    epochs: 1000
+    batch_size: 30
+    epochs: 200
     n_timesteps: 50
     trajectories: 675
     mode: all
@@ -25,13 +25,16 @@ params:
       trajectories: 135 # Number of trajectories that are going to be used to compute the validation loss during training
       rollouts: 135 # Number of trajectories that are going to be used to compute the rollout loss during training
       n_steps: 10
-      n_step_rollouts: 50
+      n_step_rollouts: 20
       n_viz: 5
   model:
+    feature_norm: False
+    layer_norm: False
+    layers: 1
     size: 2
-    noise: 0.01
+    noise: 0.001
     pc_noise: 0.0
-    pc_frequency: 5
+    pc_frequency: 1
     mgn: False
     poisson_ratio: False
     scheduler_epoch: 10

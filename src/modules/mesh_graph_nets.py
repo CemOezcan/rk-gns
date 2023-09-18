@@ -20,7 +20,7 @@ class MeshGraphNets(nn.Module):
 
     def __init__(self, output_size: int, latent_size: int, num_layers: int, message_passing_aggregator: str,
                  message_passing_steps: int, node_sets: List[str], edge_sets: List[str], dec: str,
-                 use_global: bool, recurrence: bool):
+                 use_global: bool, recurrence: bool, layer_norm: bool = False):
         super().__init__()
         self._latent_size = latent_size
         self._output_size = output_size
@@ -34,7 +34,7 @@ class MeshGraphNets(nn.Module):
                                node_sets=node_sets,
                                edge_sets=edge_sets,
                                use_global=use_global)
-        self.processor = Processor(make_mlp=self._make_mlp, output_size=self._latent_size,
+        self.processor = Processor(make_mlp=functools.partial(self._make_mlp, layer_norm=layer_norm), output_size=self._latent_size,
                                    message_passing_steps=self._message_passing_steps,
                                    message_passing_aggregator=self._message_passing_aggregator,
                                    node_sets=node_sets,
@@ -54,16 +54,13 @@ class MeshGraphNets(nn.Module):
     def _make_mlp(self, output_size: int, layer_norm=False) -> nn.Module:
         """Builds an MLP."""
         widths = [self._latent_size] * self._num_layers #+ [output_size]
-        network = LazyMLP(widths)
-        if layer_norm:
-            network = nn.Sequential(
-                network, nn.LayerNorm(normalized_shape=widths[-1]))
+        network = LazyMLP(widths, layer_norm)
         return network
 
 
 # TODO refactor into new file
 class LazyMLP(nn.Module):
-    def __init__(self, output_sizes: List[int]):
+    def __init__(self, output_sizes: List[int], layer_norm):
         super().__init__()
         num_layers = len(output_sizes)
         self._layers_ordered_dict = OrderedDict()
@@ -73,6 +70,10 @@ class LazyMLP(nn.Module):
             #if index < (num_layers - 1):
             #    self._layers_ordered_dict["leakyrelu_" + str(index)] = nn.LeakyReLU()
             self._layers_ordered_dict["leakyrelu_" + str(index)] = nn.LeakyReLU()
+
+        if layer_norm:
+            self._layers_ordered_dict['layernorm_0'] = nn.LayerNorm(normalized_shape=output_sizes[-1])
+
         self.layers = nn.Sequential(self._layers_ordered_dict)
 
     def forward(self, input: Tensor) -> Tensor:

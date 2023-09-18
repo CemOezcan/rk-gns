@@ -6,10 +6,10 @@ params:
   task:
     task: mesh
     model: trapez
-    sequence: 5
+    sequence: 1
     dataset: deformable_plate
     rollout_split: valid
-    batch_size: 30
+    batch_size: 32
     epochs: 200
     n_timesteps: 50
     trajectories: 675
@@ -25,20 +25,23 @@ params:
       trajectories: 135 # Number of trajectories that are going to be used to compute the validation loss during training
       rollouts: 135 # Number of trajectories that are going to be used to compute the rollout loss during training
       n_steps: 10
-      n_step_rollouts: 50
+      n_step_rollouts: 20
       n_viz: 5
   model:
+    feature_norm: False
+    layer_norm: False
+    layers: 1
     size: 2
     noise: 0.01
     pc_noise: 0.0
-    pc_frequency: 2
+    pc_frequency: 1
     mgn: False
-    poisson_ratio: False
+    poisson_ratio: True
     scheduler_epoch: 10
-    aggregation: pna
-    learning_rate: 1.0e-4
+    aggregation: mean
+    learning_rate: 5.0e-4
     message_passing_steps: 5
-    use_global: False
+    use_global: True
     heterogeneous: False
   logging:
     wandb_mode: online
