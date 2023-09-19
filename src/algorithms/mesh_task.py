@@ -111,7 +111,8 @@ class MeshTask(AbstractTask):
             self._algorithm.pretraining(train_dataloader=self.train_loader)
         for e in trange(start_epoch, self._epochs, desc='Epochs', leave=True):
             task_name = f'{self._task_name}{e + 1}'
-            self._algorithm.fit_iteration(train_dataloader=self.train_loader)
+            epoch_loss = self._algorithm.fit_iteration(train_dataloader=self.train_loader)
+            evaluation_data = [{'training/epoch_loss': epoch_loss}]
 
             if (e + 1) % self._validation_interval == 0:
                 one_step = self._algorithm.one_step_evaluator(self._valid_loader, self._num_val_trajectories, task_name)
@@ -125,11 +126,11 @@ class MeshTask(AbstractTask):
 
                 animation = {f"video_{key}": wandb.Video(value, fps=10, format="gif") for key, value in dir_dict.items()}
                 evaluation_data = [one_step] + rollouts + n_steps + [animation]
-                data = {k: v for dictionary in evaluation_data for k, v in dictionary.items()}
-                data['epoch'] = e + 1
                 self._algorithm.save(task_name)
-                self._algorithm.log_epoch(data)
 
+            data = {k: v for dictionary in evaluation_data for k, v in dictionary.items()}
+            data['epoch'] = e + 1
+            self._algorithm.log_epoch(data)
             self._current_epoch = e + 1
 
     def get_scalars(self) -> None:

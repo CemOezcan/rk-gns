@@ -86,7 +86,7 @@ class AlternatingSimulator(AbstractSimulator):
 
         """
         #self.fit_poisson(train_dataloader)
-        self.fit_gnn(train_dataloader)
+        return self.fit_gnn(train_dataloader)
 
     def fit_poisson(self, train_dataloader: List[Data]):
         self.global_model.train()
@@ -109,6 +109,7 @@ class AlternatingSimulator(AbstractSimulator):
     def fit_lstm(self, train_dataloader: List[List[Data]]):
         self.global_model.train()
         data = self.fetch_data(train_dataloader, True)
+        total_loss = 0
 
         start_instance = time.time()
         for i, sequence in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
@@ -142,6 +143,10 @@ class AlternatingSimulator(AbstractSimulator):
             end_instance = time.time()
             wandb.log({**gradients, 'training/material_loss': loss.detach(), 'training/material_sequence_time': end_instance - start_instance})
             start_instance = time.time()
+            total_loss += loss.detach()
+            size = i
+
+        return total_loss / size
 
     def fit_gnn(self, train_dataloader: List[Data]) -> None:
         """
@@ -162,6 +167,7 @@ class AlternatingSimulator(AbstractSimulator):
         self._network.train()
         self.global_model.eval()
         data = self.fetch_data(train_dataloader, True, poisson=True)
+        total_loss = 0
 
         for i, batch in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
             start_instance = time.time()
@@ -177,6 +183,11 @@ class AlternatingSimulator(AbstractSimulator):
 
             end_instance = time.time()
             wandb.log({**gradients, 'training/loss': loss.detach(), 'training/instance_time': end_instance - start_instance})
+
+            total_loss += loss.detach()
+            size = i
+
+        return total_loss / size
         # self._network.train()
         # self.global_model.eval()
         # data = self.fetch_data(train_dataloader, True, mgn=True)
