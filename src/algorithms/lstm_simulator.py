@@ -54,6 +54,7 @@ class LSTMSimulator(AbstractSimulator):
         """
         self._network.train()
         data = self.fetch_data(train_dataloader, True)
+        total_loss = 0
 
         start_instance = time.time()
         for i, sequence in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
@@ -84,6 +85,11 @@ class LSTMSimulator(AbstractSimulator):
             end_instance = time.time()
             wandb.log({**gradients, 'training/loss': loss.detach(), 'training/sequence_time': end_instance - start_instance})
             start_instance = time.time()
+
+            total_loss += loss.detach()
+            size = i
+
+        return total_loss / size
 
     def fetch_data(self, trajectory: List[Union[List[Data], Data]], is_training: bool) -> DataLoader:
         """

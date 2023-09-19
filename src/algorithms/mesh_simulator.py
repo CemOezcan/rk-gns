@@ -50,6 +50,9 @@ class MeshSimulator(AbstractSimulator):
         self._network.train()
         data = self.fetch_data(train_dataloader, True)
 
+        total_loss = 0
+        size = 0
+
         for i, batch in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
             start_instance = time.time()
             batch.to(device)
@@ -63,6 +66,11 @@ class MeshSimulator(AbstractSimulator):
 
             end_instance = time.time()
             wandb.log({**gradients, 'training/loss': loss.detach(), 'training/instance_time': end_instance - start_instance})
+
+            total_loss += loss.detach()
+            size = i
+
+        return total_loss / size
 
     def fetch_data(self, trajectory: List[Data], is_training: bool) -> DataLoader:
         """
