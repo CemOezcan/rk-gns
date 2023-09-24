@@ -50,7 +50,7 @@ class AbstractSimulator(ABC):
         self._time_steps = config.get('task').get('n_timesteps')
         self._seq_len = config.get('task').get('sequence')
         mgn = self._config.get('task').get('mgn')
-        poisson = self._config.get('task').get('model').lower() == 'poisson'
+        poisson = self._config.get('task').get('task').lower() == 'poisson'
 
         if mgn:
             self.mode = 'mgn'

@@ -47,7 +47,7 @@ class Preprocessing:
         self.raw = raw
         self.trajectories = config.get('task').get('trajectories')
         self.trajectories = math.inf if isinstance(self.trajectories, str) else self.trajectories
-        self.triangulate = config.get('task').get('task') == 'alternating' or config.get('task').get('model') == 'poisson'
+        self.triangulate = config.get('task').get('model') == 'supervised' or config.get('task').get('task') == 'poisson'
 
         # dataset parameters
         self.input_dataset = 'deformable_plate'

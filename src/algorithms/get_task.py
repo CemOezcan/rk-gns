@@ -8,9 +8,4 @@ from src.algorithms.abstract_task import AbstractTask
 
 
 def get_task(config: ConfigDict) -> AbstractTask:
-    task = get_from_nested_dict(config, list_of_keys=['task', 'task'], raise_error=True)
-
-    if task == 'mesh' or task == 'lstm' or task == 'alternating':
-        return MeshTask(config=config)
-    else:
-        raise NotImplementedError('Implement your tasks here!')
+    return MeshTask(config=config)

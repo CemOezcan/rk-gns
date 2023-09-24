@@ -10,13 +10,14 @@ from src.util.util import get_from_nested_dict
 
 
 def get_simulator(config: ConfigDict) -> AbstractSimulator:
-    task = get_from_nested_dict(config, list_of_keys=["task", "task"], raise_error=True)
+    model = get_from_nested_dict(config, list_of_keys=['task', 'model'], raise_error=True)
 
-    if task == "mesh":
+    # TODO: self-supervised
+    if model == 'mgn':
         return MeshSimulator(config=config)
-    elif task == 'lstm':
+    elif model == 'lstm':
         return LSTMSimulator(config=config)
-    elif task == 'alternating':
+    elif model == 'supervised':
         return AlternatingSimulator(config=config)
     else:
         raise NotImplementedError("Implement your tasks here!")

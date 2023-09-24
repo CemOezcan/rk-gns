@@ -7,10 +7,10 @@ wandb_mode: offline
 directory: deformable_plate
 
 task:
-  task: mesh # Trapez/Poisson
-  model: trapez # None/S/SS
-  mgn: True # T/F
-  recurrence: False # T/F/N
+  task: trapez # trapez/poisson
+  model: mgn # mgn/supervised/self-supervised
+  ggns: True # T/F
+  recurrence: False # None/name now T/F
   sequence: 1
   poisson_ratio: False # Link to use global with model
   learning_rate: 5.0e-4
