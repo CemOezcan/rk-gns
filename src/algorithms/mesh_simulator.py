@@ -88,7 +88,7 @@ class MeshSimulator(AbstractSimulator):
             DataLoader
                 Collection of batched graphs.
         """
-        mgn = self._config.get('model').get('mgn')
+        mgn = self._config.get('task').get('mgn')
         poisson = self._config.get('task').get('model').lower() == 'poisson'
 
         if mgn:

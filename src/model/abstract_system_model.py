@@ -35,7 +35,6 @@ class AbstractSystemModel(ABC, nn.Module):
 
         self.euclidian_distance = True
         self.pc_frequency = params.get('pc_frequency')
-        self.mgn = params.get('mgn')
         self.hetero = params.get('heterogeneous')
         self.input_mesh_noise = params.get('noise')
         self.input_pcd_noise = params.get('pc_noise')

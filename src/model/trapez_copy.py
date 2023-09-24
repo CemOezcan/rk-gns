@@ -26,7 +26,7 @@ class TrapezModel(AbstractSystemModel):
         super(TrapezModel, self).__init__(params)
         self.recurrence = recurrence
         self.learned_model = MeshGraphNets(
-            output_size=params.get('size'),
+            output_size=2,
             latent_size=128,
             num_layers=self.num_layers,
             message_passing_steps=self.message_passing_steps,

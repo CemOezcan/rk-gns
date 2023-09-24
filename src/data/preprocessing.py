@@ -41,7 +41,7 @@ class Preprocessing:
                 Contains the configuration file.
         """
         self.hetero = config.get('model').get('heterogeneous')
-        self.use_poisson = config.get('model').get('poisson_ratio')
+        self.use_poisson = config.get('task').get('poisson_ratio')
         self.split = split
         self.path = path
         self.raw = raw

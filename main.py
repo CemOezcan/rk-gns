@@ -14,9 +14,8 @@ warnings.filterwarnings('ignore')
 
 
 def main(config_name='trapez'):
-    config_file = read_yaml(config_name)
+    params = read_yaml(config_name)
 
-    params = config_file['params']
     print(f'Device used for this run: {device}')
     random_seed = params.get('random_seed')
     random.seed(random_seed)

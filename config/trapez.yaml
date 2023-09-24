@@ -1,48 +1,46 @@
 name: "DEFAULT"   # MUST BE DEFAULT
 import_path: "default.yaml"
 
-params:
-  retrain: False # Start training a new model if True. Continue training the most recent version of the model if False.
-  task:
-    task: mesh
-    model: trapez
-    sequence: 1
-    dataset: deformable_plate
-    rollout_split: valid
-    batch_size: 32
-    epochs: 200
-    n_timesteps: 50
-    trajectories: 675
-    mode: all
-    prefetch_factor: 1
-    test:
-      trajectories: 10 # Number of trajectories that are going to be used to compute the validation loss during evaluation
-      rollouts: 10 # Number of trajectories that are going to be used to compute the rollout loss during evaluation
-      n_step_rollouts: 1 # Number of trajectories that are going to be used to compute the n_step_loss during evaluation
-      n_steps: 10
-    validation:
-      interval: 10
-      trajectories: 135 # Number of trajectories that are going to be used to compute the validation loss during training
-      rollouts: 135 # Number of trajectories that are going to be used to compute the rollout loss during training
-      n_steps: 10
-      n_step_rollouts: 20
-      n_viz: 5
-  model:
-    feature_norm: False
-    layer_norm: False
-    layers: 1
-    size: 2
-    noise: 0.01
-    pc_noise: 0.0
-    pc_frequency: 1
-    mgn: False
-    poisson_ratio: False
-    scheduler_epoch: 10
-    aggregation: mean
-    learning_rate: 5.0e-4
-    message_passing_steps: 5
-    use_global: False
-    heterogeneous: False
-  logging:
-    wandb_mode: online
-  random_seed: 115
+random_seed: 115
+retrain: False # Start training a new model if True. Continue training the most recent version of the model if False.
+wandb_mode: offline
+directory: deformable_plate
+
+task:
+  task: mesh # Trapez/Poisson
+  model: trapez # None/S/SS
+  mgn: True # T/F
+  recurrence: False # T/F/N
+  sequence: 1
+  poisson_ratio: False # Link to use global with model
+  learning_rate: 5.0e-4
+  batch_size: 32
+  trajectories: 1
+  n_timesteps: 50
+  epochs: 200
+
+  test:
+    trajectories: 10 # Number of trajectories that are going to be used to compute the validation loss during evaluation
+    rollouts: 10 # Number of trajectories that are going to be used to compute the rollout loss during evaluation
+    n_step_rollouts: 1 # Number of trajectories that are going to be used to compute the n_step_loss during evaluation
+    n_steps: 10
+
+  validation:
+    interval: 1
+    trajectories: 135 # Number of trajectories that are going to be used to compute the validation loss during training
+    rollouts: 135 # Number of trajectories that are going to be used to compute the rollout loss during training
+    n_steps: 10
+    n_step_rollouts: 20
+    n_viz: 5
+
+model:
+  feature_norm: False
+  layer_norm: False
+  layers: 1
+  noise: 0.01
+  pc_noise: 0.0
+  pc_frequency: 1
+  aggregation: mean
+  message_passing_steps: 5
+  heterogeneous: False
+  use_global: False

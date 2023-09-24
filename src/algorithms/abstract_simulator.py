@@ -42,14 +42,13 @@ class AbstractSimulator(ABC):
 
         self._config = config
         self._network_config = config.get('model')
-        self._dataset_name = config.get('task').get('dataset')
+        self._dataset_name = config.get('directory')
         _, self._out_dir = get_directories(self._dataset_name)
-        self._wandb_mode = config.get('logging').get('wandb_mode')
+        self._wandb_mode = config.get('wandb_mode')
 
         self._trajectories = config.get('task').get('trajectories')
         self._time_steps = config.get('task').get('n_timesteps')
         self._seq_len = config.get('task').get('sequence')
-        self._prefetch_factor = config.get('task').get('prefetch_factor')
 
         self._batch_size = config.get('task').get('batch_size')
         self._network = None
@@ -60,8 +59,7 @@ class AbstractSimulator(ABC):
         self.random_seed, self.np_seed, self.torch_seed = None, None, None
 
         self.loss_function = F.mse_loss
-        self._learning_rate = self._network_config.get('learning_rate')
-        self._gamma = self._network_config.get('gamma')
+        self._learning_rate = config.get('task').get('learning_rate')
 
     def initialize(self, task_information: ConfigDict) -> None:
         """
@@ -79,7 +77,7 @@ class AbstractSimulator(ABC):
 
         """
         self._wandb_run = None
-        self._wandb_mode = task_information.get('logging').get('wandb_mode')
+        self._wandb_mode = task_information.get('wandb_mode')
         wandb.init(project='RK-GNS', config=task_information, mode=self._wandb_mode)
         wandb.define_metric('epoch')
         wandb.define_metric('validation_loss', step_metric='epoch')

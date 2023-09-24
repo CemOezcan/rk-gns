@@ -114,7 +114,7 @@ class PoissonModel(AbstractSystemModel):
     def _step_fn(self, hidden, cur_pos, ground_truth, step, freq):
         input = {**ground_truth, 'h': hidden}
 
-        keep_pc = False if self.mgn else step % freq == 0
+        keep_pc = step % freq == 0
         index = 0 if keep_pc else 1
 
         if not keep_pc and not self.recurrence:

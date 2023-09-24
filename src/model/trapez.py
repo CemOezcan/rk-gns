@@ -27,7 +27,7 @@ class TrapezModel(AbstractSystemModel):
 
         self.recurrence = recurrence
         self.learned_model = MeshGraphNets(
-            output_size=params.get('size'),
+            output_size=2,
             latent_size=128,
             num_layers=self.num_layers,
             message_passing_steps=self.message_passing_steps,
@@ -103,7 +103,7 @@ class TrapezModel(AbstractSystemModel):
 
         input = {**ground_truth, 'pos': cur_pos, 'h': hidden}
 
-        keep_pc = False if self.mgn else step % freq == 0
+        keep_pc = step % freq == 0
         index = 0 if keep_pc else 1
 
         data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), False)[index]
