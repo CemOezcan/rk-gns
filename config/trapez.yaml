@@ -39,7 +39,6 @@ model:
   layers: 1
   noise: 0.01
   pc_noise: 0.0
-  pc_frequency: 1
   aggregation: mean
   message_passing_steps: 5
   heterogeneous: False

@@ -72,11 +72,10 @@ class MeshTask(AbstractTask):
         layers = get_from_nested_dict(config, ['model', 'layers'])
         poisson = get_from_nested_dict(config, ['task', 'poisson_ratio'])
         mgn = get_from_nested_dict(config, ['task', 'mgn'])
-        freq = get_from_nested_dict(config, ['model', 'pc_frequency'])
         self.task_type = get_from_nested_dict(config, ['task', 'task'])
         seq = get_from_nested_dict(config, ['task', 'sequence'])
         batch_size = config.get('task').get('batch_size')
-        self._task_name = f'm:{self.model_type}_l:{layers}_fn:{feature_norm}_ln:{layer_norm}_b:{batch_size}_t:{self.task_type}_a:{aggr}_lr:{lr}_g:{use_global}_seq:{seq}_mgn:{mgn}_freq:{freq}_poisson:{poisson}_mp:{self._mp}_epoch:'
+        self._task_name = f'm:{self.model_type}_l:{layers}_fn:{feature_norm}_ln:{layer_norm}_b:{batch_size}_t:{self.task_type}_a:{aggr}_lr:{lr}_g:{use_global}_seq:{seq}_mgn:{mgn}_poisson:{poisson}_mp:{self._mp}_epoch:'
 
         self.frequency_list = [1] if mgn else [1, 2, 5]
 
