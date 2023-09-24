@@ -49,10 +49,10 @@ class AbstractSimulator(ABC):
         self._trajectories = config.get('task').get('trajectories')
         self._time_steps = config.get('task').get('n_timesteps')
         self._seq_len = config.get('task').get('sequence')
-        mgn = self._config.get('task').get('mgn')
+        ggns = self._config.get('task').get('ggns')
         poisson = self._config.get('task').get('task').lower() == 'poisson'
 
-        if mgn:
+        if not ggns:
             self.mode = 'mgn'
         elif poisson:
             self.mode = 'poisson'
