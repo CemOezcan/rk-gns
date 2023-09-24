@@ -90,7 +90,7 @@ class AlternatingSimulator(AbstractSimulator):
 
     def fit_poisson(self, train_dataloader: List[Data]):
         self.global_model.train()
-        data = self.fetch_data(train_dataloader, True, poisson=True)
+        data = self.fetch_data(train_dataloader, True, mode='poisson')
 
         for i, batch in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
             start_instance = time.time()
@@ -166,7 +166,7 @@ class AlternatingSimulator(AbstractSimulator):
         """
         self._network.train()
         self.global_model.eval()
-        data = self.fetch_data(train_dataloader, True, poisson=True)
+        data = self.fetch_data(train_dataloader, True, mode='poisson')
         total_loss = 0
 
         for i, batch in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
@@ -238,7 +238,7 @@ class AlternatingSimulator(AbstractSimulator):
 
         """
         trajectory_loss = list()
-        test_loader = self.fetch_data(ds_loader, is_training=False, poisson=True)
+        test_loader = self.fetch_data(ds_loader, is_training=False, mode='poisson')
         for i, batch in enumerate(tqdm(test_loader, desc='Validation', leave=True, position=0)):
             batch.to(device)
             instance_loss = self._network.validation_step(batch, i, self.global_model)
@@ -394,7 +394,7 @@ class AlternatingSimulator(AbstractSimulator):
             f'{n_steps}-step error/material_last_k={freq}': torch.mean(torch.tensor(u_lasts), dim=0)
         }
 
-    def fetch_data(self, trajectory: List[Union[List[Data], Data]], is_training: bool, seq=None, mgn=False, poisson=False) -> DataLoader:
+    def fetch_data(self, trajectory: List[Union[List[Data], Data]], is_training: bool, mode=None) -> DataLoader:
         """
         Transform a collection of system states into batched graphs.
 
@@ -410,13 +410,6 @@ class AlternatingSimulator(AbstractSimulator):
             DataLoader
                 Collection of batched graphs.
         """
-        if mgn:
-            mode = 'mgn'
-        elif poisson:
-            mode = 'poisson'
-        else:
-            mode = None
-
         dataset = RegularDataset(trajectory, partial(self._network.build_graph, is_training=is_training), mode)
 
         batches = DataLoader(dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True, num_workers=8,

@@ -88,17 +88,7 @@ class MeshSimulator(AbstractSimulator):
             DataLoader
                 Collection of batched graphs.
         """
-        mgn = self._config.get('task').get('mgn')
-        poisson = self._config.get('task').get('model').lower() == 'poisson'
-
-        if mgn:
-            mode = 'mgn'
-        elif poisson:
-            mode = 'poisson'
-        else:
-            mode = None
-
-        dataset = RegularDataset(trajectory, partial(self._network.build_graph, is_training=is_training), mode)
+        dataset = RegularDataset(trajectory, partial(self._network.build_graph, is_training=is_training), self.mode)
 
         batches = DataLoader(dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True, num_workers=8,
                              prefetch_factor=2, worker_init_fn=self.seed_worker)
