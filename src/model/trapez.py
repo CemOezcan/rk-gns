@@ -106,7 +106,7 @@ class TrapezModel(AbstractSystemModel):
         keep_pc = step % freq == 0
         index = 0 if keep_pc else 1
 
-        data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), False)[index]
+        data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), False, True)[index]
         graph = Batch.from_data_list([self.build_graph(data, is_training=False)]).to(device)
 
         output, hidden = self(graph, False)

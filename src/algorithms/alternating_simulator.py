@@ -107,6 +107,7 @@ class AlternatingSimulator(AbstractSimulator):
             wandb.log({**gradients, 'training/material_loss': loss.detach(), 'training/material_instance_time': end_instance - start_instance})
 
     def fit_lstm(self, train_dataloader: List[List[Data]]):
+        # TODO: proper implementation
         self.global_model.train()
         data = self.fetch_data(train_dataloader, True)
         total_loss = 0

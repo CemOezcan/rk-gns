@@ -120,7 +120,7 @@ class PoissonModel(AbstractSystemModel):
         if not keep_pc and not self.recurrence:
             prediction = cur_pos
         else:
-            data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True)[index]
+            data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True, False)[index]
             graph = Batch.from_data_list([self.build_graph(data, is_training=False)]).to(device)
 
             output, hidden = self(graph, False)

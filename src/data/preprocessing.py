@@ -48,6 +48,7 @@ class Preprocessing:
         self.trajectories = config.get('task').get('trajectories')
         self.trajectories = math.inf if isinstance(self.trajectories, str) else self.trajectories
         self.triangulate = config.get('task').get('model') == 'supervised' or config.get('task').get('task') == 'poisson'
+        self.ggns = config.get('task').get('ggns') and not config.get('task').get('task') == 'poisson'
 
         # dataset parameters
         self.input_dataset = 'deformable_plate'
@@ -79,7 +80,7 @@ class Preprocessing:
                 data = self.create_graph(data_timestep)
 
                 if not self.raw:
-                    data = Preprocessing.postprocessing(Data.from_dict(data), self.triangulate)
+                    data = Preprocessing.postprocessing(Data.from_dict(data), self.triangulate, self.ggns)
 
                 data_list.append(data)
 
@@ -127,10 +128,9 @@ class Preprocessing:
         instance['collider_edge_index'] = torch.tensor(data['edge_index_collider'].T).long()
         instance['collider_cells'] = torch.tensor(data['triangles_collider']).long()
 
-        if self.triangulate:
-            # TODO: more efficient implementation
-            instance['pcd_pos'] = instance['pcd_pos'][Preprocessing.subsample(instance)]
-            instance['target_pcd_pos'] = instance['target_pcd_pos'][Preprocessing.subsample(instance, target='target_pcd_pos')]
+        instance['shape_pos'] = instance['pcd_pos'][Preprocessing.subsample(instance)]
+        instance['target_shape_pos'] = instance['target_pcd_pos'][
+            Preprocessing.subsample(instance, target='target_pcd_pos')]
 
         return instance
 
@@ -171,9 +171,9 @@ class Preprocessing:
         """
 
         # dictionary for positions
-        pos_dict = {'mesh': input_data['mesh_pos'], 'collider': input_data['collider_pos'], 'point': input_data['pcd_pos']}
+        pos_dict = {'mesh': input_data['mesh_pos'], 'collider': input_data['collider_pos'], 'point': input_data['pcd_pos'], 'shape': input_data['shape_pos']}
         init_pos_dict = {'mesh': input_data['init_mesh_pos'], 'collider': input_data['init_collider_pos']}
-        target_dict = {'mesh': input_data['target_mesh_pos'], 'collider': input_data['target_collider_pos'], 'point': input_data['target_pcd_pos']}
+        target_dict = {'mesh': input_data['target_mesh_pos'], 'collider': input_data['target_collider_pos'], 'point': input_data['target_pcd_pos'], 'shape': input_data['target_shape_pos']}
 
         # build nodes features (one hot)
         num_nodes = [values.shape[0] for values in pos_dict.values()]
@@ -322,7 +322,7 @@ class Preprocessing:
         return data.edge_attr
 
     @staticmethod
-    def postprocessing(data: Data, triangulate) -> Tuple[Data, Data]:
+    def postprocessing(data: Data, triangulate, ggns) -> Tuple[Data, Data]:
         """
         Task specific expansion of the given input graph. Adds different edge types based on neighborhood graphs.
         Convert the resulting graph into a Data object.
@@ -341,7 +341,9 @@ class Preprocessing:
         mask = torch.where(data.node_type == NodeType.MESH)[0]
         obst_mask = torch.where(data.node_type == NodeType.COLLIDER)[0]
         point_mask = torch.where(data.node_type == NodeType.POINT)[0]
+        shape_mask = torch.where(data.node_type == NodeType.SHAPE)[0]
         point_index = data.point_index
+        shape_index = len(point_mask) + point_index
 
         # Add collision edges
         collision_edges = torch_cluster.radius(data.pos[mask], data.pos[obst_mask], r=0.3, max_num_neighbors=100)
@@ -355,50 +357,54 @@ class Preprocessing:
 
         data_mgn = copy.deepcopy(data)
         old_edges = data_mgn.edge_type.shape[0]
+        num = 4
 
-        if triangulate:
-            cp_edges = torch_cluster.radius(data.pos[point_index:], data.pos[obst_mask], r=0.3, max_num_neighbors=100)
-            Preprocessing.add_edge_set(data, cp_edges, (len(mask), point_index), 4, False)
+        # GGNS
 
-            triangles = scipy.spatial.Delaunay(data.pos[point_mask])
-            pc_edges = set()
-            for simplex in triangles.simplices:
-                pc_edges.update(
-                    (simplex[i], simplex[j]) for i in range(-1, len(simplex)) for j in range(i + 1, len(simplex)))
+        # cp_edges = torch_cluster.radius(data.pos[point_mask], data.pos[obst_mask], r=0.08, max_num_neighbors=100)
+        # Preprocessing.add_edge_set(data, cp_edges, (len(mask), point_index), 4, False)
 
-            coll_set = set(collision_edges[1].tolist())
-            short_dist_graph = torch_cluster.radius_graph(data.pos[point_mask], r=0.35, max_num_neighbors=100).tolist()
-            short_edges = [(x, y) for x, y in zip(short_dist_graph[0], short_dist_graph[1]) if
-                           x in coll_set and y in coll_set]
-            short_pc_edges = set(short_edges).intersection(set(pc_edges))
+        # cp_edges_1 = torch_cluster.radius(data.pos[obst_mask], data.pos[point_mask], r=0.08, max_num_neighbors=100)
+        # Preprocessing.add_edge_set(data, cp_edges_1, (point_index, len(mask)), 5, False)
 
-            long_dist_graph = torch_cluster.radius_graph(data.pos[point_mask], r=0.6, max_num_neighbors=100).tolist()
-            long_edges = [(x, y) for x, y in zip(long_dist_graph[0], long_dist_graph[1]) if
-                          x not in coll_set or y not in coll_set]
+        grounding_edges = torch_cluster.radius(data.pos[mask], data.pos[point_mask], r=0.08, max_num_neighbors=100)
+        Preprocessing.add_edge_set(data, grounding_edges, (point_index, 0), 4, False)
 
-            pc_edges_copy = set(long_edges).union(short_pc_edges).intersection(set(pc_edges))
-            pc_edges = zip(*list(pc_edges_copy))
+        grounding_edges_1 = torch_cluster.radius(data.pos[point_mask], data.pos[mask], r=0.08, max_num_neighbors=100)
+        Preprocessing.add_edge_set(data, grounding_edges_1, (0, point_index), 5, False)
+        # TODO: Integrate GGNS into Poisson
+        # pc_edges = torch_cluster.radius_graph(data.pos[point_mask], r=0.1, max_num_neighbors=100)
+        # Preprocessing.add_edge_set(data, pc_edges, (point_index, point_index), 8, False)
 
-            # Convert edge indices to PyTorch tensor
-            pc_edges = torch.tensor(list(pc_edges), dtype=torch.long)
-            Preprocessing.add_edge_set(data, pc_edges, (point_index, point_index), 5, False)
-            num = 6
-        else:
-            cp_edges = torch_cluster.radius(data.pos[point_index:], data.pos[obst_mask], r=0.08, max_num_neighbors=100)
-            Preprocessing.add_edge_set(data, cp_edges, (len(mask), point_index), 4, False)
+        # SHAPE
 
-            cp_edges_1 = torch_cluster.radius(data.pos[obst_mask], data.pos[point_index:], r=0.08, max_num_neighbors=100)
-            Preprocessing.add_edge_set(data, cp_edges_1, (point_index, len(mask)), 5, False)
+        cp_edges = torch_cluster.radius(data.pos[shape_mask], data.pos[obst_mask], r=0.3, max_num_neighbors=100)
+        Preprocessing.add_edge_set(data, cp_edges, (len(mask), shape_index), 6, False)
 
-            grounding_edges = torch_cluster.radius(data.pos[mask], data.pos[point_index:], r=0.08, max_num_neighbors=100)
-            Preprocessing.add_edge_set(data, grounding_edges, (point_index, 0), 6, False)
+        triangles = scipy.spatial.Delaunay(data.pos[shape_mask])
+        pc_edges = set()
+        for simplex in triangles.simplices:
+            pc_edges.update(
+                (simplex[i], simplex[j]) for i in range(-1, len(simplex)) for j in range(i + 1, len(simplex)))
 
-            grounding_edges_1 = torch_cluster.radius(data.pos[point_index:], data.pos[mask], r=0.08, max_num_neighbors=100)
-            Preprocessing.add_edge_set(data, grounding_edges_1, (0, point_index), 7, False)
-            # TODO: Integrate GGNS into Poisson
-            pc_edges = torch_cluster.radius_graph(data.pos[point_index:], r=0.1, max_num_neighbors=100)
-            Preprocessing.add_edge_set(data, pc_edges, (point_index, point_index), 8, False)
-            num = 9
+        coll_set = set(collision_edges[1].tolist())
+        short_dist_graph = torch_cluster.radius_graph(data.pos[shape_mask], r=0.4, max_num_neighbors=100).tolist()
+        short_edges = [(x, y) for x, y in zip(short_dist_graph[0], short_dist_graph[1]) if
+                       x in coll_set and y in coll_set]
+        short_pc_edges = set(short_edges).intersection(set(pc_edges))
+
+        long_dist_graph = torch_cluster.radius_graph(data.pos[shape_mask], r=0.7, max_num_neighbors=100).tolist()
+        long_edges = [(x, y) for x, y in zip(long_dist_graph[0], long_dist_graph[1]) if
+                      x not in coll_set or y not in coll_set]
+
+        pc_edges_copy = set(long_edges).union(short_pc_edges).intersection(set(pc_edges))
+        pc_edges = zip(*list(pc_edges_copy))
+
+        # Convert edge indices to PyTorch tensor
+        pc_edges = torch.tensor(list(pc_edges), dtype=torch.long)
+        Preprocessing.add_edge_set(data, pc_edges, (shape_index, shape_index), 7, False)
+
+        num = 8
 
         values = [0] * num
         for key in data.edge_type:

@@ -28,3 +28,4 @@ class NodeType(enum.IntEnum):
     MESH = 0
     COLLIDER = 1
     POINT = 2
+    SHAPE = 3
