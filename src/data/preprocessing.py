@@ -357,7 +357,6 @@ class Preprocessing:
 
         data_mgn = copy.deepcopy(data)
         old_edges = data_mgn.edge_type.shape[0]
-        num = 4
 
         # GGNS
 
@@ -375,36 +374,37 @@ class Preprocessing:
         # TODO: Integrate GGNS into Poisson
         # pc_edges = torch_cluster.radius_graph(data.pos[point_mask], r=0.1, max_num_neighbors=100)
         # Preprocessing.add_edge_set(data, pc_edges, (point_index, point_index), 8, False)
+        num = 6
 
         # SHAPE
+        if triangulate:
+            cp_edges = torch_cluster.radius(data.pos[shape_mask], data.pos[obst_mask], r=0.3, max_num_neighbors=100)
+            Preprocessing.add_edge_set(data, cp_edges, (len(mask), shape_index), num, False)
 
-        cp_edges = torch_cluster.radius(data.pos[shape_mask], data.pos[obst_mask], r=0.3, max_num_neighbors=100)
-        Preprocessing.add_edge_set(data, cp_edges, (len(mask), shape_index), 6, False)
+            triangles = scipy.spatial.Delaunay(data.pos[shape_mask])
+            pc_edges = set()
+            for simplex in triangles.simplices:
+                pc_edges.update(
+                    (simplex[i], simplex[j]) for i in range(-1, len(simplex)) for j in range(i + 1, len(simplex)))
 
-        triangles = scipy.spatial.Delaunay(data.pos[shape_mask])
-        pc_edges = set()
-        for simplex in triangles.simplices:
-            pc_edges.update(
-                (simplex[i], simplex[j]) for i in range(-1, len(simplex)) for j in range(i + 1, len(simplex)))
+            coll_set = set(collision_edges[1].tolist())
+            short_dist_graph = torch_cluster.radius_graph(data.pos[shape_mask], r=0.35, max_num_neighbors=100).tolist()
+            short_edges = [(x, y) for x, y in zip(short_dist_graph[0], short_dist_graph[1]) if
+                           x in coll_set and y in coll_set]
+            short_pc_edges = set(short_edges).intersection(set(pc_edges))
 
-        coll_set = set(collision_edges[1].tolist())
-        short_dist_graph = torch_cluster.radius_graph(data.pos[shape_mask], r=0.35, max_num_neighbors=100).tolist()
-        short_edges = [(x, y) for x, y in zip(short_dist_graph[0], short_dist_graph[1]) if
-                       x in coll_set and y in coll_set]
-        short_pc_edges = set(short_edges).intersection(set(pc_edges))
+            long_dist_graph = torch_cluster.radius_graph(data.pos[shape_mask], r=0.6, max_num_neighbors=100).tolist()
+            long_edges = [(x, y) for x, y in zip(long_dist_graph[0], long_dist_graph[1]) if
+                          x not in coll_set or y not in coll_set]
 
-        long_dist_graph = torch_cluster.radius_graph(data.pos[shape_mask], r=0.6, max_num_neighbors=100).tolist()
-        long_edges = [(x, y) for x, y in zip(long_dist_graph[0], long_dist_graph[1]) if
-                      x not in coll_set or y not in coll_set]
+            pc_edges_copy = set(long_edges).union(short_pc_edges).intersection(set(pc_edges))
+            pc_edges = zip(*list(pc_edges_copy))
 
-        pc_edges_copy = set(long_edges).union(short_pc_edges).intersection(set(pc_edges))
-        pc_edges = zip(*list(pc_edges_copy))
+            # Convert edge indices to PyTorch tensor
+            pc_edges = torch.tensor(list(pc_edges), dtype=torch.long)
+            Preprocessing.add_edge_set(data, pc_edges, (shape_index, shape_index), num + 1, False)
 
-        # Convert edge indices to PyTorch tensor
-        pc_edges = torch.tensor(list(pc_edges), dtype=torch.long)
-        Preprocessing.add_edge_set(data, pc_edges, (shape_index, shape_index), 7, False)
-
-        num = 8
+            num += 2
 
         values = [0] * num
         for key in data.edge_type:

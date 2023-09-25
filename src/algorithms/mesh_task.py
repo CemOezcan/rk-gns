@@ -77,7 +77,7 @@ class MeshTask(AbstractTask):
         batch_size = config.get('task').get('batch_size')
         self._task_name = f'm:{self.task_type}_l:{layers}_fn:{feature_norm}_ln:{layer_norm}_b:{batch_size}_t:{self.model_type}_a:{aggr}_lr:{lr}_g:{use_global}_seq:{seq}_ggns:{ggns}_poisson:{poisson}_mp:{self._mp}_epoch:'
 
-        self.frequency_list = [1, 2, 5] if self.task_type != 'poisson' and (ggns or self.model_type != 'mgn') else [1]
+        self.frequency_list = [0] if self.task_type != 'poisson' and not ggns and self.model_type == 'mgn' else [1, 2, 5]
 
         retrain = config.get('retrain')
         epochs = list() if retrain else [
