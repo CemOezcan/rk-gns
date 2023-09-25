@@ -14,13 +14,13 @@ def get_model(config: ConfigDict, poisson=False) -> AbstractSystemModel:
     recurrence = config.get('task').get('recurrence')
     # TODO: Alternating
     if poisson:
-        return PoissonModel(config.get('model'), recurrence=recurrence)
+        return PoissonModel(config, recurrence=recurrence)
     elif model == 'supervised':
-        return trapez_copy.TrapezModel(config.get('model'), recurrence=recurrence)
+        return trapez_copy.TrapezModel(config, recurrence=recurrence)
 
     if 'trapez' == task:
-        return trapez.TrapezModel(config.get('model'), recurrence=recurrence)
+        return trapez.TrapezModel(config, recurrence=recurrence)
     elif 'poisson' == task:
-        return PoissonModel(config.get('model'), recurrence=recurrence)
+        return PoissonModel(config, recurrence=recurrence)
     else:
         raise NotImplementedError('Implement your algorithms here!')

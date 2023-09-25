@@ -38,7 +38,7 @@ class TrapezModel(AbstractSystemModel):
         ).to(device)
 
     def forward(self, graph: Batch, is_training: bool) -> Tuple[Tensor, Tensor]:
-        graph, _ = self.split_graphs(graph)
+        graph, _ = self.split_graphs(graph, self.ggns)
         if self.feature_norm:
             graph[('mesh', '0', 'mesh')].edge_attr = self._mesh_edge_normalizer(graph[('mesh', '0', 'mesh')].edge_attr, is_training)
             graph['mesh'].x = self._feature_normalizer(graph['mesh'].x, is_training)
@@ -131,7 +131,7 @@ class TrapezModel(AbstractSystemModel):
         keep_pc = False if freq == 0 else step % freq == 0
         index = 0 if keep_pc else 1
 
-        data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True, True)[index]
+        data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True, self.ggns)[index]
         graph = Batch.from_data_list([self.build_graph(data, is_training=False)]).to(device)
 
         if keep_pc and not self.recurrence:

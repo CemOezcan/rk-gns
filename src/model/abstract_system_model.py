@@ -20,26 +20,27 @@ class AbstractSystemModel(ABC, nn.Module):
 
     def __init__(self, params: ConfigDict) -> None:
         super(AbstractSystemModel, self).__init__()
-        self._params = params
+        self.ggns = params.get('task').get('ggns')
+        self._params = params.get('model')
         self.loss_fn = torch.nn.MSELoss()
 
         self._output_normalizer = Normalizer(name='output_normalizer')
         self._mesh_edge_normalizer = Normalizer(name='mesh_edge_normalizer')
         self._feature_normalizer = Normalizer(name='node_normalizer')
 
-        self.message_passing_steps = params.get('message_passing_steps')
-        self.message_passing_aggregator = params.get('aggregation')
+        self.message_passing_steps = self._params.get('message_passing_steps')
+        self.message_passing_aggregator = self._params.get('aggregation')
 
         self._edge_sets = [''.join(('mesh', '0', 'mesh'))]
         self._node_sets = ['mesh']
 
         self.euclidian_distance = True
-        self.hetero = params.get('heterogeneous')
-        self.input_mesh_noise = params.get('noise')
-        self.input_pcd_noise = params.get('pc_noise')
-        self.feature_norm = params.get('feature_norm')
-        self.layer_norm = params.get('layer_norm')
-        self.num_layers = params.get('layers')
+        self.hetero = self._params.get('heterogeneous')
+        self.input_mesh_noise = self._params.get('noise')
+        self.input_pcd_noise = self._params.get('pc_noise')
+        self.feature_norm = self._params.get('feature_norm')
+        self.layer_norm = self._params.get('layer_norm')
+        self.num_layers = self._params.get('layers')
 
 
 
@@ -288,14 +289,15 @@ class AbstractSystemModel(ABC, nn.Module):
         return out_data
 
     @staticmethod
-    def split_graphs(graph):
+    def split_graphs(graph, ggns=False):
         pc_mask = torch.where(graph['mesh'].node_type == NodeType.POINT)[0]
         shape_mask = torch.where(graph['mesh'].node_type == NodeType.SHAPE)[0]
         obst_mask = torch.where(graph['mesh'].node_type == NodeType.COLLIDER)[0]
         mesh_mask = torch.where(graph['mesh'].node_type == NodeType.MESH)[0]
 
         poisson_mask = torch.cat([shape_mask, obst_mask], dim=0)
-        mgn_mask = torch.cat([mesh_mask, pc_mask, obst_mask], dim=0)
+        mgn_list = [mesh_mask, pc_mask, obst_mask] if ggns else [mesh_mask, obst_mask]
+        mgn_mask = torch.cat(mgn_list, dim=0)
 
         pc = graph.subgraph({'mesh': poisson_mask}).clone()
         #pc['mesh'].x = torch.cat([pc['mesh'].pos, pc['mesh'].x], dim=1)

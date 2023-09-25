@@ -167,7 +167,7 @@ class AlternatingSimulator(AbstractSimulator):
         """
         self._network.train()
         self.global_model.eval()
-        data = self.fetch_data(train_dataloader, True, mode='poisson')
+        data = self.fetch_data(train_dataloader, True, mode=self.mode)
         total_loss = 0
 
         for i, batch in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
@@ -239,7 +239,7 @@ class AlternatingSimulator(AbstractSimulator):
 
         """
         trajectory_loss = list()
-        test_loader = self.fetch_data(ds_loader, is_training=False, mode='poisson')
+        test_loader = self.fetch_data(ds_loader, is_training=False, mode=self.mode)
         for i, batch in enumerate(tqdm(test_loader, desc='Validation', leave=True, position=0)):
             batch.to(device)
             instance_loss = self._network.validation_step(batch, i, self.global_model)
