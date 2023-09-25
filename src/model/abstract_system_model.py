@@ -117,6 +117,7 @@ class AbstractSystemModel(ABC, nn.Module):
         if is_training:
             data = self.add_noise(data, self.input_mesh_noise, NodeType.MESH)
         data = self.add_noise(data, self.input_pcd_noise, NodeType.POINT)
+        data = self.add_noise(data, self.input_pcd_noise, NodeType.SHAPE)
         data = self.transform_position_to_edges(data, self.euclidian_distance)
 
         edge_index = data.edge_index
