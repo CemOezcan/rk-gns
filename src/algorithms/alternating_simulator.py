@@ -45,6 +45,8 @@ class AlternatingSimulator(AbstractSimulator):
         super().__init__(config=config)
         self.global_model = None
         self.global_optimizer = None
+        if self.mode == 'mgn':
+            self.mode = 'poisson'
 
     def initialize(self, task_information: ConfigDict) -> None:
         if not self._initialized:
