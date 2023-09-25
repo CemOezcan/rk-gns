@@ -388,12 +388,12 @@ class Preprocessing:
                 (simplex[i], simplex[j]) for i in range(-1, len(simplex)) for j in range(i + 1, len(simplex)))
 
         coll_set = set(collision_edges[1].tolist())
-        short_dist_graph = torch_cluster.radius_graph(data.pos[shape_mask], r=0.4, max_num_neighbors=100).tolist()
+        short_dist_graph = torch_cluster.radius_graph(data.pos[shape_mask], r=0.35, max_num_neighbors=100).tolist()
         short_edges = [(x, y) for x, y in zip(short_dist_graph[0], short_dist_graph[1]) if
                        x in coll_set and y in coll_set]
         short_pc_edges = set(short_edges).intersection(set(pc_edges))
 
-        long_dist_graph = torch_cluster.radius_graph(data.pos[shape_mask], r=0.7, max_num_neighbors=100).tolist()
+        long_dist_graph = torch_cluster.radius_graph(data.pos[shape_mask], r=0.6, max_num_neighbors=100).tolist()
         long_edges = [(x, y) for x, y in zip(long_dist_graph[0], long_dist_graph[1]) if
                       x not in coll_set or y not in coll_set]
 

@@ -52,10 +52,10 @@ class AbstractSimulator(ABC):
         ggns = self._config.get('task').get('ggns')
         poisson = self._config.get('task').get('task').lower() == 'poisson'
 
-        if not ggns:
-            self.mode = 'mgn'
-        elif poisson:
+        if poisson:
             self.mode = 'poisson'
+        elif not ggns:
+            self.mode = 'mgn'
         else:
             self.mode = None
 
