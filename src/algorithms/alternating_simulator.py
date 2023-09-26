@@ -69,7 +69,10 @@ class AlternatingSimulator(AbstractSimulator):
 
         """
         for _ in range(150):
-            self.fit_poisson(train_dataloader)
+            if self.recurrence:
+                self.fit_lstm_poisson(train_dataloader)
+            else:
+                self.fit_poisson(train_dataloader)
 
     def fit_iteration(self, train_dataloader: List[Union[List[Data], Data]]) -> None:
         """
@@ -88,7 +91,10 @@ class AlternatingSimulator(AbstractSimulator):
 
         """
         #self.fit_poisson(train_dataloader)
-        return self.fit_gnn(train_dataloader)
+        if self.recurrence:
+            return self.fit_lstm(train_dataloader)
+        else:
+            return self.fit_gnn(train_dataloader)
 
     def fit_poisson(self, train_dataloader: List[Data]):
         self.global_model.train()
@@ -108,11 +114,9 @@ class AlternatingSimulator(AbstractSimulator):
             end_instance = time.time()
             wandb.log({**gradients, 'training/material_loss': loss.detach(), 'training/material_instance_time': end_instance - start_instance})
 
-    def fit_lstm(self, train_dataloader: List[List[Data]]):
-        # TODO: proper implementation
+    def fit_lstm_poisson(self, train_dataloader: List[Data]):
         self.global_model.train()
-        data = self.fetch_data(train_dataloader, True)
-        total_loss = 0
+        data = self.fetch_data(train_dataloader, True, mode='poisson', seq=True, seq_len=self._seq_len)
 
         start_instance = time.time()
         for i, sequence in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
@@ -120,12 +124,9 @@ class AlternatingSimulator(AbstractSimulator):
             pred_list = list()
 
             for j, graph in enumerate(sequence):
-                _, graph = self.split_graphs(graph)
-
                 graph.to(device)
                 if j != 0:
                     graph.h = h
-
                 pred_velocity, h = self.global_model(graph, True)
                 target_velocity = self.global_model.get_target(graph, True)
 
@@ -144,10 +145,37 @@ class AlternatingSimulator(AbstractSimulator):
             self.global_optimizer.zero_grad()
 
             end_instance = time.time()
-            wandb.log({**gradients, 'training/material_loss': loss.detach(), 'training/material_sequence_time': end_instance - start_instance})
+            wandb.log({**gradients, 'training/loss': loss.detach(), 'training/sequence_time': end_instance - start_instance})
             start_instance = time.time()
-            total_loss += loss.detach()
-            size = i
+
+    def fit_lstm(self, train_dataloader: List[List[Data]]):
+        self._network.train()
+        self.global_model.eval()
+        data = self.fetch_data(train_dataloader, True, mode='poisson', seq=True, seq_len=47)
+        total_loss = 0
+        size = 0
+
+        for i, sequence in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
+            for j, graph in enumerate(sequence):
+                start_instance = time.time()
+                graph.to(device)
+                if j != 0:
+                    graph.h = h
+
+                loss = self._network.training_step(graph, self.global_model)
+                loss.backward()
+                h = graph.h.detach()
+
+                gradients = self.log_gradients(self._network)
+
+                self._optimizer.step()
+                self._optimizer.zero_grad()
+
+                end_instance = time.time()
+                wandb.log({**gradients, 'training/loss': loss.detach(), 'training/instance_time': end_instance - start_instance})
+
+                total_loss += loss.detach()
+                size += 1
 
         return total_loss / size
 
@@ -397,7 +425,7 @@ class AlternatingSimulator(AbstractSimulator):
             f'{n_steps}-step error/material_last_k={freq}': torch.mean(torch.tensor(u_lasts), dim=0)
         }
 
-    def fetch_data(self, trajectory: List[Union[List[Data], Data]], is_training: bool, mode=None) -> DataLoader:
+    def fetch_data(self, trajectory: List[Union[List[Data], Data]], is_training: bool, mode=None, seq=False, seq_len=49) -> DataLoader:
         """
         Transform a collection of system states into batched graphs.
 
@@ -413,10 +441,23 @@ class AlternatingSimulator(AbstractSimulator):
             DataLoader
                 Collection of batched graphs.
         """
-        dataset = RegularDataset(trajectory, partial(self._network.build_graph, is_training=is_training), mode)
+        if seq:
+            trajectories = [list() for _ in range(len(trajectory) // self._time_steps)]
+            for i, graph in enumerate(trajectory):
+                index = i // self._time_steps
+                trajectories[index].append(graph)
 
-        batches = DataLoader(dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True, num_workers=8,
-                             prefetch_factor=2, worker_init_fn=self.seed_worker)
+            dataset = SequenceNoReturnDataset(trajectories, seq_len, partial(self._network.build_graph, is_training=True), mode)
+
+            batches = DataLoader(dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True, num_workers=8,
+                                 prefetch_factor=2, worker_init_fn=self.seed_worker)
+
+        else:
+
+            dataset = RegularDataset(trajectory, partial(self._network.build_graph, is_training=is_training), mode)
+
+            batches = DataLoader(dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True, num_workers=8,
+                                 prefetch_factor=2, worker_init_fn=self.seed_worker)
 
         return batches
 

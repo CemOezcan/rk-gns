@@ -49,6 +49,7 @@ class AbstractSimulator(ABC):
         self._trajectories = config.get('task').get('trajectories')
         self._time_steps = config.get('task').get('n_timesteps')
         self._seq_len = config.get('task').get('sequence')
+        self.recurrence = config.get('task').get('recurrence')
         ggns = self._config.get('task').get('ggns')
         poisson = self._config.get('task').get('task').lower() == 'poisson'
 
