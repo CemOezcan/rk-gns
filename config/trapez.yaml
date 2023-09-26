@@ -18,6 +18,7 @@ task:
   trajectories: 675
   n_timesteps: 50
   epochs: 200
+  pretraining: 150
 
   test:
     trajectories: 10 # Number of trajectories that are going to be used to compute the validation loss during evaluation

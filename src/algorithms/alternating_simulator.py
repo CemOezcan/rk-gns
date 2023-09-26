@@ -45,6 +45,7 @@ class AlternatingSimulator(AbstractSimulator):
         super().__init__(config=config)
         self.global_model = None
         self.global_optimizer = None
+        self.pretraining_epochs = config.get('task').get('pretraining')
         if self.mode == 'mgn':
             self.mode = 'poisson'
 
@@ -68,7 +69,7 @@ class AlternatingSimulator(AbstractSimulator):
         -------
 
         """
-        for _ in range(150):
+        for _ in range(self.pretraining_epochs):
             if self.recurrence:
                 self.fit_lstm_poisson(train_dataloader)
             else:
@@ -145,7 +146,7 @@ class AlternatingSimulator(AbstractSimulator):
             self.global_optimizer.zero_grad()
 
             end_instance = time.time()
-            wandb.log({**gradients, 'training/loss': loss.detach(), 'training/sequence_time': end_instance - start_instance})
+            wandb.log({**gradients, 'training/material_loss': loss.detach(), 'training/sequence_time': end_instance - start_instance})
             start_instance = time.time()
 
     def fit_lstm(self, train_dataloader: List[List[Data]]):

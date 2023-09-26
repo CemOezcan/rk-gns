@@ -133,14 +133,14 @@ class TrapezModel(AbstractSystemModel):
         data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True, self.ggns)[index]
         graph = Batch.from_data_list([self.build_graph(data, is_training=False)]).to(device)
 
-        if keep_pc and not self.recurrence:
+        if keep_pc or self.recurrence:
             output, hidden = poisson_model(graph, False)
             poisson, _, _ = poisson_model.update(graph, output)
         else:
-            poisson = cur_poisson
+            poisson = cur_poisson.to(device)
         graph.u = poisson
 
-        output, hidden = self(graph, False)
+        output, _ = self(graph, False)
 
         prediction, cur_position, cur_velocity = self.update(graph.to(device), output[mask])
         next_pos[mask] = prediction
