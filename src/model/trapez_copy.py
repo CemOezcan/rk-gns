@@ -22,9 +22,8 @@ class TrapezModel(AbstractSystemModel):
     Model for static flag simulation.
     """
 
-    def __init__(self, params: ConfigDict, recurrence: bool = False):
+    def __init__(self, params: ConfigDict):
         super(TrapezModel, self).__init__(params)
-        self.recurrence = recurrence
         self.learned_model = MeshGraphNets(
             output_size=2,
             latent_size=128,

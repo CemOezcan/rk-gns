@@ -21,6 +21,7 @@ class AbstractSystemModel(ABC, nn.Module):
     def __init__(self, params: ConfigDict) -> None:
         super(AbstractSystemModel, self).__init__()
         self.ggns = params.get('task').get('ggns')
+        self.recurrence = params.get('task').get('recurrence')
         self._params = params.get('model')
         self.loss_fn = torch.nn.MSELoss()
 
