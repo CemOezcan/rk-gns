@@ -4,7 +4,10 @@ from copy import deepcopy
 from random import randint
 from typing import Callable
 
+import torch
 from torch.utils.data import Dataset
+
+from src.util.types import NodeType
 
 
 class SequenceNoReturnDataset(Dataset):
@@ -66,8 +69,12 @@ class RegularDataset(Dataset):
             self.trajectory_list = [x[1] for x in trajectory_list]
         elif mode == 'poisson':
             self.trajectory_list = [x[0] for x in trajectory_list]
+        elif mode is None:
+            self.trajectory_list = list(zip(*trajectory_list))
+            self.trajectory_list = list(self.trajectory_list[0]) + list(self.trajectory_list[1])
         else:
             self.trajectory_list = list(zip(*trajectory_list))
+            self.trajectory_list[1] = [self.split(x) for x in self.trajectory_list[0]]
             self.trajectory_list = list(self.trajectory_list[0]) + list(self.trajectory_list[1])
 
         self.preprocessing = preprocessing
@@ -89,4 +96,16 @@ class RegularDataset(Dataset):
         copy = deepcopy(data)
 
         return self.preprocessing(copy)
+
+    @staticmethod
+    def split(graph):
+        shape_mask = torch.where(graph.node_type == NodeType.SHAPE)[0].cpu()
+        obst_mask = torch.where(graph.node_type == NodeType.COLLIDER)[0].cpu()
+        mesh_mask = torch.where(graph.node_type == NodeType.MESH)[0].cpu()
+
+        poisson_mask = torch.cat([mesh_mask, shape_mask, obst_mask], dim=0).cpu()
+
+        pc = graph.subgraph(poisson_mask).clone().cpu()
+
+        return pc
 

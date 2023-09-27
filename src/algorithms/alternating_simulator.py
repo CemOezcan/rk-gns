@@ -198,7 +198,7 @@ class AlternatingSimulator(AbstractSimulator):
         """
         self._network.train()
         self.global_model.eval()
-        data = self.fetch_data(train_dataloader, True, mode=self.mode)
+        data = self.fetch_data(train_dataloader, True, mode='supervised')
         total_loss = 0
 
         for i, batch in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
@@ -270,7 +270,7 @@ class AlternatingSimulator(AbstractSimulator):
 
         """
         trajectory_loss = list()
-        test_loader = self.fetch_data(ds_loader, is_training=False, mode=self.mode)
+        test_loader = self.fetch_data(ds_loader, is_training=False, mode='supervised')
         for i, batch in enumerate(tqdm(test_loader, desc='Validation', leave=True, position=0)):
             batch.to(device)
             instance_loss = self._network.validation_step(batch, i, self.global_model)
@@ -461,18 +461,3 @@ class AlternatingSimulator(AbstractSimulator):
                                  prefetch_factor=2, worker_init_fn=self.seed_worker)
 
         return batches
-
-
-    def split_graphs(self, graph):
-        pc_mask = torch.where(graph['mesh'].node_type == NodeType.POINT)[0]
-        obst_mask = torch.where(graph['mesh'].node_type == NodeType.COLLIDER)[0]
-        mesh_mask = torch.where(graph['mesh'].node_type == NodeType.MESH)[0]
-
-        poisson_mask = torch.cat([pc_mask, obst_mask], dim=0)
-        mgn_mask = torch.cat([mesh_mask, obst_mask], dim=0)
-
-        pc = copy.deepcopy(graph.subgraph({'mesh': poisson_mask}))
-        #pc['mesh'] = torch.cat([pc['mesh'].pos, pc['mesh'].x], dim=1)
-        mesh = copy.deepcopy(graph.subgraph({'mesh': mgn_mask}))
-
-        return mesh, pc

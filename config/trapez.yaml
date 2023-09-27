@@ -9,9 +9,9 @@ directory: deformable_plate
 task:
   task: trapez # trapez/poisson
   model: supervised # mgn/supervised/self-supervised
-  ggns: False # T/F
-  recurrence: True # None/name now T/F
-  sequence: 5
+  ggns: True # T/F
+  recurrence: False # None/name now T/F
+  sequence: 1
   poisson_ratio: False # Link to use global with model
   learning_rate: 5.0e-4
   batch_size: 32
