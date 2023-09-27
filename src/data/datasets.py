@@ -26,7 +26,7 @@ class SequenceNoReturnDataset(Dataset):
         # create index list of tuples (i, t_i), where i indicates the index for the trajectory and t_i for the starting time step of the sequence
         self.indices = []
         for trajectory in range(len(trajectory_list)):
-            difference = max(len(trajectory_list[trajectory]) - self.sequence_length, 1)
+            difference = len(trajectory_list[trajectory]) - self.sequence_length + 1
             self.indices.extend([(i, t_i) for i, t_i in itertools.product([trajectory], range(difference))])
 
     def __len__(self):

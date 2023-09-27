@@ -152,7 +152,7 @@ class AlternatingSimulator(AbstractSimulator):
     def fit_lstm(self, train_dataloader: List[List[Data]]):
         self._network.train()
         self.global_model.eval()
-        data = self.fetch_data(train_dataloader, True, mode='poisson', seq=True, seq_len=47)
+        data = self.fetch_data(train_dataloader, True, mode='poisson', seq=True, seq_len=49)
         total_loss = 0
         size = 0
 
