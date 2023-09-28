@@ -47,7 +47,8 @@ class TrapezModel(AbstractSystemModel):
     def training_step(self, graph: Batch, poisson_model):
         graph.to(device)
 
-        output, _ = poisson_model(graph, False)
+        with torch.no_grad():
+            output, _ = poisson_model(graph, False)
         poisson, _, _ = poisson_model.update(graph, output)
         graph.u = poisson
 
