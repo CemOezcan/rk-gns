@@ -33,7 +33,7 @@ class TrapezModel(AbstractSystemModel):
             edge_sets=self._edge_sets,
             node_sets=self._node_sets,
             dec=self._node_sets[0],
-            use_global=params.get('use_global'), recurrence=self.recurrence
+            use_global=self.use_global, recurrence=self.recurrence
         ).to(device)
 
     def forward(self, graph: Batch, is_training: bool) -> Tuple[Tensor, Tensor]:

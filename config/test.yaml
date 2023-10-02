@@ -43,4 +43,3 @@ model:
   aggregation: mean
   message_passing_steps: 5
   heterogeneous: False
-  use_global: True
