@@ -14,7 +14,7 @@ def get_simulator(config: ConfigDict) -> AbstractSimulator:
     task = get_from_nested_dict(config, list_of_keys=['task', 'task'], raise_error=True)
 
     # TODO: self-supervised
-    if model == 'mgn':
+    if model == 'mgn' or model == 'self-supervised':
         return MeshSimulator(config=config)
     elif model == 'lstm':
         return LSTMSimulator(config=config)

@@ -16,6 +16,8 @@ def get_model(config: ConfigDict, poisson=False) -> AbstractSystemModel:
         return PoissonModel(config)
     elif model == 'supervised':
         return trapez_copy.TrapezModel(config)
+    elif model == 'self-supervised':
+        return trapez.TrapezModel(config)
 
     if 'trapez' == task:
         return trapez.TrapezModel(config)

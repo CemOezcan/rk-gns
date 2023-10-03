@@ -12,6 +12,7 @@ from src.modules.encoder import Encoder
 from src.modules.graphnet import GraphNet
 from src.modules.processor import Processor
 from src.modules.decoder import Decoder
+from src.modules.ss_graphnet import SSGraphNet
 from src.util.util import device
 
 
@@ -20,14 +21,14 @@ class MeshGraphNets(nn.Module):
 
     def __init__(self, output_size: int, latent_size: int, num_layers: int, message_passing_aggregator: str,
                  message_passing_steps: int, node_sets: List[str], edge_sets: List[str], dec: str,
-                 use_global: bool, recurrence: bool, layer_norm: bool = False):
+                 use_global: bool, recurrence: bool, layer_norm: bool = False, self_sup: bool = False):
         super().__init__()
         self._latent_size = latent_size
         self._output_size = output_size
         self._num_layers = num_layers
         self._message_passing_steps = message_passing_steps
         self._message_passing_aggregator = message_passing_aggregator
-        graphnet_block = GraphNet
+        graphnet_block = SSGraphNet if self_sup else GraphNet
 
         self.encoder = Encoder(make_mlp=nn.LazyLinear,
                                latent_size=self._latent_size,

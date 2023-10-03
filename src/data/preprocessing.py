@@ -47,7 +47,7 @@ class Preprocessing:
         self.raw = raw
         self.trajectories = config.get('task').get('trajectories')
         self.trajectories = math.inf if isinstance(self.trajectories, str) else self.trajectories
-        self.triangulate = config.get('task').get('model') == 'supervised' or config.get('task').get('task') == 'poisson'
+        self.triangulate = config.get('task').get('model').lower() == 'supervised' or config.get('task').get('model').lower() == 'self-supervised' or config.get('task').get('task') == 'poisson'
         self.ggns = config.get('task').get('ggns') and not config.get('task').get('task') == 'poisson'
 
         # dataset parameters

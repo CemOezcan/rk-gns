@@ -52,10 +52,11 @@ class AbstractSimulator(ABC):
         self.recurrence = config.get('task').get('recurrence')
         ggns = self._config.get('task').get('ggns')
         poisson = self._config.get('task').get('task').lower() == 'poisson'
+        ss = self._config.get('task').get('model').lower() == 'self-supervised'
 
         if poisson:
             self.mode = 'poisson'
-        elif not ggns:
+        elif not ggns and not ss:
             self.mode = 'mgn'
         else:
             self.mode = None
