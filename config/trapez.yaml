@@ -9,7 +9,7 @@ directory: deformable_plate
 task:
   task: trapez # trapez/poisson
   model: supervised # mgn/supervised/self-supervised
-  ggns: True # T/F
+  ggns: False # T/F
   recurrence: False # None/name now T/F
   sequence: 1
   poisson_ratio: False # Link to use global with model
@@ -18,7 +18,7 @@ task:
   trajectories: 675
   n_timesteps: 50
   epochs: 200
-  pretraining: 150
+  pretraining: 200
 
   test:
     trajectories: 10 # Number of trajectories that are going to be used to compute the validation loss during evaluation
