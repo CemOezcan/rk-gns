@@ -56,7 +56,9 @@ class AbstractSimulator(ABC):
 
         if poisson:
             self.mode = 'poisson'
-        elif not ggns and not ss:
+        elif ss:
+            self.mode = 'self-supervised'
+        elif not ggns:
             self.mode = 'mgn'
         else:
             self.mode = None

@@ -37,6 +37,8 @@ class TrapezModel(AbstractSystemModel):
         ).to(device)
 
     def forward(self, graph: Batch, is_training: bool) -> Tuple[Tensor, Tensor]:
+        if self.self_sup:
+            graph = self.split(graph, self.ggns)
         if self.feature_norm:
             graph[('mesh', '0', 'mesh')].edge_attr = self._mesh_edge_normalizer(graph[('mesh', '0', 'mesh')].edge_attr, is_training)
             graph['mesh'].x = self._feature_normalizer(graph['mesh'].x, is_training)
@@ -107,8 +109,6 @@ class TrapezModel(AbstractSystemModel):
         data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), self.self_sup, True)[index]
         graph = Batch.from_data_list([self.build_graph(data, is_training=False)]).to(device)
 
-        test.visualize_graph(graph)
-
         output, hidden = self(graph, False)
 
         prediction, cur_position, cur_velocity = self.update(graph.to(device), output[mask])
@@ -129,3 +129,18 @@ class TrapezModel(AbstractSystemModel):
             last_losses.append(mse_loss.cpu()[-1])
 
         return torch.mean(torch.stack(mse_losses)), torch.mean(torch.stack(last_losses))
+
+    @staticmethod
+    def split(graph, ggns=False):
+        pc_mask = torch.where(graph['mesh'].node_type == NodeType.POINT)[0]
+        shape_mask = torch.where(graph['mesh'].node_type == NodeType.SHAPE)[0]
+        obst_mask = torch.where(graph['mesh'].node_type == NodeType.COLLIDER)[0]
+        mesh_mask = torch.where(graph['mesh'].node_type == NodeType.MESH)[0]
+
+        mgn_list = [mesh_mask, pc_mask, obst_mask, shape_mask] if ggns else [mesh_mask, obst_mask, shape_mask]
+        mgn_mask = torch.cat(mgn_list, dim=0)
+
+        # pc['mesh'].x = torch.cat([pc['mesh'].pos, pc['mesh'].x], dim=1)
+        mesh = graph.subgraph({'mesh': mgn_mask}).clone()
+
+        return mesh
