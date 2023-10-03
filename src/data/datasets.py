@@ -65,6 +65,7 @@ class RegularDataset(Dataset):
             trajectory_list: List of lists of (PyG) data objects
             sequence_length: Length of the drawn sequence from a trajectory
         """
+        # TODO: Selfsup
         if mode == 'mgn':
             self.trajectory_list = [x[1] for x in trajectory_list]
         elif mode == 'poisson':
