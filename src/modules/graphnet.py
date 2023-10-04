@@ -5,7 +5,6 @@ from torch import nn, Tensor
 from torch_geometric.data import Batch
 from torch_geometric.utils import scatter
 
-from src.util.types import NodeType
 
 class GraphNet(nn.Module):
     """Multi-Edge Interaction Network with residual connections."""
@@ -16,7 +15,7 @@ class GraphNet(nn.Module):
         self.poisson = poisson
         self.node_models = nn.ModuleDict({name: model_fn(output_size) for name in node_sets})
         self.edge_models = nn.ModuleDict({name: model_fn(output_size) for name in edge_sets})
-        self.global_model = model_fn(output_size) if use_global else None
+        self.global_model = model_fn(output_size) if use_global and self.poisson else None
 
         self._use_global = use_global
         self.message_passing_aggregator = message_passing_aggregator
@@ -67,33 +66,25 @@ class GraphNet(nn.Module):
     def _update_global(self, graph: Batch):
         edge_feature_list = []
         node_feature_list = []
-        pc = self.split_graphs(graph)
-        for edge_type, edge_store in zip(pc.edge_types, pc.edge_stores):
+        for edge_type, edge_store in zip(graph.edge_types, graph.edge_stores):
             edge_attr = edge_store.get('edge_attr')
             source_indices, _ = edge_store.get('edge_index')
             source_node_type, _, _ = edge_type
-            indices = pc[source_node_type].batch
-            edge_feature_list.append(self.aggregation(edge_attr, indices[source_indices], pc.u.shape[0]))
+            indices = graph[source_node_type].batch
+            edge_feature_list.append(self.aggregation(edge_attr, indices[source_indices], graph.u.shape[0]))
 
-        for node_type, node_store in zip(pc.node_types, pc.node_stores):
+        for node_type, node_store in zip(graph.node_types, graph.node_stores):
             node_attr = node_store.get('x')
-            node_feature_list.append(self.aggregation(node_attr, pc[node_type].batch, pc.u.shape[0]))
+            node_feature_list.append(self.aggregation(node_attr, graph[node_type].batch, graph.u.shape[0]))
 
         aggregated_edge_features = torch.cat(edge_feature_list, 1)
         aggregated_node_features = torch.cat(node_feature_list, 1)
 
-        aggregated_features = torch.cat([aggregated_node_features, aggregated_edge_features, pc.u], 1)
-        graph.u = self.global_model(aggregated_features)
-
-    @staticmethod
-    def split_graphs(graph):
-        pc_mask = torch.where(graph['mesh'].node_type == NodeType.POINT)[0]
-        obst_mask = torch.where(graph['mesh'].node_type == NodeType.COLLIDER)[0]
-
-        poisson_mask = torch.cat([pc_mask, obst_mask], dim=0)
-        pc = graph.subgraph({'mesh': poisson_mask})
-
-        return pc
+        aggregated_features = torch.cat([aggregated_node_features, aggregated_edge_features, graph.u], 1)
+        if self.poisson:
+            graph.u = self.global_model(aggregated_features)
+        else:
+            graph.u = torch.add(graph.u, self.global_model(aggregated_features))
 
     def aggregation(self, edge_features, indices, num_nodes: int) -> Tensor:
         if self.message_passing_aggregator == 'pna':
@@ -113,7 +104,7 @@ class GraphNet(nn.Module):
 
         self._update_edges(graph)
         self._update_nodes(graph)
-        if self._use_global:
+        if self._use_global and self.poisson:
             self._update_global(graph)
 
         return graph
