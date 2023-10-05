@@ -21,7 +21,7 @@ class Decoder(nn.Module):
         self.model = nn.Sequential(nn.LazyLinear(latent_size), nn.LeakyReLU(), nn.Linear(latent_size, output_size))
 
         if self.recurrence:
-            self.lstm = nn.GRUCell(self.latent_size, self.latent_size)
+            self.rnn = nn.GRUCell(self.latent_size, self.latent_size)
         elif self.self_sup:
             self.gl_model = nn.Sequential(nn.LazyLinear(latent_size), nn.LeakyReLU(), nn.Linear(latent_size, latent_size))
 
@@ -35,9 +35,9 @@ class Decoder(nn.Module):
     def transform_global(self, graph):
         if self.recurrence:
             if graph.h.shape[-1] == self.latent_size:
-                graph.u = self.lstm(graph.u, graph.h)
+                graph.u = self.rnn(graph.u, graph.h)
             else:
-                graph.u = self.lstm(graph.u)
+                graph.u = self.rnn(graph.u)
         elif self.self_sup:
             graph.u = self.gl_model(graph.u)
 
