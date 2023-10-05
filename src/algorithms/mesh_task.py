@@ -42,7 +42,7 @@ class MeshTask(AbstractTask):
         self._config = config
         self._epochs = config.get('task').get('epochs')
         self._trajectories = config.get('task').get('trajectories')
-        self._dataset_name = config.get('task').get('dataset')
+        self._dataset_name = config.get('directory')
         _, self._out_dir = get_directories(self._dataset_name)
 
         self._validation_interval = get_from_nested_dict(config, ['task', 'validation', 'interval'])
@@ -64,21 +64,20 @@ class MeshTask(AbstractTask):
 
         self._mp = get_from_nested_dict(config, ['model', 'message_passing_steps'])
         aggr = get_from_nested_dict(config, ['model', 'aggregation'])
-        self.model_type = get_from_nested_dict(config, ['task', 'model'])
-        lr = get_from_nested_dict(config, ['model', 'learning_rate'])
-        use_global = get_from_nested_dict(config, ['model', 'use_global'])
+        self.task_type = get_from_nested_dict(config, ['task', 'task'])
+        lr = get_from_nested_dict(config, ['task', 'learning_rate'])
         feature_norm = get_from_nested_dict(config, ['model', 'feature_norm'])
         layer_norm = get_from_nested_dict(config, ['model', 'layer_norm'])
         layers = get_from_nested_dict(config, ['model', 'layers'])
-        poisson = get_from_nested_dict(config, ['model', 'poisson_ratio'])
-        mgn = get_from_nested_dict(config, ['model', 'mgn'])
-        freq = get_from_nested_dict(config, ['model', 'pc_frequency'])
-        self.task_type = get_from_nested_dict(config, ['task', 'task'])
+        poisson = get_from_nested_dict(config, ['task', 'poisson_ratio'])
+        ggns = get_from_nested_dict(config, ['task', 'ggns'])
+        self.model_type = get_from_nested_dict(config, ['task', 'model'])
         seq = get_from_nested_dict(config, ['task', 'sequence'])
         batch_size = config.get('task').get('batch_size')
-        self._task_name = f'm:{self.model_type}_l:{layers}_fn:{feature_norm}_ln:{layer_norm}_b:{batch_size}_t:{self.task_type}_a:{aggr}_lr:{lr}_g:{use_global}_seq:{seq}_mgn:{mgn}_freq:{freq}_poisson:{poisson}_mp:{self._mp}_epoch:'
+        reduced = config.get('task').get('reduced')
+        self._task_name = f'm:{self.task_type}_l:{layers}_fn:{feature_norm}_ln:{layer_norm}_b:{batch_size}_t:{self.model_type}_a:{aggr}_lr:{lr}_seq:{seq}_ggns:{ggns}_red:{reduced}_poisson:{poisson}_mp:{self._mp}_epoch:'
 
-        self.frequency_list = [1] if mgn else [1, 2, 5]
+        self.frequency_list = [0] if self.task_type != 'poisson' and not ggns and self.model_type == 'mgn' else [1, 5]
 
         retrain = config.get('retrain')
         epochs = list() if retrain else [
@@ -160,7 +159,7 @@ class MeshTask(AbstractTask):
         self._algorithm.log_epoch(data)
 
     def select_plotting(self, task_name: str, freq_list: list):
-        if self.model_type == 'poisson' and self.task_type != 'alternating':
+        if self.task_type == 'poisson' and self.model_type != 'supervised':
             return {}
 
         out = dict.fromkeys(freq_list)

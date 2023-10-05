@@ -22,7 +22,7 @@ def get_directories(dataset_name):
 
 
 def get_data(config: ConfigDict, split='train', raw=False):
-    dataset_name = get_from_nested_dict(config, list_of_keys=['task', 'dataset'], raise_error=True)
+    dataset_name = get_from_nested_dict(config, list_of_keys=['directory'], raise_error=True)
     in_dir, _ = get_directories(dataset_name)
 
     if dataset_name == 'trapez' or dataset_name == 'deformable_plate':

@@ -10,16 +10,18 @@ from src.util.util import get_from_nested_dict
 
 def get_model(config: ConfigDict, poisson=False) -> AbstractSystemModel:
     task = config.get('task').get('task').lower()
-    model_name = config.get('task').get('model').lower()
+    model = config.get('task').get('model').lower()
     # TODO: Alternating
     if poisson:
-        return PoissonModel(config.get('model'), recurrence=task == 'lstm')
-    elif task == 'alternating':
-        return trapez_copy.TrapezModel(config.get('model'), recurrence=task == 'lstm')
+        return PoissonModel(config)
+    elif model == 'supervised':
+        return trapez_copy.TrapezModel(config)
+    elif model == 'self-supervised':
+        return trapez.TrapezModel(config)
 
-    if 'trapez' == model_name:
-        return trapez.TrapezModel(config.get('model'), recurrence=task == 'lstm')
-    elif 'poisson' == model_name:
-        return PoissonModel(config.get('model'), recurrence=task == 'lstm')
+    if 'trapez' == task:
+        return trapez.TrapezModel(config)
+    elif 'poisson' == task:
+        return PoissonModel(config)
     else:
         raise NotImplementedError('Implement your algorithms here!')

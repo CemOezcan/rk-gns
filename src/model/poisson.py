@@ -22,10 +22,8 @@ class PoissonModel(AbstractSystemModel):
     Model for static flag simulation.
     """
 
-    def __init__(self, params: ConfigDict, recurrence: bool = False):
+    def __init__(self, params: ConfigDict):
         super(PoissonModel, self).__init__(params)
-        self.loss_fn = torch.nn.MSELoss()
-        self.recurrence = recurrence
         self.learned_model = MeshGraphNets(
             output_size=1,
             latent_size=128,
@@ -35,7 +33,7 @@ class PoissonModel(AbstractSystemModel):
             edge_sets=self._edge_sets,
             node_sets=self._node_sets,
             dec=self._node_sets[0],
-            use_global=True, recurrence=self.recurrence, layer_norm=self.layer_norm
+            use_global=True, recurrence=self.rnn_type, layer_norm=self.layer_norm
         ).to(device)
 
     def forward(self, graph: Batch, is_training: bool) -> Tuple[Tensor, Tensor]:
@@ -114,13 +112,13 @@ class PoissonModel(AbstractSystemModel):
     def _step_fn(self, hidden, cur_pos, ground_truth, step, freq):
         input = {**ground_truth, 'h': hidden}
 
-        keep_pc = False if self.mgn else step % freq == 0
+        keep_pc = step % freq == 0
         index = 0 if keep_pc else 1
 
         if not keep_pc and not self.recurrence:
             prediction = cur_pos
         else:
-            data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True)[index]
+            data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True, self.reduced)[index]
             graph = Batch.from_data_list([self.build_graph(data, is_training=False)]).to(device)
 
             output, hidden = self(graph, False)

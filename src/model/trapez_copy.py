@@ -22,11 +22,10 @@ class TrapezModel(AbstractSystemModel):
     Model for static flag simulation.
     """
 
-    def __init__(self, params: ConfigDict, recurrence: bool = False):
+    def __init__(self, params: ConfigDict):
         super(TrapezModel, self).__init__(params)
-        self.recurrence = recurrence
         self.learned_model = MeshGraphNets(
-            output_size=params.get('size'),
+            output_size=2,
             latent_size=128,
             num_layers=self.num_layers,
             message_passing_steps=self.message_passing_steps,
@@ -34,11 +33,11 @@ class TrapezModel(AbstractSystemModel):
             edge_sets=self._edge_sets,
             node_sets=self._node_sets,
             dec=self._node_sets[0],
-            use_global=True, recurrence=self.recurrence
+            use_global=True, recurrence=False
         ).to(device)
 
     def forward(self, graph: Batch, is_training: bool) -> Tuple[Tensor, Tensor]:
-        graph, _ = self.split_graphs(graph)
+        graph, _ = self.split_graphs(graph, self.ggns)
         if self.feature_norm:
             graph[('mesh', '0', 'mesh')].edge_attr = self._mesh_edge_normalizer(graph[('mesh', '0', 'mesh')].edge_attr, is_training)
             graph['mesh'].x = self._feature_normalizer(graph['mesh'].x, is_training)
@@ -48,8 +47,9 @@ class TrapezModel(AbstractSystemModel):
     def training_step(self, graph: Batch, poisson_model):
         graph.to(device)
 
-        output, _ = poisson_model(graph, False)
-        poisson, _, _ = poisson_model.update(graph, output)
+        with torch.no_grad():
+            output, _ = poisson_model(graph, False)
+            poisson, _, _ = poisson_model.update(graph, output)
         graph.u = poisson
 
         prediction, _ = self(graph, True)
@@ -128,20 +128,20 @@ class TrapezModel(AbstractSystemModel):
 
         input = {**ground_truth, 'pos': cur_pos, 'h': hidden}
 
-        keep_pc = step % freq == 0
+        keep_pc = False if freq == 0 else step % freq == 0
         index = 0 if keep_pc else 1
 
-        data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True)[index]
+        data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True, self.reduced)[index]
         graph = Batch.from_data_list([self.build_graph(data, is_training=False)]).to(device)
 
-        if keep_pc and not self.recurrence:
+        if keep_pc or self.recurrence:
             output, hidden = poisson_model(graph, False)
             poisson, _, _ = poisson_model.update(graph, output)
         else:
-            poisson = cur_poisson
+            poisson = cur_poisson.to(device)
         graph.u = poisson
 
-        output, hidden = self(graph, False)
+        output, _ = self(graph, False)
 
         prediction, cur_position, cur_velocity = self.update(graph.to(device), output[mask])
         next_pos[mask] = prediction

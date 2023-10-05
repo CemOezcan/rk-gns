@@ -22,12 +22,10 @@ class TrapezModel(AbstractSystemModel):
     Model for static flag simulation.
     """
 
-    def __init__(self, params: ConfigDict, recurrence: bool = False):
+    def __init__(self, params: ConfigDict):
         super(TrapezModel, self).__init__(params)
-
-        self.recurrence = recurrence
         self.learned_model = MeshGraphNets(
-            output_size=params.get('size'),
+            output_size=2,
             latent_size=128,
             num_layers=self.num_layers,
             message_passing_steps=self.message_passing_steps,
@@ -35,10 +33,12 @@ class TrapezModel(AbstractSystemModel):
             edge_sets=self._edge_sets,
             node_sets=self._node_sets,
             dec=self._node_sets[0],
-            use_global=params.get('use_global'), recurrence=self.recurrence
+            use_global=self.use_global, recurrence=self.rnn_type, self_sup=self.self_sup
         ).to(device)
 
     def forward(self, graph: Batch, is_training: bool) -> Tuple[Tensor, Tensor]:
+        if self.self_sup:
+            graph = self.split(graph, self.ggns)
         if self.feature_norm:
             graph[('mesh', '0', 'mesh')].edge_attr = self._mesh_edge_normalizer(graph[('mesh', '0', 'mesh')].edge_attr, is_training)
             graph['mesh'].x = self._feature_normalizer(graph['mesh'].x, is_training)
@@ -103,10 +103,10 @@ class TrapezModel(AbstractSystemModel):
 
         input = {**ground_truth, 'pos': cur_pos, 'h': hidden}
 
-        keep_pc = False if self.mgn else step % freq == 0
+        keep_pc = False if freq == 0 else step % freq == 0
         index = 0 if keep_pc else 1
 
-        data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), False)[index]
+        data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), self.self_sup, self.reduced)[index]
         graph = Batch.from_data_list([self.build_graph(data, is_training=False)]).to(device)
 
         output, hidden = self(graph, False)
@@ -129,3 +129,18 @@ class TrapezModel(AbstractSystemModel):
             last_losses.append(mse_loss.cpu()[-1])
 
         return torch.mean(torch.stack(mse_losses)), torch.mean(torch.stack(last_losses))
+
+    @staticmethod
+    def split(graph, ggns=False):
+        pc_mask = torch.where(graph['mesh'].node_type == NodeType.POINT)[0]
+        shape_mask = torch.where(graph['mesh'].node_type == NodeType.SHAPE)[0]
+        obst_mask = torch.where(graph['mesh'].node_type == NodeType.COLLIDER)[0]
+        mesh_mask = torch.where(graph['mesh'].node_type == NodeType.MESH)[0]
+
+        mgn_list = [mesh_mask, pc_mask, obst_mask, shape_mask] if ggns else [mesh_mask, obst_mask, shape_mask]
+        mgn_mask = torch.cat(mgn_list, dim=0)
+
+        # pc['mesh'].x = torch.cat([pc['mesh'].pos, pc['mesh'].x], dim=1)
+        mesh = graph.subgraph({'mesh': mgn_mask}).clone()
+
+        return mesh
