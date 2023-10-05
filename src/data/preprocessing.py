@@ -48,7 +48,8 @@ class Preprocessing:
         self.trajectories = config.get('task').get('trajectories')
         self.trajectories = math.inf if isinstance(self.trajectories, str) else self.trajectories
         self.triangulate = config.get('task').get('model').lower() == 'supervised' or config.get('task').get('model').lower() == 'self-supervised' or config.get('task').get('task') == 'poisson'
-        self.ggns = config.get('task').get('ggns') and not config.get('task').get('task') == 'poisson'
+        #self.ggns = config.get('task').get('ggns') and not config.get('task').get('task') == 'poisson'
+        self.reduced = config.get('task').get('reduced')
 
         # dataset parameters
         self.input_dataset = 'deformable_plate'
@@ -80,7 +81,7 @@ class Preprocessing:
                 data = self.create_graph(data_timestep)
 
                 if not self.raw:
-                    data = Preprocessing.postprocessing(Data.from_dict(data), self.triangulate, self.ggns)
+                    data = Preprocessing.postprocessing(Data.from_dict(data), self.triangulate, self.reduced)
 
                 data_list.append(data)
 
@@ -322,7 +323,7 @@ class Preprocessing:
         return data.edge_attr
 
     @staticmethod
-    def postprocessing(data: Data, triangulate, ggns) -> Tuple[Data, Data]:
+    def postprocessing(data: Data, triangulate, reduced) -> Tuple[Data, Data]:
         """
         Task specific expansion of the given input graph. Adds different edge types based on neighborhood graphs.
         Convert the resulting graph into a Data object.
@@ -371,9 +372,7 @@ class Preprocessing:
 
         grounding_edges_1 = torch_cluster.radius(data.pos[point_mask], data.pos[mask], r=0.08, max_num_neighbors=100)
         Preprocessing.add_edge_set(data, grounding_edges_1, (0, point_index), 7, False)
-        # TODO: Integrate GGNS into Poisson
-        #pc_edges = torch_cluster.radius_graph(data.pos[point_mask], r=0.1, max_num_neighbors=100)
-        #Preprocessing.add_edge_set(data, pc_edges, (point_index, point_index), 8, False)
+
         num = 8
 
         # SHAPE
@@ -405,6 +404,24 @@ class Preprocessing:
             Preprocessing.add_edge_set(data, pc_edges, (shape_index, shape_index), num + 1, False)
 
             num += 2
+
+        # if not reduced:
+        #     grounding_edges_1 = torch_cluster.radius(data.pos[point_mask], data.pos[shape_mask], r=0.1,
+        #                                              max_num_neighbors=100)
+        #     Preprocessing.add_edge_set(data, grounding_edges_1, (shape_index, point_index), num, False)
+        #
+        #     grounding_edges_1 = torch_cluster.radius(data.pos[shape_mask], data.pos[point_mask], r=0.1,
+        #                                              max_num_neighbors=100)
+        #     Preprocessing.add_edge_set(data, grounding_edges_1, (point_index, shape_index), num + 1, False)
+        #     num += 2
+
+        if not reduced:
+            pc_edges = torch_cluster.radius_graph(data.pos[point_mask], r=0.1, max_num_neighbors=100)
+            Preprocessing.add_edge_set(data, pc_edges, (point_index, point_index), num, False)
+            num += 1
+
+        transform = T.Compose([T.remove_isolated_nodes.RemoveIsolatedNodes()])
+        data = transform(data)
 
         values = [0] * num
         for key in data.edge_type:
