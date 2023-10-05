@@ -22,6 +22,9 @@ class Decoder(nn.Module):
 
         if self.recurrence:
             self.rnn = nn.GRUCell(self.latent_size, self.latent_size)
+        elif self.self_sup:
+            # TODO: necessary?
+            self.gl_model = nn.Sequential(nn.LazyLinear(latent_size), nn.LeakyReLU(), nn.Linear(latent_size, latent_size))
 
     def forward(self, graph: Batch) -> Tuple[Tensor, Union[None, Tensor]]:
         self.transform_global(graph)
@@ -36,6 +39,9 @@ class Decoder(nn.Module):
                 graph.u = self.rnn(graph.u, graph.h)
             else:
                 graph.u = self.rnn(graph.u)
+        elif self.self_sup:
+            # TODO: necessary?
+            graph.u = self.gl_model(graph.u)
 
     def transform_nodes(self, graph):
         if self.use_u:
