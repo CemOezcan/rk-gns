@@ -36,7 +36,7 @@ class LSTMSimulator(AbstractSimulator):
         """
         super().__init__(config=config)
 
-    def fit_iteration(self, train_dataloader: List[List[Data]]) -> None:
+    def fit_iteration(self, train_dataloader: List[List[Data]]) -> float:
         """
         Perform a training epoch, followed by a validation iteration to assess the model performance.
         Document relevant metrics with wandb.

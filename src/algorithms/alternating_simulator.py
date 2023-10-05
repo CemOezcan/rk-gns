@@ -75,7 +75,7 @@ class AlternatingSimulator(AbstractSimulator):
             else:
                 self.fit_poisson(train_dataloader)
 
-    def fit_iteration(self, train_dataloader: List[Union[List[Data], Data]]) -> None:
+    def fit_iteration(self, train_dataloader: List[Union[List[Data], Data]]) -> float:
         """
         Perform a training epoch, followed by a validation iteration to assess the model performance.
         Document relevant metrics with wandb.
@@ -181,7 +181,7 @@ class AlternatingSimulator(AbstractSimulator):
 
         return total_loss / size
 
-    def fit_gnn(self, train_dataloader: List[Data]) -> None:
+    def fit_gnn(self, train_dataloader: List[Data]) -> float:
         """
         Perform a training epoch, followed by a validation iteration to assess the model performance.
         Document relevant metrics with wandb.
