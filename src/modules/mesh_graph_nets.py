@@ -1,7 +1,7 @@
 import functools
 
 from collections import OrderedDict
-from typing import List, Type, Tuple
+from typing import List, Type, Tuple, Union
 
 import numpy as np
 import torch
@@ -21,7 +21,7 @@ class MeshGraphNets(nn.Module):
 
     def __init__(self, output_size: int, latent_size: int, num_layers: int, message_passing_aggregator: str,
                  message_passing_steps: int, node_sets: List[str], edge_sets: List[str], dec: str,
-                 use_global: bool, recurrence: bool, layer_norm: bool = False, self_sup: bool = False):
+                 use_global: bool, recurrence: Union[bool, str], layer_norm: bool = False, self_sup: bool = False):
         super().__init__()
         self._latent_size = latent_size
         self._output_size = output_size
@@ -43,7 +43,7 @@ class MeshGraphNets(nn.Module):
                                    graphnet_block=graphnet_block,
                                    use_global=use_global,
                                    poisson=self._output_size == 1)
-        self.decoder = Decoder(output_size=self._output_size, node_type=dec, latent_size=latent_size, recurrence=recurrence, self_sup=self_sup)
+        self.decoder = Decoder(output_size=self._output_size, node_type=dec, latent_size=latent_size, rnn_type=recurrence, self_sup=self_sup)
 
     def forward(self, graph: Batch) -> Tensor:
         """Encodes and processes a multigraph, and returns node features."""

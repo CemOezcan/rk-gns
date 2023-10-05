@@ -10,10 +10,10 @@ from src.util.types import NodeType
 class Decoder(nn.Module):
     """Decodes node features from graph."""
 
-    def __init__(self, output_size: int, node_type: str, latent_size: int, recurrence: bool, self_sup: bool = False):
+    def __init__(self, output_size: int, node_type: str, latent_size: int, rnn_type: Union[bool, str], self_sup: bool = False):
         super().__init__()
         self.node_type = node_type
-        self.recurrence = recurrence
+        self.recurrence = rnn_type is not False
         self.latent_size = latent_size
         self.self_sup = self_sup
         self.use_u = output_size == 1
@@ -21,7 +21,7 @@ class Decoder(nn.Module):
         self.model = nn.Sequential(nn.LazyLinear(latent_size), nn.LeakyReLU(), nn.Linear(latent_size, output_size))
 
         if self.recurrence:
-            self.rnn = nn.GRUCell(self.latent_size, self.latent_size)
+            self.rnn = get_RNN(rnn_type)(self.latent_size, self.latent_size)
         elif self.self_sup:
             # TODO: necessary?
             self.gl_model = nn.Sequential(nn.LazyLinear(latent_size), nn.LeakyReLU(), nn.Linear(latent_size, latent_size))
@@ -55,3 +55,9 @@ class Decoder(nn.Module):
             return torch.cat([node_features, graph.u[batch][mask]], dim=-1)
 
         return node_features
+
+def get_RNN(rnn_type):
+    if str(rnn_type).lower() == 'gru':
+        return nn.GRUCell
+    else:
+        raise NotImplementedError("Implement your RNN cells here!")

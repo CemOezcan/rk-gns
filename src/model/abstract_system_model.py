@@ -22,7 +22,8 @@ class AbstractSystemModel(ABC, nn.Module):
         super(AbstractSystemModel, self).__init__()
         self.self_sup = params.get('task').get('model').lower() == 'self-supervised'
         self.ggns = params.get('task').get('ggns')
-        self.recurrence = params.get('task').get('recurrence')
+        self.recurrence = params.get('task').get('recurrence') is not False
+        self.rnn_type = params.get('task').get('recurrence') if self.recurrence else False
         self.use_global = params.get('task').get('poisson_ratio') or params.get('task').get('model').lower() == 'self-supervised'
         self._params = params.get('model')
         self.loss_fn = torch.nn.MSELoss()
