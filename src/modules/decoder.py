@@ -16,35 +16,40 @@ class Decoder(nn.Module):
         self.recurrence = recurrence
         self.latent_size = latent_size
         self.self_sup = self_sup
-
         self.use_u = output_size == 1
+
+        self.model = nn.Sequential(nn.LazyLinear(latent_size), nn.LeakyReLU(), nn.Linear(latent_size, output_size))
 
         if self.recurrence:
             self.lstm = nn.GRUCell(self.latent_size, self.latent_size)
-
-        self.model = nn.Sequential(nn.LazyLinear(latent_size), nn.LeakyReLU(), nn.Linear(latent_size, output_size))
-        if self.self_sup:
+        elif self.self_sup:
             self.gl_model = nn.Sequential(nn.LazyLinear(latent_size), nn.LeakyReLU(), nn.Linear(latent_size, latent_size))
 
     def forward(self, graph: Batch) -> Tuple[Tensor, Union[None, Tensor]]:
-        mask = torch.where(graph[self.node_type].node_type == NodeType.MESH)[0]
-        if self.self_sup:
-            graph.u = self.gl_model(graph.u)
-        node_features = graph.u if self.use_u else graph[self.node_type].x[mask]
+        self.transform_global(graph)
+        x_hat = self.transform_nodes(graph)
+        y_hat = self.model(x_hat)
 
-        if not self.use_u and self.self_sup:
-            batch = graph[self.node_type].batch
-            node_features = torch.cat([node_features, graph.u[batch][mask]], dim=-1)
+        return y_hat, graph.u
 
+    def transform_global(self, graph):
         if self.recurrence:
             if graph.h.shape[-1] == self.latent_size:
-                hidden = self.lstm(node_features, graph.h)
+                graph.u = self.lstm(graph.u, graph.h)
             else:
-                hidden = self.lstm(node_features)
+                graph.u = self.lstm(graph.u)
+        elif self.self_sup:
+            graph.u = self.gl_model(graph.u)
 
-            out = self.model(hidden)
-        else:
-            out = self.model(node_features)
-            hidden = out
+    def transform_nodes(self, graph):
+        if self.use_u:
+            return graph.u
 
-        return out, hidden
+        mask = torch.where(graph[self.node_type].node_type == NodeType.MESH)[0]
+        node_features = graph[self.node_type].x[mask]
+
+        if self.self_sup:
+            batch = graph[self.node_type].batch
+            return torch.cat([node_features, graph.u[batch][mask]], dim=-1)
+
+        return node_features
