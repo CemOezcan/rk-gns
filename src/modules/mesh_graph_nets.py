@@ -43,8 +43,7 @@ class MeshGraphNets(nn.Module):
                                    graphnet_block=graphnet_block,
                                    use_global=use_global,
                                    poisson=self._output_size == 1)
-        self.decoder = Decoder(make_mlp=self._make_mlp,
-                               output_size=self._output_size, node_type=dec, latent_size=latent_size, recurrence=recurrence, self_sup=self_sup)
+        self.decoder = Decoder(output_size=self._output_size, node_type=dec, latent_size=latent_size, recurrence=recurrence, self_sup=self_sup)
 
     def forward(self, graph: Batch) -> Tensor:
         """Encodes and processes a multigraph, and returns node features."""

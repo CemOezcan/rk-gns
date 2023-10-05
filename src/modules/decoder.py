@@ -10,7 +10,7 @@ from src.util.types import NodeType
 class Decoder(nn.Module):
     """Decodes node features from graph."""
 
-    def __init__(self, make_mlp: Callable, output_size: int, node_type: str, latent_size: int, recurrence: bool, self_sup: bool = False):
+    def __init__(self, output_size: int, node_type: str, latent_size: int, recurrence: bool, self_sup: bool = False):
         super().__init__()
         self.node_type = node_type
         self.recurrence = recurrence
