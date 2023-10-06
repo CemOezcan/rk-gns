@@ -1,8 +1,9 @@
 import os
 import pickle
 import time
-from typing import List, Union
+from typing import List, Union, Dict, Optional
 
+import numpy as np
 import torch
 import wandb
 
@@ -91,6 +92,72 @@ class LSTMSimulator(AbstractSimulator):
 
         return total_loss / size
 
+    @torch.no_grad()
+    def one_step_evaluator(self, ds_loader: List, instances: int, task_name: str, logging: bool = True) -> Optional[Dict]:
+        """
+        Predict the system state for the next time step and evaluate the predictions over the test data.
+
+        Parameters
+        ----------
+            ds_loader : List
+                A list containing test/validation instances
+
+            instances : int
+                Number of trajectories used to estimate the one-step loss
+
+            task_name : str
+                Name of the task
+
+            logging : bool
+                Whether to log the results to wandb
+
+        Returns
+        -------
+            Optional[Dict]
+                A single result that scores the input, potentially per sample
+
+        """
+        trajectory_loss = list()
+        test_loader = self.fetch_data(ds_loader, is_training=False)
+        for i, sequence in enumerate(tqdm(test_loader, desc='Batches', leave=True, position=0)):
+
+            for j, graph in enumerate(sequence):
+                graph.to(device)
+                if j != 0:
+                    graph.h = h
+
+                pred_velocity, h = self._network(graph, False)
+                target_velocity = self._network.get_target(graph, False)
+                error = self._network.loss_fn(target_velocity, pred_velocity).cpu()
+
+                pred_position, _, _ = self._network.update(graph, pred_velocity)
+                pos_error = self._network.loss_fn(pred_position, graph.y).cpu()
+                trajectory_loss.append([(error, pos_error)])
+
+        mean = np.mean(trajectory_loss, axis=0)
+        std = np.std(trajectory_loss, axis=0)
+
+        val_loss, pos_loss = zip(*mean)
+        val_std, pos_std = zip(*std)
+
+        log_dict = {
+            'single-step error/velocity_historgram':
+                wandb.Histogram(
+                    [x for x in val_loss],
+                    num_bins=20
+                ),
+            'single-step error/position_historgram':
+                wandb.Histogram(
+                    [x for x in pos_loss],
+                    num_bins=20
+                ),
+            'single-step error/velocity_error': np.mean(val_loss),
+            'single-step error/position_error': np.mean(pos_loss),
+            'single-step error/velocity_std': np.mean(val_std),
+            'single-step error/position_std': np.mean(pos_std)
+        }
+        return log_dict
+
     def fetch_data(self, trajectory: List[Union[List[Data], Data]], is_training: bool) -> DataLoader:
         """
         Transform a collection of system states into batched graphs.
@@ -107,16 +174,14 @@ class LSTMSimulator(AbstractSimulator):
             DataLoader
                 Collection of batched graphs.
         """
-        if is_training:
-            trajectories = [list() for _ in range(len(trajectory) // self._time_steps)]
-            for i, graph in enumerate(trajectory):
-                index = i // self._time_steps
-                trajectories[index].append(graph)
+        seq = self._seq_len if is_training else 50
+        trajectories = [list() for _ in range(len(trajectory) // self._time_steps)]
 
-            dataset = SequenceNoReturnDataset(trajectories, self._seq_len, partial(self._network.build_graph, is_training=True), self.mode)
-        else:
-            dataset = RegularDataset(trajectory, partial(self._network.build_graph, is_training=False), self.mode)
+        for i, graph in enumerate(trajectory):
+            index = i // self._time_steps
+            trajectories[index].append(graph)
 
+        dataset = SequenceNoReturnDataset(trajectories, seq, partial(self._network.build_graph, is_training=is_training), self.mode)
         batches = DataLoader(dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True, num_workers=8,
                              prefetch_factor=2, worker_init_fn=self.seed_worker)
 
