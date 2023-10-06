@@ -152,7 +152,7 @@ class AlternatingSimulator(AbstractSimulator):
     def fit_lstm(self, train_dataloader: List[List[Data]]):
         self._network.train()
         self.global_model.eval()
-        # TODO: check mode
+        # TODO: check mode --> sequence dataset only differentiates between mode == mgn and mode != mgn
         data = self.fetch_data(train_dataloader, True, mode='poisson', seq=True, seq_len=49)
         total_loss = 0
         size = 0
@@ -221,28 +221,6 @@ class AlternatingSimulator(AbstractSimulator):
             size = i
 
         return total_loss / size
-        # self._network.train()
-        # self.global_model.eval()
-        # data = self.fetch_data(train_dataloader, True, mgn=True)
-        #
-        # for i, batch in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
-        #     start_instance = time.time()
-        #     batch, pc = self.split_graphs(batch)
-        #     batch.to(device)
-        #     pc.to(device)
-        #
-        #     output, _ = self.global_model(pc, False)
-        #     poisson = self.global_model._output_normalizer.inverse(output)
-        #     batch.u = poisson
-        #
-        #     loss = self._network.training_step(batch)
-        #     loss.backward()
-        #
-        #     self._optimizer.step()
-        #     self._optimizer.zero_grad()
-        #
-        #     end_instance = time.time()
-        #     wandb.log({'loss': loss.detach(), 'training time per instance': end_instance - start_instance})
 
     @torch.no_grad()
     def one_step_evaluator(self, ds_loader: List, instances: int, task_name: str, logging: bool = True) -> Optional[
@@ -271,12 +249,38 @@ class AlternatingSimulator(AbstractSimulator):
 
         """
         trajectory_loss = list()
-        test_loader = self.fetch_data(ds_loader, is_training=False, mode='supervised')
-        for i, batch in enumerate(tqdm(test_loader, desc='Validation', leave=True, position=0)):
-            batch.to(device)
-            instance_loss = self._network.validation_step(batch, i, self.global_model)
+        if self.recurrence:
+            trajectory_loss = list()
+            test_loader = self.fetch_data(ds_loader, is_training=False, mode='supervised', seq=True, seq_len=50)
+            for i, sequence in enumerate(tqdm(test_loader, desc='Batches', leave=True, position=0)):
 
-            trajectory_loss.append([instance_loss])
+                for j, graph in enumerate(sequence):
+                    graph.to(device)
+                    if j != 0:
+                        graph.h = h
+
+                    output, h = self.global_model(graph, False)
+                    u_target = self.global_model.get_target(graph, False)
+                    u_error = self._network.loss_fn(output, u_target).cpu()
+
+                    poisson, _, _ = self.global_model.update(graph, output)
+                    poisson_error = self._network.loss_fn(poisson, graph.u).cpu()
+                    graph.u = poisson
+
+                    prediction, _ = self._network(graph, False)
+                    target = self._network.get_target(graph, False)
+                    error = self._network.loss_fn(target, prediction).cpu()
+
+                    pred_position, _, _ = self._network.update(graph, prediction)
+                    pos_error = self._network.loss_fn(pred_position, graph.y).cpu()
+                    trajectory_loss.append([(error, pos_error, u_error, poisson_error)])
+        else:
+            test_loader = self.fetch_data(ds_loader, is_training=False, mode='supervised')
+            for i, batch in enumerate(tqdm(test_loader, desc='Validation', leave=True, position=0)):
+                batch.to(device)
+                instance_loss = self._network.validation_step(batch, i, self.global_model)
+
+                trajectory_loss.append([instance_loss])
 
         mean = np.mean(trajectory_loss, axis=0)
         std = np.std(trajectory_loss, axis=0)
@@ -449,7 +453,7 @@ class AlternatingSimulator(AbstractSimulator):
                 index = i // self._time_steps
                 trajectories[index].append(graph)
 
-            dataset = SequenceNoReturnDataset(trajectories, seq_len, partial(self._network.build_graph, is_training=True), mode)
+            dataset = SequenceNoReturnDataset(trajectories, seq_len, partial(self._network.build_graph, is_training=is_training), mode)
 
             batches = DataLoader(dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True, num_workers=8,
                                  prefetch_factor=2, worker_init_fn=self.seed_worker)

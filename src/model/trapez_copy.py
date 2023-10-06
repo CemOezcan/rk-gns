@@ -48,9 +48,10 @@ class TrapezModel(AbstractSystemModel):
         graph.to(device)
 
         with torch.no_grad():
-            output, _ = poisson_model(graph, False)
+            output, h = poisson_model(graph, False)
             poisson, _, _ = poisson_model.update(graph, output)
         graph.u = poisson
+        graph.h = h
 
         prediction, _ = self(graph, True)
         target = self.get_target(graph, True)
