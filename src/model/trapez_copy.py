@@ -132,7 +132,7 @@ class TrapezModel(AbstractSystemModel):
         keep_pc = False if freq == 0 else step % freq == 0
         index = 0 if keep_pc else 1
 
-        data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True, self.reduced)[index]
+        data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True, self.reduced, mgn=not keep_pc)[index]
         graph = Batch.from_data_list([self.build_graph(data, is_training=False)]).to(device)
 
         if keep_pc or self.recurrence:
