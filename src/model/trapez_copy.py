@@ -156,15 +156,17 @@ class TrapezModel(AbstractSystemModel):
         u_losses = list()
         u_last_losses = list()
         num_timesteps = len(trajectory) if num_timesteps is None else num_timesteps
-        for step in range(num_timesteps - n_step):
-            eval_traj = trajectory[step: step + n_step + 1]
-            prediction_trajectory, mse_loss, u_loss = self.rollout(eval_traj, n_step + 1, poisson_model, freq)
+        for step in range(num_timesteps // n_step):
+            start = step * n_step
+            if start < num_timesteps:
+                eval_traj = trajectory[start: start + n_step]
+                prediction_trajectory, mse_loss, u_loss = self.rollout(eval_traj, n_step, poisson_model, freq)
 
-            mse_losses.append(torch.mean(mse_loss).cpu())
-            last_losses.append(mse_loss.cpu()[-1])
+                mse_losses.append(torch.mean(mse_loss).cpu())
+                last_losses.append(mse_loss.cpu()[-1])
 
-            u_losses.append(torch.mean(u_loss).cpu())
-            u_last_losses.append(u_loss.cpu()[-1])
+                u_losses.append(torch.mean(u_loss).cpu())
+                u_last_losses.append(u_loss.cpu()[-1])
 
         return torch.mean(torch.stack(mse_losses)), torch.mean(torch.stack(last_losses)), \
             torch.mean(torch.stack(u_losses)), torch.mean(torch.stack(u_last_losses))
