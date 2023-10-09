@@ -20,6 +20,7 @@ task:
   epochs: 200
   pretraining: 200
   reduced: False
+  imputation: [1, 2, 5]
 
   test:
     trajectories: 135 # Number of trajectories that are going to be used to compute the validation loss during evaluation
