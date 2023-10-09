@@ -17,6 +17,7 @@ class SSGraphNet(GraphNet):
                  node_sets: List[str], edge_sets: List[str], use_global: bool = True, poisson: bool = False):
         super(SSGraphNet, self).__init__(model_fn, output_size, message_passing_aggregator, node_sets, edge_sets, use_global, poisson)
         self.global_model = model_fn(output_size)
+        self._use_global = False
 
     def _update_global(self, graph: Batch):
         edge_feature_list = []

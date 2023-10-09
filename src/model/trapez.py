@@ -106,7 +106,7 @@ class TrapezModel(AbstractSystemModel):
         keep_pc = False if freq == 0 else step % freq == 0
         index = 0 if keep_pc else 1
 
-        data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), self.self_sup, self.reduced)[index]
+        data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), self.self_sup, self.reduced, mgn=not keep_pc)[index]
         graph = Batch.from_data_list([self.build_graph(data, is_training=False)]).to(device)
 
         output, hidden = self(graph, False)
@@ -121,12 +121,13 @@ class TrapezModel(AbstractSystemModel):
         mse_losses = list()
         last_losses = list()
         num_timesteps = len(trajectory) if num_timesteps is None else num_timesteps
-        for step in range(num_timesteps - n_step):
-            # TODO: clusters/balancers are reset when computing n_step loss
-            eval_traj = trajectory[step: step + n_step + 1]
-            prediction_trajectory, mse_loss = self.rollout(eval_traj, n_step + 1, freq)
-            mse_losses.append(torch.mean(mse_loss).cpu())
-            last_losses.append(mse_loss.cpu()[-1])
+        for step in range(num_timesteps // n_step):
+            start = step * n_step
+            if start < num_timesteps:
+                eval_traj = trajectory[start: start + n_step]
+                prediction_trajectory, mse_loss = self.rollout(eval_traj, n_step, freq)
+                mse_losses.append(torch.mean(mse_loss).cpu())
+                last_losses.append(mse_loss.cpu()[-1])
 
         return torch.mean(torch.stack(mse_losses)), torch.mean(torch.stack(last_losses))
 

@@ -316,14 +316,13 @@ class Preprocessing:
         Returns:
             edge_attr: Tensor containing the batched edge features
         """
-        data = Data(pos=mesh_positions,
-                    edge_index=mesh_edge_index)
+        data = Data(pos=mesh_positions, edge_index=mesh_edge_index)
         transforms = T.Compose([T.Cartesian(norm=False, cat=True), T.Distance(norm=False, cat=True)])
         data = transforms(data)
         return data.edge_attr
 
     @staticmethod
-    def postprocessing(data: Data, triangulate, reduced) -> Tuple[Data, Data]:
+    def postprocessing(data: Data, triangulate, reduced, mgn=False) -> Tuple[Data, Data]:
         """
         Task specific expansion of the given input graph. Adds different edge types based on neighborhood graphs.
         Convert the resulting graph into a Data object.
@@ -341,90 +340,11 @@ class Preprocessing:
         """
         mask = torch.where(data.node_type == NodeType.MESH)[0]
         obst_mask = torch.where(data.node_type == NodeType.COLLIDER)[0]
-        point_mask = torch.where(data.node_type == NodeType.POINT)[0]
-        shape_mask = torch.where(data.node_type == NodeType.SHAPE)[0]
-        point_index = data.point_index
-        shape_index = len(point_mask) + point_index
 
-        # Add collision edges
-        collision_edges = torch_cluster.radius(data.pos[mask], data.pos[obst_mask], r=0.3, max_num_neighbors=100)
-        Preprocessing.add_edge_set(data, collision_edges, (len(mask), 0), 2, False)
-        collision_edges = torch_cluster.radius(data.pos[obst_mask], data.pos[mask], r=0.3, max_num_neighbors=100)
-        Preprocessing.add_edge_set(data, collision_edges, (0, len(mask)), 3, False)
-
-        # Add world edges
-        #world_edges = torch_cluster.radius_graph(data.pos[mask], r=0.3, max_num_neighbors=100)
-        #Preprocessing.add_edge_set(data, world_edges, (0, 0), 4, False)
-
-        data_mgn = copy.deepcopy(data)
-        old_edges = data_mgn.edge_type.shape[0]
-
-        # GGNS
-
-        cp_edges = torch_cluster.radius(data.pos[point_mask], data.pos[obst_mask], r=0.08, max_num_neighbors=100)
-        Preprocessing.add_edge_set(data, cp_edges, (len(mask), point_index), 4, False)
-
-        cp_edges_1 = torch_cluster.radius(data.pos[obst_mask], data.pos[point_mask], r=0.08, max_num_neighbors=100)
-        Preprocessing.add_edge_set(data, cp_edges_1, (point_index, len(mask)), 5, False)
-
-        grounding_edges = torch_cluster.radius(data.pos[mask], data.pos[point_mask], r=0.08, max_num_neighbors=100)
-        Preprocessing.add_edge_set(data, grounding_edges, (point_index, 0), 6, False)
-
-        grounding_edges_1 = torch_cluster.radius(data.pos[point_mask], data.pos[mask], r=0.08, max_num_neighbors=100)
-        Preprocessing.add_edge_set(data, grounding_edges_1, (0, point_index), 7, False)
-
-        num = 8
-
-        # SHAPE
-        if triangulate:
-            cp_edges = torch_cluster.radius(data.pos[shape_mask], data.pos[obst_mask], r=0.3, max_num_neighbors=100)
-            Preprocessing.add_edge_set(data, cp_edges, (len(mask), shape_index), num, False)
-
-            triangles = scipy.spatial.Delaunay(data.pos[shape_mask])
-            pc_edges = set()
-            for simplex in triangles.simplices:
-                pc_edges.update(
-                    (simplex[i], simplex[j]) for i in range(-1, len(simplex)) for j in range(i + 1, len(simplex)))
-
-            coll_set = set(collision_edges[1].tolist())
-            short_dist_graph = torch_cluster.radius_graph(data.pos[shape_mask], r=0.35, max_num_neighbors=100).tolist()
-            short_edges = [(x, y) for x, y in zip(short_dist_graph[0], short_dist_graph[1]) if
-                           x in coll_set and y in coll_set]
-            short_pc_edges = set(short_edges).intersection(set(pc_edges))
-
-            long_dist_graph = torch_cluster.radius_graph(data.pos[shape_mask], r=0.6, max_num_neighbors=100).tolist()
-            long_edges = [(x, y) for x, y in zip(long_dist_graph[0], long_dist_graph[1]) if
-                          x not in coll_set or y not in coll_set]
-
-            pc_edges_copy = set(long_edges).union(short_pc_edges).intersection(set(pc_edges))
-            pc_edges = zip(*list(pc_edges_copy))
-
-            # Convert edge indices to PyTorch tensor
-            pc_edges = torch.tensor(list(pc_edges), dtype=torch.long)
-            Preprocessing.add_edge_set(data, pc_edges, (shape_index, shape_index), num + 1, False)
-
-            num += 2
-
-        # if not reduced:
-        #     grounding_edges_1 = torch_cluster.radius(data.pos[point_mask], data.pos[shape_mask], r=0.1,
-        #                                              max_num_neighbors=100)
-        #     Preprocessing.add_edge_set(data, grounding_edges_1, (shape_index, point_index), num, False)
-        #
-        #     grounding_edges_1 = torch_cluster.radius(data.pos[shape_mask], data.pos[point_mask], r=0.1,
-        #                                              max_num_neighbors=100)
-        #     Preprocessing.add_edge_set(data, grounding_edges_1, (point_index, shape_index), num + 1, False)
-        #     num += 2
-
-        if not reduced:
-            pc_edges = torch_cluster.radius_graph(data.pos[point_mask], r=0.1, max_num_neighbors=100)
-            Preprocessing.add_edge_set(data, pc_edges, (point_index, point_index), num, False)
-            num += 1
-
-        transform = T.Compose([T.remove_isolated_nodes.RemoveIsolatedNodes()])
-        data = transform(data)
+        data, num = Preprocessing.new(data, triangulate, reduced, mgn)
 
         values = [0] * num
-        for key in data.edge_type:
+        for key in data.edge_type.tolist():
             values[int(key)] += 1
 
         data.edge_attr = Preprocessing.build_one_hot_features(values)
@@ -433,57 +353,106 @@ class Preprocessing:
                                                                    data.edge_type,
                                                                    data.edge_index[:, mesh_edge_mask],
                                                                    data.init_pos[mask])
-        data_mgn.edge_attr = data.edge_attr[:old_edges]
-        data_mgn.edge_type = data.edge_type[:old_edges]
-        data_mgn.x = data_mgn.x[:point_index]
-        data_mgn.pos = data_mgn.pos[:point_index]
-        data_mgn.next_pos = data_mgn.next_pos[:point_index]
-        data_mgn.node_type = data_mgn.node_type[:point_index]
+
+        if mgn:
+            return None, data
+
+        mgn_mask = torch.cat([mask, obst_mask], dim=0)
+        data_mgn = data.subgraph(mgn_mask).clone()
+        # TODO: default: put put whole graph only, parameter: no pc --> efficient rollouts
 
         return data, data_mgn
 
     @staticmethod
-    def add_edge_set(data: Data, edges: Tensor, index_shift: Tuple[int], edge_type: int, bidirectional: bool, remove_duplicates: bool = False) -> None:
-        """
-        Adds a new set of edges to an existing graph
-        Parameters
-        ----------
-            data: Data
-                The current graph
-            edges: Tensor
-                Set of edges
-            index_shift: Tuple[int]
-                Shift edge indices
-            edge_type: int
-                Edge type for one-hot encoding
-            bidirectional: bool
-                Whether to expand edges to be bidirectional
-            remove_duplicates: bool
-                Whether to check existing edge set for duplicates and removing them if need be
+    def new(data, triangulate, reduced, mgn=False):
+        mask = torch.where(data.node_type == NodeType.MESH)[0]
+        obst_mask = torch.where(data.node_type == NodeType.COLLIDER)[0]
+        point_mask = torch.where(data.node_type == NodeType.POINT)[0]
+        shape_mask = torch.where(data.node_type == NodeType.SHAPE)[0]
+        point_index = data.point_index
+        shape_index = len(point_mask) + point_index
 
-        Returns
-        -------
-        Transformed graph
+        collision_edges = torch_cluster.radius(data.pos[mask], data.pos[obst_mask], r=0.3, max_num_neighbors=100)
+        edge_radius_dict = {'cm': (collision_edges, 0, len(mask))}
 
-        """
+        if not mgn:
+            collision_point_edges = torch_cluster.radius(data.pos[point_mask], data.pos[obst_mask], r=0.08, max_num_neighbors=100)
+            grounding_edges = torch_cluster.radius(data.pos[mask], data.pos[point_mask], r=0.08, max_num_neighbors=100)
+            edge_radius_dict['cp'] = (collision_point_edges, point_index, len(mask))
+            edge_radius_dict['pm'] = (grounding_edges, 0, point_index)
+
+            if not reduced:
+                point_edges = torch_cluster.radius_graph(data.pos[point_mask], r=0.1, max_num_neighbors=100)
+                edge_radius_dict['pp'] = (point_edges, point_index, point_index)
+
+            if triangulate:
+                triangles = scipy.spatial.Delaunay(data.pos[shape_mask])
+                shape_edges = set()
+                for simplex in triangles.simplices:
+                    shape_edges.update(
+                        (simplex[i], simplex[j]) for i in range(-1, len(simplex)) for j in range(i + 1, len(simplex)))
+
+                coll_set = set(collision_edges[0].tolist())
+                short_dist_graph = torch_cluster.radius_graph(data.pos[shape_mask], r=0.35, max_num_neighbors=100).tolist()
+                short_edges = [(x, y) for x, y in zip(short_dist_graph[0], short_dist_graph[1]) if
+                               x in coll_set and y in coll_set]
+                short_pc_edges = set(short_edges).intersection(set(shape_edges))
+
+                long_dist_graph = torch_cluster.radius_graph(data.pos[shape_mask], r=0.6, max_num_neighbors=100).tolist()
+                long_edges = [(x, y) for x, y in zip(long_dist_graph[0], long_dist_graph[1]) if
+                              x not in coll_set or y not in coll_set]
+
+                shape_edges = set(long_edges).union(short_pc_edges).intersection(set(shape_edges))
+                shape_edges = zip(*list(shape_edges))
+
+                shape_edges = torch.tensor(list(shape_edges), dtype=torch.long)
+                edge_radius_dict['ss'] = (shape_edges, shape_index, shape_index)
+
+                collision_shape_edges = torch_cluster.radius(data.pos[shape_mask], data.pos[obst_mask], r=0.3, max_num_neighbors=100)
+                edge_radius_dict['cs'] = (collision_shape_edges, shape_index, len(mask))
+
+        index_list = [[data.edge_index[0]], [data.edge_index[1]]]
+        edge_type_list = [data.edge_type]
+        num = int(max(data.edge_type.tolist())) + 1
+
+        for key, (edges, index_1, index_2) in edge_radius_dict.items():
+            indices, num_edges = Preprocessing.shift_indices(edges, (index_2, index_1))
+            index_list[0].append(indices[0])
+            index_list[1].append(indices[1])
+            edge_type_list.append(torch.tensor([num] * num_edges).long())
+            num += 1
+            if key != 'pp' and key != 'ss':
+                index_list[0].append(indices[1])
+                index_list[1].append(indices[0])
+                edge_type_list.append(torch.tensor([num] * num_edges).long())
+                num += 1
+
+        if mgn:
+            num += 4
+            if not reduced:
+                num += 1
+            if triangulate:
+                num += 3
+
+        data.edge_index = torch.stack([torch.cat(index_list[0], dim=0), torch.cat(index_list[1], dim=0)], dim=0)
+        data.edge_type = torch.cat(edge_type_list, dim=0)
+
+        transform = T.Compose([T.remove_isolated_nodes.RemoveIsolatedNodes()])
+        data = transform(data)
+
+        return data, num
+
+    @staticmethod
+    def shift_indices(edges, index_shift):
         row, col = edges[0], edges[1]
         row, col = row[row != col], col[row != col]
-        edges = torch.stack([row, col], dim=0)
-        edges[0, :] += index_shift[0]
-        edges[1, :] += index_shift[1]
+        row += index_shift[0]
+        col += index_shift[1]
+        # edges = torch.stack([row, col], dim=0)
+        # edges[0, :] += index_shift[0]
+        # edges[1, :] += index_shift[1]
 
-        if remove_duplicates:
-            edges = Preprocessing.get_unique_edges(data.edge_index, edges)
-
-        indices = [data.edge_index, edges]
-        factor = len(edges[0])
-
-        if bidirectional:
-            indices.append(edges[[1, 0]])
-            factor *= 2
-
-        data.edge_index = torch.cat(indices, dim=1)
-        data.edge_type = torch.cat([data.edge_type, torch.tensor([edge_type] * factor).long()], dim=0)
+        return (row, col), len(row)
 
     @staticmethod
     def get_unique_edges(e_1: Tensor, e_2: Tensor) -> Tensor:

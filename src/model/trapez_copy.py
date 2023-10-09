@@ -48,9 +48,10 @@ class TrapezModel(AbstractSystemModel):
         graph.to(device)
 
         with torch.no_grad():
-            output, _ = poisson_model(graph, False)
+            output, h = poisson_model(graph, False)
             poisson, _, _ = poisson_model.update(graph, output)
         graph.u = poisson
+        graph.h = h
 
         prediction, _ = self(graph, True)
         target = self.get_target(graph, True)
@@ -131,7 +132,7 @@ class TrapezModel(AbstractSystemModel):
         keep_pc = False if freq == 0 else step % freq == 0
         index = 0 if keep_pc else 1
 
-        data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True, self.reduced)[index]
+        data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True, self.reduced, mgn=not keep_pc)[index]
         graph = Batch.from_data_list([self.build_graph(data, is_training=False)]).to(device)
 
         if keep_pc or self.recurrence:
@@ -155,15 +156,17 @@ class TrapezModel(AbstractSystemModel):
         u_losses = list()
         u_last_losses = list()
         num_timesteps = len(trajectory) if num_timesteps is None else num_timesteps
-        for step in range(num_timesteps - n_step):
-            eval_traj = trajectory[step: step + n_step + 1]
-            prediction_trajectory, mse_loss, u_loss = self.rollout(eval_traj, n_step + 1, poisson_model, freq)
+        for step in range(num_timesteps // n_step):
+            start = step * n_step
+            if start < num_timesteps:
+                eval_traj = trajectory[start: start + n_step]
+                prediction_trajectory, mse_loss, u_loss = self.rollout(eval_traj, n_step, poisson_model, freq)
 
-            mse_losses.append(torch.mean(mse_loss).cpu())
-            last_losses.append(mse_loss.cpu()[-1])
+                mse_losses.append(torch.mean(mse_loss).cpu())
+                last_losses.append(mse_loss.cpu()[-1])
 
-            u_losses.append(torch.mean(u_loss).cpu())
-            u_last_losses.append(u_loss.cpu()[-1])
+                u_losses.append(torch.mean(u_loss).cpu())
+                u_last_losses.append(u_loss.cpu()[-1])
 
         return torch.mean(torch.stack(mse_losses)), torch.mean(torch.stack(last_losses)), \
             torch.mean(torch.stack(u_losses)), torch.mean(torch.stack(u_last_losses))

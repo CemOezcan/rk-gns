@@ -118,7 +118,7 @@ class PoissonModel(AbstractSystemModel):
         if not keep_pc and not self.recurrence:
             prediction = cur_pos
         else:
-            data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True, self.reduced)[index]
+            data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True, self.reduced, mgn=not keep_pc)[index]
             graph = Batch.from_data_list([self.build_graph(data, is_training=False)]).to(device)
 
             output, hidden = self(graph, False)
@@ -131,10 +131,12 @@ class PoissonModel(AbstractSystemModel):
         mse_losses = list()
         last_losses = list()
         num_timesteps = len(trajectory) if num_timesteps is None else num_timesteps
-        for step in range(num_timesteps - n_step):
-            eval_traj = trajectory[step: step + n_step + 1]
-            prediction_trajectory, mse_loss = self.rollout(eval_traj, n_step + 1, freq)
-            mse_losses.append(torch.mean(mse_loss).cpu())
-            last_losses.append(mse_loss.cpu()[-1])
+        for step in range(num_timesteps // n_step):
+            start = step * n_step
+            if start < num_timesteps:
+                eval_traj = trajectory[start: start + n_step]
+                prediction_trajectory, mse_loss = self.rollout(eval_traj, n_step, freq)
+                mse_losses.append(torch.mean(mse_loss).cpu())
+                last_losses.append(mse_loss.cpu()[-1])
 
         return torch.mean(torch.stack(mse_losses)), torch.mean(torch.stack(last_losses))

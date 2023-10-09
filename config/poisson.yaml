@@ -7,18 +7,19 @@ wandb_mode: online
 directory: deformable_plate
 
 task:
-  task: trapez # trapez/poisson
-  model: self-supervised # mgn/supervised/self-supervised
+  task: poisson # trapez/poisson
+  model: mgn # mgn/supervised/self-supervised
   ggns: False # T/F
-  recurrence: False # None/name now T/F
-  sequence: 1
+  recurrence: GRU # False/name
+  sequence: 5
   poisson_ratio: False # Link to use global with model
   learning_rate: 1.0e-4
   batch_size: 32
   trajectories: 675
   n_timesteps: 50
   epochs: 200
-  pretraining: 150
+  pretraining: 200
+  reduced: True
 
   test:
     trajectories: 10 # Number of trajectories that are going to be used to compute the validation loss during evaluation
@@ -31,7 +32,7 @@ task:
     trajectories: 135 # Number of trajectories that are going to be used to compute the validation loss during training
     rollouts: 135 # Number of trajectories that are going to be used to compute the rollout loss during training
     n_steps: 10
-    n_step_rollouts: 20
+    n_step_rollouts: 1
     n_viz: 5
 
 model:

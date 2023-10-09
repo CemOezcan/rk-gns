@@ -56,6 +56,8 @@ class MeshTask(AbstractTask):
         self._num_n_step_rollouts = config.get('task').get('test').get('n_step_rollouts')
         self._n_steps = config.get('task').get('test').get('n_steps')
         self.n_viz = self._config.get('task').get('validation').get('n_viz')
+        self.test_viz = self._config.get('task').get('test').get('n_viz')
+        self.viz_interval = self._config.get('task').get('validation').get('viz_interval')
 
         self.train_loader = get_data(config=config)
 
@@ -77,7 +79,7 @@ class MeshTask(AbstractTask):
         reduced = config.get('task').get('reduced')
         self._task_name = f'm:{self.task_type}_l:{layers}_fn:{feature_norm}_ln:{layer_norm}_b:{batch_size}_t:{self.model_type}_a:{aggr}_lr:{lr}_seq:{seq}_ggns:{ggns}_red:{reduced}_poisson:{poisson}_mp:{self._mp}_epoch:'
 
-        self.frequency_list = [0] if self.task_type != 'poisson' and not ggns and self.model_type == 'mgn' else [1, 5]
+        self.frequency_list = [0] if self.task_type != 'poisson' and not ggns and self.model_type == 'mgn' else get_from_nested_dict(config, ['task', 'imputation'])
 
         retrain = config.get('retrain')
         epochs = list() if retrain else [
@@ -115,15 +117,13 @@ class MeshTask(AbstractTask):
 
             if (e + 1) % self._validation_interval == 0:
                 one_step = self._algorithm.one_step_evaluator(self._valid_loader, self._num_val_trajectories, task_name)
-                rollouts = list()
-                n_steps = list()
-                for freq in self.frequency_list:
-                    rollouts.append(self._algorithm.rollout_evaluator(self._rollout_loader, self._num_val_rollouts, task_name, freq=freq))
-                    n_steps.append(self._algorithm.n_step_evaluator(self._rollout_loader, task_name, n_steps=self._val_n_steps, n_traj=self._num_val_n_step_rollouts, freq=freq))
+                n_steps = [self._algorithm.n_step_evaluator(self._rollout_loader, task_name, n_steps=self._val_n_steps, n_traj=self._num_val_n_step_rollouts, freq=1)]
+                rollouts = [self._algorithm.rollout_evaluator(self._rollout_loader, self._num_val_rollouts, task_name, freq=freq)
+                            for freq in self.frequency_list]
 
-                dir_dict = self.select_plotting(task_name, self.frequency_list)
-
+                dir_dict = self.select_plotting(task_name, self.frequency_list, self.n_viz) if (e + 1) % self.viz_interval == 0 else {}
                 animation = {f"video_{key}": wandb.Video(value, fps=10, format="gif") for key, value in dir_dict.items()}
+
                 evaluation_data = [one_step] + rollouts + n_steps + [animation]
                 self._algorithm.save(task_name)
 
@@ -148,9 +148,9 @@ class MeshTask(AbstractTask):
 
         one_step = self._algorithm.one_step_evaluator(self._test_loader, self._num_test_trajectories, task_name)
         rollout = [self._algorithm.rollout_evaluator(self._test_rollout_loader, self._num_test_rollouts, task_name, freq=freq) for freq in self.frequency_list]
-        n_step = [self._algorithm.n_step_evaluator(self._test_rollout_loader, task_name, n_steps=self._n_steps, n_traj=self._num_n_step_rollouts, freq=freq) for freq in self.frequency_list]
+        n_step = [self._algorithm.n_step_evaluator(self._test_rollout_loader, task_name, n_steps=self._n_steps, n_traj=self._num_n_step_rollouts, freq=1)]
 
-        dir_dict = self.select_plotting(task_name, self.frequency_list)
+        dir_dict = self.select_plotting(task_name, self.frequency_list, self.test_viz)
         animation = {f"video_{key}": wandb.Video(value, fps=10, format="gif") for key, value in dir_dict.items()}
 
         evaluation_data = [one_step] + rollout + n_step + [animation]
@@ -158,18 +158,20 @@ class MeshTask(AbstractTask):
 
         self._algorithm.log_epoch(data)
 
-    def select_plotting(self, task_name: str, freq_list: list):
+    def select_plotting(self, task_name: str, freq_list: list, n_viz):
         if self.task_type == 'poisson' and self.model_type != 'supervised':
+            return {}
+        if n_viz == 0:
             return {}
 
         out = dict.fromkeys(freq_list)
         for freq in freq_list:
-            a, w = self.plot(task_name, freq)
+            a, w = self.plot(task_name, freq, n_viz)
             out[freq] = self._save_plot(a, w, task_name, freq)
 
         return out
 
-    def plot(self, task_name: str, freq: int) -> Tuple[FuncAnimation, PillowWriter]:
+    def plot(self, task_name: str, freq: int, n_viz: int) -> Tuple[FuncAnimation, PillowWriter]:
         """
         Simulates and visualizes predicted trajectories as well as their respective ground truth trajectories.
         The predicted trajectories are produced by the current state of the mesh simulator.
@@ -187,7 +189,7 @@ class MeshTask(AbstractTask):
         """
         rollouts = os.path.join(self._out_dir, f'{task_name}_rollouts_k={freq}.pkl')
         with open(rollouts, 'rb') as fp:
-            rollout_data = pickle.load(fp)[:self.n_viz]
+            rollout_data = pickle.load(fp)[:n_viz]
 
         mask = torch.where(rollout_data[0]['node_type'] == NodeType.MESH)[0]
         cell_mask = torch.where(rollout_data[0]['cell_type'] == NodeType.MESH)[0]
