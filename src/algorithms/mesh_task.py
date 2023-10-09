@@ -79,7 +79,7 @@ class MeshTask(AbstractTask):
         reduced = config.get('task').get('reduced')
         self._task_name = f'm:{self.task_type}_l:{layers}_fn:{feature_norm}_ln:{layer_norm}_b:{batch_size}_t:{self.model_type}_a:{aggr}_lr:{lr}_seq:{seq}_ggns:{ggns}_red:{reduced}_poisson:{poisson}_mp:{self._mp}_epoch:'
 
-        self.frequency_list = [0] if self.task_type != 'poisson' and not ggns and self.model_type == 'mgn' else [1, 2, 5]
+        self.frequency_list = [0] if self.task_type != 'poisson' and not ggns and self.model_type == 'mgn' else get_from_nested_dict(config, ['task', 'imputation'])
 
         retrain = config.get('retrain')
         epochs = list() if retrain else [
@@ -117,11 +117,9 @@ class MeshTask(AbstractTask):
 
             if (e + 1) % self._validation_interval == 0:
                 one_step = self._algorithm.one_step_evaluator(self._valid_loader, self._num_val_trajectories, task_name)
-                rollouts = list()
-                n_steps = list()
-                for freq in self.frequency_list:
-                    rollouts.append(self._algorithm.rollout_evaluator(self._rollout_loader, self._num_val_rollouts, task_name, freq=freq))
-                    n_steps.append(self._algorithm.n_step_evaluator(self._rollout_loader, task_name, n_steps=self._val_n_steps, n_traj=self._num_val_n_step_rollouts, freq=freq))
+                n_steps = [self._algorithm.n_step_evaluator(self._rollout_loader, task_name, n_steps=self._val_n_steps, n_traj=self._num_val_n_step_rollouts, freq=1)]
+                rollouts = [self._algorithm.rollout_evaluator(self._rollout_loader, self._num_val_rollouts, task_name, freq=freq)
+                            for freq in self.frequency_list]
 
                 dir_dict = self.select_plotting(task_name, self.frequency_list, self.n_viz) if (e + 1) % self.viz_interval == 0 else {}
                 animation = {f"video_{key}": wandb.Video(value, fps=10, format="gif") for key, value in dir_dict.items()}
@@ -150,7 +148,7 @@ class MeshTask(AbstractTask):
 
         one_step = self._algorithm.one_step_evaluator(self._test_loader, self._num_test_trajectories, task_name)
         rollout = [self._algorithm.rollout_evaluator(self._test_rollout_loader, self._num_test_rollouts, task_name, freq=freq) for freq in self.frequency_list]
-        n_step = [self._algorithm.n_step_evaluator(self._test_rollout_loader, task_name, n_steps=self._n_steps, n_traj=self._num_n_step_rollouts, freq=freq) for freq in self.frequency_list]
+        n_step = [self._algorithm.n_step_evaluator(self._test_rollout_loader, task_name, n_steps=self._n_steps, n_traj=self._num_n_step_rollouts, freq=1)]
 
         dir_dict = self.select_plotting(task_name, self.frequency_list, self.test_viz)
         animation = {f"video_{key}": wandb.Video(value, fps=10, format="gif") for key, value in dir_dict.items()}
