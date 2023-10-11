@@ -45,10 +45,10 @@ class RKN(nn.Module):
         # TODO: Validity indices
         obs_valid = None #if obs_valid is not None else None
 
-        # TODO: Use priors!
-        _, _, post_means, post_covs = self._cell(prior_mean, prior_cov, w, w_var, obs_valid)
+        # TODO: Use priors for recurrence, but posteriors for predictions
+        post_means, post_covs, prior_means, prior_cov = self._cell(prior_mean, prior_cov, w, w_var, obs_valid)
 
-        return post_means, post_covs
+        return post_means, post_covs, prior_means, prior_cov
 
 
 def elup1(x: torch.Tensor) -> torch.Tensor:

@@ -25,6 +25,6 @@ class GRU(nn.Module):
     def forward(self, graph):
         #graph.u = self.reduce(graph.u)
         if graph.h.shape[-1] == self._lod:
-            return self._cell(graph.u, graph.h), None
+            return self._cell(graph.u, graph.h), None, None, None
         else:
-            return self._cell(graph.u), None
+            return self._cell(graph.u), None, None, None

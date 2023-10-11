@@ -28,18 +28,18 @@ class Decoder(nn.Module):
             self.log_var_model = nn.Sequential(nn.LazyLinear(latent_size), nn.LeakyReLU(), nn.LazyLinear(output_size))
 
     def forward(self, graph: Batch) -> Tuple[Tensor, Union[None, Tensor]]:
-        graph.u, c = self.rnn(graph)
+        graph.u, post_var, h, c = self.rnn(graph)
         x_hat = self.transform_nodes(graph)
         mean = self.model(x_hat)
-        if c is not None:
-            log_var = self.log_var_model(torch.cat(c, dim=-1))
+        if post_var is not None:
+            log_var = self.log_var_model(torch.cat(post_var, dim=-1))
             var = elup1(log_var)
             c = torch.stack(c, dim=0)
         else:
             var = None
         y_hat = (mean, var)
 
-        return y_hat, (graph.u, c)
+        return y_hat, (h, c)
 
     def transform_nodes(self, graph):
         if self.use_u:
