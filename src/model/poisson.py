@@ -79,12 +79,13 @@ class PoissonModel(AbstractSystemModel):
         """Rolls out a model trajectory."""
         num_steps = len(trajectory) if num_steps is None else num_steps
         hidden = trajectory[0]['h']
+        cell = trajectory[0]['c']
         cur_pos = trajectory[0]['u']
         point_index = trajectory[0]['point_index']
 
         pred_trajectory = []
         for step in range(num_steps):
-            cur_pos, hidden = self._step_fn(hidden, cur_pos, trajectory[step], step, freq)
+            cur_pos, (hidden, cell) = self._step_fn((hidden, cell), cur_pos, trajectory[step], step, freq)
             pred_trajectory.append(cur_pos)
 
         prediction = torch.stack([t['pos'][:point_index] for t in trajectory][:num_steps]).cpu()
@@ -110,7 +111,9 @@ class PoissonModel(AbstractSystemModel):
 
     @torch.no_grad()
     def _step_fn(self, hidden, cur_pos, ground_truth, step, freq):
-        input = {**ground_truth, 'h': hidden}
+        hidden, cell = hidden
+        cell = hidden if cell is None else cell
+        input = {**ground_truth, 'h': hidden, 'c': cell}
 
         keep_pc = step % freq == 0
         index = 0 if keep_pc else 1
@@ -121,7 +124,7 @@ class PoissonModel(AbstractSystemModel):
             data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True, self.reduced, mgn=not keep_pc)[index]
             graph = Batch.from_data_list([self.build_graph(data, is_training=False)]).to(device)
 
-            output, hidden = self(graph, False)
+            (output, _), hidden = self(graph, False)
             prediction, _, _ = self.update(graph.to(device), output)
 
         return prediction, hidden

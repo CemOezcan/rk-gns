@@ -35,8 +35,8 @@ class RKN(nn.Module):
 
     def forward(self, graph):
         batch, hidden_mean, hidden_var = graph.u, graph.h, graph.c
-        if hidden_mean.shape[-1] == self._lod:
-            prior_mean, prior_cov = graph.h, graph.c
+        if hidden_mean.shape[-1] == self._lsd:
+            prior_mean, prior_cov = graph.h, [graph.c[i] for i in range(3)]
         else:
             prior_mean, prior_cov = self._initial_mean, [var_activation(self._log_icu), var_activation(self._log_icl),
                                                          self._ics]
