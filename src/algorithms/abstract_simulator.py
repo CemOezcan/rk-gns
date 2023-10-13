@@ -405,7 +405,6 @@ class AbstractSimulator(ABC):
         wandb.log(data)
 
     def log_gradients(self, model):
-        return {}
         grad_first_layer = self.calculate_gradients(model, 0)
         grad_last_layer = self.calculate_gradients(model, -1)
         grad_enc = torch.cat([param.grad.view(-1) for param in model.learned_model.encoder.parameters()]).abs().mean()
