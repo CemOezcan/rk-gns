@@ -52,10 +52,10 @@ class RKNCell(nn.Module):
     @staticmethod
     def get_default_config() -> ConfigDict:
         config = {
-            'num_basis': 16,
-            'bandwidth': 32,
-            'trans_net_hidden_units': [128, 128],
-            'trans_net_hidden_activation': ['ReLU', "ReLU"],
+            'num_basis': 15,
+            'bandwidth': 25,
+            'trans_net_hidden_units': [128],
+            'trans_net_hidden_activation': ['ReLU'],
             'learn_trans_covar':True,
             'trans_covar':0.1,
             'learn_initial_state_covar':False,
