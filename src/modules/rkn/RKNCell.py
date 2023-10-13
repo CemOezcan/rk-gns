@@ -54,7 +54,7 @@ class RKNCell(nn.Module):
         config = {
             'num_basis': 16,
             'bandwidth': 32,
-            'trans_net_hidden_units': [128, 128],
+            'trans_net_hidden_units': [128, 64],
             'trans_net_hidden_activation': ['ReLU', "Tanh"],
             'learn_trans_covar':True,
             'trans_covar':0.1,
