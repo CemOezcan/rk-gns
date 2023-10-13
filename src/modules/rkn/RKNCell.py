@@ -54,8 +54,8 @@ class RKNCell(nn.Module):
         config = {
             'num_basis': 16,
             'bandwidth': 32,
-            'trans_net_hidden_units':[128, 128],
-            'trans_net_hidden_activation':"ReLU",
+            'trans_net_hidden_units': [128, 128],
+            'trans_net_hidden_activation': ['ReLU', "Tanh"],
             'learn_trans_covar':True,
             'trans_covar':0.1,
             'learn_initial_state_covar':False,
@@ -135,9 +135,9 @@ class RKNCell(nn.Module):
         """
         layers = []
         prev_dim = self._lsd
-        for n in num_hidden:
+        for i, n in enumerate(num_hidden):
             layers.append(nn.Linear(prev_dim, n))
-            layers.append(getattr(nn, activation)())
+            layers.append(getattr(nn, activation[i])())
             prev_dim = n
         layers.append(nn.Linear(prev_dim, self.c['num_basis']))
         layers.append(nn.Softmax(dim=-1))
@@ -206,14 +206,14 @@ class RKNCell(nn.Module):
         :return: current posterior state and covariance
         """
         cov_u, cov_l, cov_s = prior_cov
-        cov_u = torch.maximum(cov_u, torch.full_like(cov_u, 1e-8))
-        cov_l = torch.maximum(cov_l, torch.full_like(cov_l, 1e-8))
-        cov_s = torch.maximum(cov_s, torch.full_like(cov_s, 1e-8))
+        #cov_u = torch.maximum(cov_u, torch.full_like(cov_u, 1e-8))
+        #cov_l = torch.maximum(cov_l, torch.full_like(cov_l, 1e-8))
+        #cov_s = torch.maximum(cov_s, torch.full_like(cov_s, 1e-8))
 
         # compute kalman gain (eq 2 and 3 in paper)
         denominator = cov_u + obs_var
-        q_upper = cov_u / denominator
-        q_lower = cov_s / denominator
+        q_upper = torch.nan_to_num(cov_u / denominator)
+        q_lower = torch.nan_to_num(cov_s / denominator)
 
         # update mean (eq 4 in paper)
         residual = obs_mean - prior_mean[:, :self._lod]
