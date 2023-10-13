@@ -209,7 +209,6 @@ class RKNCell(nn.Module):
         cov_u = torch.maximum(cov_u, torch.full_like(cov_u, 1e-8))
         cov_l = torch.maximum(cov_l, torch.full_like(cov_l, 1e-8))
         cov_s = torch.maximum(cov_s, torch.full_like(cov_s, 1e-8))
-        obs_var = torch.maximum(obs_var, torch.full_like(obs_var, 1e-8))
 
         # compute kalman gain (eq 2 and 3 in paper)
         denominator = cov_u + obs_var
