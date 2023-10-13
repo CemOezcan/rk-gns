@@ -42,7 +42,7 @@ class RKN(nn.Module):
                                                          self._ics]
 
         w, w_var = self.mean_encoder(batch), elup1(self.log_var_encoder(batch))
-        w = nn.functional.normalize(w, p=2, dim=-1, eps=1e-8)
+        # w = nn.functional.normalize(w, p=2, dim=-1, eps=1e-8)
         # TODO: Validity indices
         obs_valid = None #if obs_valid is not None else None
 
