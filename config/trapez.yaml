@@ -15,7 +15,7 @@ task:
   poisson_ratio: False # Link to use global with model
   learning_rate: 1.0e-3
   batch_size: 32
-  trajectories: 1
+  trajectories: 675
   n_timesteps: 50
   epochs: 200
   pretraining: 200
