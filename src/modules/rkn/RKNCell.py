@@ -208,7 +208,7 @@ class RKNCell(nn.Module):
         cov_u, cov_l, cov_s = prior_cov
 
         # compute kalman gain (eq 2 and 3 in paper)
-        denominator = cov_u + obs_var
+        denominator = cov_u + obs_var + 1e-8
         q_upper = cov_u / denominator
         q_lower = cov_s / denominator
 
