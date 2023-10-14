@@ -128,6 +128,7 @@ class LSTMSimulator(AbstractSimulator):
         """
         trajectory_loss = list()
         loss_fn = torch.nn.MSELoss()
+        self._network.eval()
         test_loader = self.fetch_data(ds_loader, is_training=False)
         for i, sequence in enumerate(tqdm(test_loader, desc='Batches', leave=True, position=0)):
 
