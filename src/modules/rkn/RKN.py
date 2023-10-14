@@ -30,7 +30,7 @@ class RKN(nn.Module):
         self.mean_encoder = nn.LazyLinear(latent_obs_dim)
         self.log_var_encoder = nn.LazyLinear(latent_obs_dim)
 
-        self.bn = nn.LazyBatchNorm1d()
+        self.bn = nn.LayerNorm(normalized_shape=self._lsd)
 
         #TODO: dtype?
         self._cell = RKNCell(latent_obs_dim, RKNCell.get_default_config(), dtype=torch.float32)
