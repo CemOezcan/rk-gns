@@ -25,7 +25,7 @@ def main(config_name='trapez'):
     torch.cuda.manual_seed(seed=random_seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-    torch.autograd.set_detect_anomaly(True)
+    # torch.autograd.set_detect_anomaly(True)
     task = get_task(params)
     task.run_iterations()
 
