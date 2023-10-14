@@ -85,7 +85,7 @@ class LSTMSimulator(AbstractSimulator):
             loss = self._network.loss_fn(target, pred_mean, pred_var)
             loss.backward()
 
-            torch.nn.utils.clip_grad_norm_(self._network.parameters(), 1)
+            torch.nn.utils.clip_grad_norm_(self._network.parameters(), 10)
 
             gradients = self.log_gradients(self._network)
 
