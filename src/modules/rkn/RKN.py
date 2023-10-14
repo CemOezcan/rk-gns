@@ -30,6 +30,8 @@ class RKN(nn.Module):
         self.mean_encoder = nn.LazyLinear(latent_obs_dim)
         self.log_var_encoder = nn.LazyLinear(latent_obs_dim)
 
+        self.bn = nn.LazyBatchNorm1d()
+
         #TODO: dtype?
         self._cell = RKNCell(latent_obs_dim, RKNCell.get_default_config(), dtype=torch.float32)
 
@@ -40,7 +42,7 @@ class RKN(nn.Module):
         else:
             prior_mean, prior_cov = self._initial_mean, [var_activation(self._log_icu), var_activation(self._log_icl),
                                                          self._ics]
-
+        batch = self.bn(batch)
         w, w_var = self.mean_encoder(batch), elup1(self.log_var_encoder(batch))
         # w = nn.functional.normalize(w, p=2, dim=-1, eps=1e-8)
         # TODO: Validity indices
