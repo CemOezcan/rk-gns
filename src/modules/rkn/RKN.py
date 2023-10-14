@@ -27,8 +27,8 @@ class RKN(nn.Module):
         self._log_icl = torch.nn.Parameter(log_ic_init * torch.ones(1, self._lod).to(device))
         self._ics = torch.zeros(1, self._lod).to(device)
 
-        self.mean_encoder = nn.LazyLinear(latent_obs_dim)
-        self.log_var_encoder = nn.LazyLinear(latent_obs_dim)
+        self.mean_encoder = nn.Sequential(nn.LazyLinear(latent_obs_dim), nn.ReLU())
+        self.log_var_encoder = nn.Sequential(nn.LazyLinear(latent_obs_dim), nn.ReLU())
 
         #TODO: dtype?
         self._cell = RKNCell(latent_obs_dim, RKNCell.get_default_config(), dtype=torch.float32)
