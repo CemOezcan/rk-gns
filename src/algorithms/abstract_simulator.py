@@ -410,6 +410,10 @@ class AbstractSimulator(ABC):
         grad_enc = torch.cat([param.grad.view(-1) for param in model.learned_model.encoder.parameters()]).abs().mean()
         grad_dec = torch.cat([param.grad.view(-1) for param in model.learned_model.decoder.parameters()]).abs().mean()
 
+        param_rkn = torch.cat([param.view(-1) for param in model.learned_model.decoder.rnn.parameters()]).abs().mean()
+        param_rkn_enc = torch.cat([param.view(-1) for param in model.learned_model.decoder.rnn.mean_encoder.parameters()]).abs().mean()
+        param_rkn_enc_var = torch.cat([param.view(-1) for param in model.learned_model.decoder.rnn.mean_encoder.parameters()]).abs().mean()
+
         grad = []
         for param in model.parameters():
             if param.grad is not None:
@@ -419,7 +423,8 @@ class AbstractSimulator(ABC):
                 "gradients/last_layer": grad_last_layer,
                 "gradients/encoder": grad_enc,
                 "gradients/decoder": grad_dec,
-                "gradients/all_layers": grad}
+                "gradients/all_layers": grad, 'gradients/param_rkn': param_rkn,
+                'gradients/param_rkn_enc': param_rkn_enc, 'gradients/param_rkn_enc_var': param_rkn_enc_var}
 
     def calculate_gradients(self, model, layer):
         """
