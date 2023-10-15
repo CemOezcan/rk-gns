@@ -30,7 +30,7 @@ class RKN(nn.Module):
         self.mean_encoder = nn.LazyLinear(latent_obs_dim)
         self.log_var_encoder = nn.LazyLinear(latent_obs_dim)
 
-        self.norm = nn.BatchNorm1d(self._lsd)
+        #self.norm = nn.BatchNorm1d(self._lsd)
 
         #TODO: dtype?
         self._cell = RKNCell(latent_obs_dim, RKNCell.get_default_config(), dtype=torch.float32)
@@ -43,8 +43,26 @@ class RKN(nn.Module):
             prior_mean, prior_cov = self._initial_mean, [var_activation(self._log_icu), var_activation(self._log_icl),
                                                          self._ics]
 
-        batch = self.norm(batch)
+        #batch = self.norm(batch)
+        if True in torch.isnan(batch):
+            print("batch")
+
+        if True in torch.isinf(batch):
+            print("batchinf")
+
         w, w_var = self.mean_encoder(batch), elup1(self.log_var_encoder(batch))
+
+        if True in torch.isnan(w):
+            print("w")
+
+        if True in torch.isinf(w):
+            print("winf")
+
+        if True in torch.isnan(w_var):
+            print("w_var")
+
+        if True in torch.isinf(w_var):
+            print("w_varinf")
         # w = nn.functional.normalize(w, p=2, dim=-1, eps=1e-8)
         # TODO: Validity indices
         obs_valid = None #if obs_valid is not None else None
