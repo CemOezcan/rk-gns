@@ -30,14 +30,68 @@ class Decoder(nn.Module):
     def forward(self, graph: Batch) -> Tuple[Tensor, Union[None, Tensor]]:
         graph.u, post_var, h, c = self.rnn(graph)
         x_hat = self.transform_nodes(graph)
+
+        ex = False
+        if True in torch.isnan(x_hat):
+            ex = True
+            print("x_hat")
+            for param in self.rnn.parameters():
+                print(param.data)
+
+        if True in torch.isinf(x_hat):
+            ex = True
+            print("x_hatinf")
+            for param in self.rnn.parameters():
+                print(param.data)
+
+
         mean = self.model(x_hat)
+        # batch = self.norm(batch)
+        if True in torch.isnan(mean):
+            ex = True
+            print("mean")
+            for param in self.model.parameters():
+                print(param.data)
+
+        if True in torch.isinf(mean):
+            ex = True
+            print("meaninf")
+            for param in self.model.parameters():
+                print(param.data)
+
         if post_var is not None:
             log_var = self.log_var_model(torch.cat(post_var, dim=-1))
             var = elup1(log_var)
             c = torch.stack(c, dim=0)
+            if True in torch.isnan(log_var):
+                ex = True
+                print("log_var")
+                for param in self.log_var_model.parameters():
+                    print(param.data)
+
+            if True in torch.isinf(log_var):
+                ex = True
+                print("log_varinf")
+                for param in self.log_var_model.parameters():
+                    print(param.data)
         else:
             var = None
+
+
+
+        if True in torch.isnan(var):
+            ex = True
+            print("var")
+
+        if True in torch.isinf(var):
+            ex = True
+            print("varinf")
+
         y_hat = (mean, var)
+
+
+        if ex:
+            exit()
 
         return y_hat, (h, c)
 

@@ -43,26 +43,35 @@ class RKN(nn.Module):
             prior_mean, prior_cov = self._initial_mean, [var_activation(self._log_icu), var_activation(self._log_icl),
                                                          self._ics]
 
-        #batch = self.norm(batch)
-        if True in torch.isnan(batch):
-            print("batch")
-
-        if True in torch.isinf(batch):
-            print("batchinf")
-
         w, w_var = self.mean_encoder(batch), elup1(self.log_var_encoder(batch))
-
+        ex = False
         if True in torch.isnan(w):
+            ex = True
             print("w")
+            for param in self.mean_encoder.parameters():
+                print(param.data)
 
         if True in torch.isinf(w):
+            ex = True
             print("winf")
+            for param in self.mean_encoder.parameters():
+                print(param.data)
 
         if True in torch.isnan(w_var):
+            ex = True
             print("w_var")
+            for param in self.log_var_encoder.parameters():
+                print(param.data)
 
         if True in torch.isinf(w_var):
+            ex = True
             print("w_varinf")
+            for param in self.log_var_encoder.parameters():
+                print(param.data)
+
+        if ex:
+            exit()
+
         # w = nn.functional.normalize(w, p=2, dim=-1, eps=1e-8)
         # TODO: Validity indices
         obs_valid = None #if obs_valid is not None else None
