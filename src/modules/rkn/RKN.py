@@ -42,7 +42,7 @@ class RKN(nn.Module):
         else:
             prior_mean, prior_cov = self._initial_mean, [var_activation(self._log_icu), var_activation(self._log_icl),
                                                          self._ics]
-
+        #batch = self.norm(batch)
         w, w_var = self.mean_encoder(batch), elup1(self.log_var_encoder(batch))
         ex = False
         if True in torch.isnan(w):

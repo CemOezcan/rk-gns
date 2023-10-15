@@ -13,7 +13,7 @@ task:
   recurrence: rkn # False/name
   sequence: 5
   poisson_ratio: False # Link to use global with model
-  learning_rate: 1.0e-3
+  learning_rate: 1.0e-4
   batch_size: 32
   trajectories: 675
   n_timesteps: 50
