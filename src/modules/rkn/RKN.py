@@ -17,7 +17,7 @@ class RKN(nn.Module):
         :param dtype: datatype
         """
         super(RKN, self).__init__()
-        self._initial_state_variance = 10.0
+        self._initial_state_variance = 1.0
         self._lod = latent_obs_dim
         self._lsd = 2 * self._lod
         self._initial_mean = torch.zeros(1, self._lsd).to(device)
