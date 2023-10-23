@@ -262,21 +262,22 @@ class AlternatingSimulator(AbstractSimulator):
                     graph.to(device)
                     if j != 0:
                         graph.h = h
+                        graph.c = c
 
-                    output, h = self.global_model(graph, False)
+                    (output, var), (h, c) = self.global_model(graph, False)
                     u_target = self.global_model.get_target(graph, False)
-                    u_error = self._network.loss_fn(output, u_target).cpu()
+                    u_error = self._network.loss_fn(output, u_target, None).cpu()
 
                     poisson, _, _ = self.global_model.update(graph, output)
-                    poisson_error = self._network.loss_fn(poisson, graph.u).cpu()
-                    graph.u = poisson
+                    poisson_error = self._network.loss_fn(poisson, graph.u, None).cpu()
+                    graph.u = torch.cat([poisson, var], dim=-1)
 
-                    prediction, _ = self._network(graph, False)
+                    (prediction, _), _ = self._network(graph, False)
                     target = self._network.get_target(graph, False)
-                    error = self._network.loss_fn(target, prediction).cpu()
+                    error = self._network.loss_fn(target, prediction, None).cpu()
 
                     pred_position, _, _ = self._network.update(graph, prediction)
-                    pos_error = self._network.loss_fn(pred_position, graph.y).cpu()
+                    pos_error = self._network.loss_fn(pred_position, graph.y, None).cpu()
                     trajectory_loss.append([(error, pos_error, u_error, poisson_error)])
         else:
             test_loader = self.fetch_data(ds_loader, is_training=False, mode='supervised')

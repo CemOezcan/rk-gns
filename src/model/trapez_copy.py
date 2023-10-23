@@ -48,15 +48,16 @@ class TrapezModel(AbstractSystemModel):
         graph.to(device)
 
         with torch.no_grad():
-            output, h = poisson_model(graph, False)
+            (output, var), (h, c) = poisson_model(graph, False)
             poisson, _, _ = poisson_model.update(graph, output)
-        graph.u = poisson
+        graph.u = torch.cat([poisson, var], dim=-1)
         graph.h = h
+        graph.c = c
 
-        prediction, _ = self(graph, True)
+        (prediction, _), _ = self(graph, True)
         target = self.get_target(graph, True)
 
-        loss = self.loss_fn(target, prediction)
+        loss = self.loss_fn(target, prediction, None)
 
         return loss
 
@@ -89,10 +90,11 @@ class TrapezModel(AbstractSystemModel):
         pred_trajectory = []
         pred_u = list()
         cur_pos = trajectory[0]['pos']
+        cell = trajectory[0]['c']
         hidden = trajectory[0]['h']
         u = trajectory[0]['u']
         for step in range(num_steps):
-            cur_pos, hidden, u = self._step_fn(hidden, cur_pos, trajectory[step], step, u, poisson_model, freq)
+            cur_pos, (hidden, cell), u = self._step_fn((hidden, cell), cur_pos, trajectory[step], step, u, poisson_model, freq)
             pred_u.append(u)
             pred_trajectory.append(cur_pos)
 
@@ -124,10 +126,13 @@ class TrapezModel(AbstractSystemModel):
 
     @torch.no_grad()
     def _step_fn(self, hidden, cur_pos, ground_truth, step, cur_poisson, poisson_model=None, freq=1):
+        hidden, cell = hidden
+        cell = hidden if cell is None else cell
+
         mask = torch.where(ground_truth['node_type'] == NodeType.MESH)[0].cpu()
         next_pos = copy.deepcopy(ground_truth['next_pos']).to(device)
 
-        input = {**ground_truth, 'pos': cur_pos, 'h': hidden}
+        input = {**ground_truth, 'pos': cur_pos, 'h': hidden, 'c': cell}
 
         keep_pc = False if freq == 0 else step % freq == 0
         index = 0 if keep_pc else 1
@@ -136,13 +141,13 @@ class TrapezModel(AbstractSystemModel):
         graph = Batch.from_data_list([self.build_graph(data, is_training=False)]).to(device)
 
         if keep_pc or self.recurrence:
-            output, hidden = poisson_model(graph, False)
+            (output, var), hidden = poisson_model(graph, False)
             poisson, _, _ = poisson_model.update(graph, output)
         else:
             poisson = cur_poisson.to(device)
-        graph.u = poisson
+        graph.u = torch.cat([poisson, var], dim=-1)
 
-        output, _ = self(graph, False)
+        (output, _), _ = self(graph, False)
 
         prediction, cur_position, cur_velocity = self.update(graph.to(device), output[mask])
         next_pos[mask] = prediction

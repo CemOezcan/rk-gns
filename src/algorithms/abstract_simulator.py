@@ -446,9 +446,9 @@ class AbstractSimulator(ABC):
         #print([(name, param) for name, param in model.learned_model.decoder.named_parameters()])
         grad_dec = torch.cat([param.grad.view(-1) for param in model.learned_model.decoder.parameters() if param.grad is not None]).abs().mean()
 
-        param_rkn = torch.cat([param.view(-1) for param in model.learned_model.decoder.rnn.parameters()]).abs().mean()
-        param_rkn_enc = torch.cat([param.view(-1) for param in model.learned_model.decoder.rnn.mean_encoder.parameters()]).abs().mean()
-        param_rkn_enc_var = torch.cat([param.view(-1) for param in model.learned_model.decoder.rnn.mean_encoder.parameters()]).abs().mean()
+        #param_rkn = torch.cat([param.view(-1) for param in model.learned_model.decoder.rnn.parameters()]).abs().mean()
+        #param_rkn_enc = torch.cat([param.view(-1) for param in model.learned_model.decoder.rnn.mean_encoder.parameters()]).abs().mean()
+        #param_rkn_enc_var = torch.cat([param.view(-1) for param in model.learned_model.decoder.rnn.mean_encoder.parameters()]).abs().mean()
 
         param_enc = torch.cat([param.view(-1) for param in model.learned_model.encoder.parameters()]).abs().mean()
         param_proc = torch.cat(
@@ -466,8 +466,8 @@ class AbstractSimulator(ABC):
                 "gradients/encoder": grad_enc,
                 "gradients/decoder": grad_dec,
                 "gradients/processor": grad_proc,
-                "gradients/all_layers": grad, 'gradients/param_rkn': param_rkn,
-                'gradients/param_rkn_enc': param_rkn_enc, 'gradients/param_rkn_enc_var': param_rkn_enc_var,
+                "gradients/all_layers": grad, #'gradients/param_rkn': param_rkn,
+                #'gradients/param_rkn_enc': param_rkn_enc, 'gradients/param_rkn_enc_var': param_rkn_enc_var,
                 'gradients/param_enc': param_enc, 'gradients/param_proc': param_proc, 'gradients/param_dec': param_dec}
 
     def calculate_gradients(self, model, layer):
