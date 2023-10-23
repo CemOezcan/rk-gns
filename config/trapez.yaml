@@ -8,17 +8,18 @@ directory: deformable_plate
 
 task:
   task: trapez # trapez/poisson
-  model: mgn # mgn/supervised/self-supervised
-  ggns: True # T/F
-  recurrence: False # False/name
+  model: supervised # mgn/supervised/self-supervised
+  ggns: False # T/F
+  recurrence: gru # False/name
   sequence: 5
   poisson_ratio: False # Link to use global with model
   learning_rate: 5.0e-4
+  weight_decay: 0
   batch_size: 32
   trajectories: 675
   n_timesteps: 50
   epochs: 200
-  pretraining: 200
+  pretraining: 100
   reduced: False
   imputation: [1, 2, 5]
 
@@ -47,3 +48,8 @@ model:
   aggregation: mean
   message_passing_steps: 5
   heterogeneous: False
+
+poisson:
+  learning_rate: 1.0e-4
+  weight_decay: 1.0e-5
+  epochs: 100

@@ -118,6 +118,7 @@ class LSTMSimulator(AbstractSimulator):
 
         """
         trajectory_loss = list()
+        self._network.eval()
         test_loader = self.fetch_data(ds_loader, is_training=False)
         for i, sequence in enumerate(tqdm(test_loader, desc='Batches', leave=True, position=0)):
 
@@ -131,7 +132,10 @@ class LSTMSimulator(AbstractSimulator):
                 error = self._network.loss_fn(target_velocity, pred_velocity).cpu()
 
                 pred_position, _, _ = self._network.update(graph, pred_velocity)
-                pos_error = self._network.loss_fn(pred_position, graph.y).cpu()
+                if self.mode == 'poisson':
+                    pos_error = self._network.loss_fn(pred_position, graph.poisson).cpu()
+                else:
+                    pos_error = self._network.loss_fn(pred_position, graph.y).cpu()
                 trajectory_loss.append([(error, pos_error)])
 
         mean = np.mean(trajectory_loss, axis=0)
