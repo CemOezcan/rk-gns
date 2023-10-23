@@ -375,7 +375,8 @@ class AlternatingSimulator(AbstractSimulator):
 
         current_mean = torch.mean(torch.tensor(rollout_losses['mse_loss']), dim=0)
         prior_mean = self.best_models[freq][0]
-        self.best_models[freq] = (current_mean, self._network) if current_mean < prior_mean else self.best_models[freq]
+        if current_mean < prior_mean:
+            self.best_models[freq] = (current_mean, copy.deepcopy(self._network))
 
         return {f'rollout error/mean_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_loss']), dim=0),
                 f'rollout error/std_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_std']), dim=0),

@@ -1,3 +1,4 @@
+import copy
 import os
 import pickle
 import re
@@ -117,7 +118,8 @@ class MeshTask(AbstractTask):
 
             if (e + 1) % self._validation_interval == 0:
                 one_step = self._algorithm.one_step_evaluator(self._valid_loader, self._num_val_trajectories, task_name)
-                n_steps = [self._algorithm.n_step_evaluator(self._rollout_loader, task_name, n_steps=self._val_n_steps, n_traj=self._num_val_n_step_rollouts, freq=1)]
+                n_steps = [self._algorithm.n_step_evaluator(self._rollout_loader, task_name, n_steps=self._val_n_steps, n_traj=self._num_val_n_step_rollouts, freq=freq)
+                            for freq in self.frequency_list]
                 rollouts = [self._algorithm.rollout_evaluator(self._rollout_loader, self._num_val_rollouts, task_name, freq=freq)
                             for freq in self.frequency_list]
 
@@ -159,10 +161,18 @@ class MeshTask(AbstractTask):
         self._test_rollout_loader = get_data(config=self._config, split='test', raw=True)
         self._test_loader = get_data(config=self._config, split='test')
 
+        old_model = copy.deepcopy(self._algorithm._network)
+        self._algorithm._network = self._algorithm.best_models[0][1] if 0 in self.frequency_list else self._algorithm.best_models[2][1]
         one_step = self._algorithm.one_step_evaluator(self._test_loader, self._num_test_trajectories, task_name)
-        rollout = [self._algorithm.rollout_evaluator(self._test_rollout_loader, self._num_test_rollouts, task_name, freq=freq) for freq in self.frequency_list]
-        n_step = [self._algorithm.n_step_evaluator(self._test_rollout_loader, task_name, n_steps=self._n_steps, n_traj=self._num_n_step_rollouts, freq=1)]
 
+        n_step = list()
+        rollout = list()
+        for freq in self.frequency_list:
+            self._algorithm._network = self._algorithm.best_models[freq][1]
+            n_step.append(self._algorithm.n_step_evaluator(self._test_rollout_loader, task_name, n_steps=self._n_steps, n_traj=self._num_n_step_rollouts, freq=freq))
+            rollout.append(self._algorithm.rollout_evaluator(self._test_rollout_loader, self._num_test_rollouts, task_name, freq=freq))
+
+        self._algorithm._network = old_model
         dir_dict = self.select_plotting(task_name, self.frequency_list, self.test_viz)
         animation = {f"video_{key}": wandb.Video(value, fps=10, format="gif") for key, value in dir_dict.items()}
 
