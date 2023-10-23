@@ -73,8 +73,9 @@ class TrapezModel(AbstractSystemModel):
         pred_trajectory = []
         cur_pos = trajectory[0]['pos']
         hidden = trajectory[0]['h']
+        c = trajectory[0]['c']
         for step in range(num_steps):
-            cur_pos, hidden = self._step_fn(hidden, cur_pos, trajectory[step], step, freq)
+            cur_pos, (hidden, c) = self._step_fn((hidden, c), cur_pos, trajectory[step], step, freq)
             pred_trajectory.append(cur_pos)
 
         point_index = trajectory[0]['point_index']
@@ -94,14 +95,15 @@ class TrapezModel(AbstractSystemModel):
         mse_loss = mse_loss_fn(gt_pos[:, mask], prediction[:, mask]).cpu()
         mse_loss = torch.mean(torch.mean(mse_loss, dim=-1), dim=-1).detach()
 
-        return traj_ops, mse_loss
+        return traj_ops, mse_loss, None, None
 
     @torch.no_grad()
     def _step_fn(self, hidden, cur_pos, ground_truth, step, freq):
+        h, c = hidden
         mask = torch.where(ground_truth['node_type'] == NodeType.MESH)[0].cpu()
         next_pos = copy.deepcopy(ground_truth['next_pos']).to(device)
 
-        input = {**ground_truth, 'pos': cur_pos, 'h': hidden}
+        input = {**ground_truth, 'pos': cur_pos, 'h': h, 'c': c}
 
         keep_pc = False if freq == 0 else step % freq == 0
         index = 0 if keep_pc else 1
@@ -109,7 +111,7 @@ class TrapezModel(AbstractSystemModel):
         data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), self.self_sup, self.reduced, mgn=not keep_pc)[index]
         graph = Batch.from_data_list([self.build_graph(data, is_training=False)]).to(device)
 
-        output, hidden = self(graph, False)
+        (output, _), hidden = self(graph, False)
 
         prediction, cur_position, cur_velocity = self.update(graph.to(device), output[mask])
         next_pos[mask] = prediction
@@ -125,11 +127,11 @@ class TrapezModel(AbstractSystemModel):
             start = step * n_step
             if start < num_timesteps:
                 eval_traj = trajectory[start: start + n_step]
-                prediction_trajectory, mse_loss = self.rollout(eval_traj, n_step, freq)
+                prediction_trajectory, mse_loss, _, _ = self.rollout(eval_traj, n_step, freq)
                 mse_losses.append(torch.mean(mse_loss).cpu())
                 last_losses.append(mse_loss.cpu()[-1])
 
-        return torch.mean(torch.stack(mse_losses)), torch.mean(torch.stack(last_losses))
+        return torch.mean(torch.stack(mse_losses)), torch.mean(torch.stack(last_losses)), None, None
 
     @staticmethod
     def split(graph, ggns=False):

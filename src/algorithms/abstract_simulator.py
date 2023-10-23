@@ -273,6 +273,7 @@ class AbstractSimulator(ABC):
 
         """
         self._network.eval()
+        track_var = True
         # Take n_traj trajectories from valid set for n_step loss calculation
         means = list()
         lasts = list()
@@ -282,22 +283,29 @@ class AbstractSimulator(ABC):
             if i >= n_traj:
                 break
             mean_loss, last_loss, mean_var, last_var = self._network.n_step_computation(trajectory, n_steps, self._time_steps, freq=freq)
+            if mean_var is None or last_var is None:
+                track_var = False
             vars.append(mean_var)
             lst_vars.append(last_var)
             means.append(mean_loss)
             lasts.append(last_loss)
 
-        vars = torch.mean(torch.stack(vars))
-        lst_vars = torch.mean(torch.stack(lst_vars))
         means = torch.mean(torch.stack(means))
         lasts = torch.mean(torch.stack(lasts))
 
-        return {
+        scalars = {
             f'{n_steps}-step error/mean_k={freq}': torch.mean(torch.tensor(means), dim=0),
-            f'{n_steps}-step error/last_k={freq}': torch.mean(torch.tensor(lasts), dim=0),
-            f'{n_steps}-step error/mean_var_k={freq}': torch.mean(torch.tensor(vars), dim=0),
-            f'{n_steps}-step error/last_var_k={freq}': torch.mean(torch.tensor(lst_vars), dim=0)
+            f'{n_steps}-step error/last_k={freq}': torch.mean(torch.tensor(lasts), dim=0)
         }
+
+        if track_var:
+            vars = torch.mean(torch.stack(vars))
+            lst_vars = torch.mean(torch.stack(lst_vars))
+
+            scalars[f'{n_steps}-step error/mean_var_k={freq}'] = torch.mean(torch.tensor(vars), dim=0)
+            scalars[f'{n_steps}-step error/last_var_k={freq}'] = torch.mean(torch.tensor(lst_vars), dim=0)
+
+        return scalars
 
     @torch.no_grad()
     def rollout_evaluator(self, ds_loader: List, rollouts: int, task_name: str, logging: bool = True, freq: int = 1) -> Optional[Dict]:
@@ -325,6 +333,7 @@ class AbstractSimulator(ABC):
                 A single result that scores the input, potentially per sample
 
         """
+        track_var = True
         self._network.eval()
         trajectories = []
         mse_losses = []
@@ -334,16 +343,14 @@ class AbstractSimulator(ABC):
             if i >= rollouts:
                 break
             prediction_trajectory, mse_loss, var, p = self._network.rollout(trajectory, num_steps=self._time_steps, freq=freq)
+            if var is None or p is None:
+                track_var = False
             trajectories.append(prediction_trajectory)
-            pred.append(p.cpu())
+            pred.append(p)
             mse_losses.append(mse_loss.cpu())
-            vars.append(var.cpu())
+            vars.append(var)
 
         rollout_hist = wandb.Histogram([x for x in torch.mean(torch.stack(mse_losses), dim=1)], num_bins=20)
-
-        var_means = torch.mean(torch.stack(vars), dim=0)
-        pred_max = torch.max(torch.stack(pred), dim=0).values
-        pred_min = torch.min(torch.stack(pred), dim=0).values
         mse_means = torch.mean(torch.stack(mse_losses), dim=0)
         mse_stds = torch.std(torch.stack(mse_losses), dim=0)
 
@@ -357,21 +364,30 @@ class AbstractSimulator(ABC):
         prior_mean = self.best_models[freq][0]
         if current_mean < prior_mean:
             self.best_models[freq] = (current_mean, copy.deepcopy(self._network))
-        return {
+
+        scalars = {
             f'rollout error/mean_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_loss']), dim=0),
             f'rollout error/std_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_std']), dim=0),
             f'rollout error/last_k={freq}': rollout_losses['mse_loss'][-1],
             f'rollout error/fst_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_loss'][:10]), dim=0),
             f'rollout error/lst_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_loss'][-10:]), dim=0),
-            f'rollout_error/var_fst_k={freq}': torch.mean(var_means[:10], dim=0),
-            f'rollout_error/var_lst_k={freq}': torch.mean(var_means[-10:], dim=0),
-            f'rollout_error/var_k={freq}': torch.mean(var_means, dim=0),
-            f'rollout_error/pred_max_fst_k={freq}': torch.mean(pred_max[:10], dim=0),
-            f'rollout_error/pred_max_lst_k={freq}': torch.mean(pred_max[-10:], dim=0),
-            f'rollout_error/pred_min_fst_k={freq}': torch.mean(pred_min[:10], dim=0),
-            f'rollout_error/pred_min_lst_k={freq}': torch.mean(pred_min[-10:], dim=0),
             f'rollout error/histogram_k={freq}': rollout_hist
         }
+
+        if track_var:
+            var_means = torch.mean(torch.stack(vars), dim=0)
+            pred_max = torch.max(torch.stack(pred), dim=0).values
+            pred_min = torch.min(torch.stack(pred), dim=0).values
+
+            scalars = {**scalars, f'rollout_error/var_fst_k={freq}': torch.mean(var_means[:10], dim=0),
+                       f'rollout_error/var_lst_k={freq}': torch.mean(var_means[-10:], dim=0),
+                       f'rollout_error/var_k={freq}': torch.mean(var_means, dim=0),
+                       f'rollout_error/pred_max_fst_k={freq}': torch.mean(pred_max[:10], dim=0),
+                       f'rollout_error/pred_max_lst_k={freq}': torch.mean(pred_max[-10:], dim=0),
+                       f'rollout_error/pred_min_fst_k={freq}': torch.mean(pred_min[:10], dim=0),
+                       f'rollout_error/pred_min_lst_k={freq}': torch.mean(pred_min[-10:], dim=0)}
+
+        return scalars
 
     def save(self, name: str) -> None:
         """

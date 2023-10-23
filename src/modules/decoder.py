@@ -33,20 +33,20 @@ class Decoder(nn.Module):
         else:
             post_var, h, c = None, None, None
 
-        x_hat = self.transform_nodes(graph)
-        mean = self.model(x_hat)
-
         if post_var is not None:
             var = self.log_var_model(torch.cat(post_var, dim=-1))
             c = torch.stack(c, dim=0)
         else:
             var = None
 
+        x_hat = self.transform_nodes(graph, var)
+        mean = self.model(x_hat)
+
         y_hat = (mean, var)
 
         return y_hat, (h, c)
 
-    def transform_nodes(self, graph):
+    def transform_nodes(self, graph, var):
         if self.use_u:
             return graph.u
 
@@ -55,8 +55,9 @@ class Decoder(nn.Module):
 
         if self.self_sup:
             batch = graph[self.node_type].batch
+            features = [node_features, graph.u[batch][mask]] if var is None else [node_features, graph.u[batch][mask], var[batch][mask]]
             # TODO: integrate cov
-            return torch.cat([node_features, graph.u[batch][mask]], dim=-1)
+            return torch.cat(features, dim=-1)
 
         return node_features
 
