@@ -155,7 +155,7 @@ class MeshTask(AbstractTask):
         -------
 
         """
-        assert isinstance(self._algorithm, MeshSimulator)
+        assert isinstance(self._algorithm, AbstractSimulator)
         task_name = f'{self._task_name}final'
 
         self._test_rollout_loader = get_data(config=self._config, split='test', raw=True)
