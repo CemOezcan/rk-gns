@@ -1,3 +1,4 @@
+import copy
 import re
 
 from src.algorithms.get_task import get_task
@@ -26,7 +27,21 @@ def main(config_name='trapez'):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
+    global_model = None
+    if params.get('task').get('model').lower() == 'supervised':
+        params_copy = copy.deepcopy(params)
+        params_copy['task']['task'] = 'poisson'
+        params_copy['task']['model'] = 'mgn'
+        params_copy['task']['learning_rate'] = params_copy['poisson']['learning_rate']
+        params_copy['task']['epochs'] = params_copy['poisson']['epochs']
+        # TODO get best.
+        task = get_task(params_copy)
+        task.run_iterations()
+        task.finish()
+        global_model = task.get_model()
+
     task = get_task(params)
+    task.set_model(global_model)
     task.run_iterations()
 
     task.get_scalars()

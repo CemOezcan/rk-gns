@@ -8,7 +8,7 @@ directory: deformable_plate
 
 task:
   task: trapez # trapez/poisson
-  model: mgn # mgn/supervised/self-supervised
+  model: supervised # mgn/supervised/self-supervised
   ggns: True # T/F
   recurrence: False # False/name
   sequence: 5
@@ -47,3 +47,7 @@ model:
   aggregation: mean
   message_passing_steps: 5
   heterogeneous: False
+
+poisson:
+  learning_rate: 5.0e-4
+  epochs: 1
