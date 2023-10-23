@@ -42,7 +42,8 @@ class AbstractSystemModel(ABC, nn.Module):
         self.rnn_type = params.get('task').get('recurrence') if self.recurrence else False
         self.use_global = params.get('task').get('poisson_ratio') or params.get('task').get('model').lower() == 'self-supervised'
         self._params = params.get('model')
-        self.loss_fn = gaussian_nll if params.get('task').get('recurrence').lower() == 'rkn' and params.get('task').get('task') == 'poisson' else mse
+        self.loss_fn = gaussian_nll if (params.get('task').get('recurrence').lower() == 'rkn' and params.get('task').get('task') == 'poisson')\
+            or (params.get('task').get('recurrence').lower() == 'rkn' and params.get('task').get('model') == 'self-supervised') else mse
 
         self._output_normalizer = Normalizer(name='output_normalizer')
         self._mesh_edge_normalizer = Normalizer(name='mesh_edge_normalizer')
