@@ -124,7 +124,7 @@ class MeshTask(AbstractTask):
                 dir_dict = self.select_plotting(task_name, self.frequency_list, self.n_viz) if (e + 1) % self.viz_interval == 0 else {}
                 animation = {f"video_{key}": wandb.Video(value, fps=10, format="gif") for key, value in dir_dict.items()}
 
-                evaluation_data = [one_step] + rollouts + n_steps + [animation]
+                evaluation_data = evaluation_data + [one_step] + rollouts + n_steps + [animation]
                 self._algorithm.save(task_name)
 
             data = {k: v for dictionary in evaluation_data for k, v in dictionary.items()}
@@ -133,7 +133,10 @@ class MeshTask(AbstractTask):
             self._current_epoch = e + 1
 
     def get_model(self):
-        return self._algorithm._network
+        if self._algorithm.best_models[2][1] is None:
+            return self._algorithm._network
+
+        return self._algorithm.best_models[2][1]
 
     def set_model(self, model):
         if model is not None:

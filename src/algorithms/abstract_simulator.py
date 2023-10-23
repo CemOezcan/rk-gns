@@ -1,3 +1,4 @@
+import math
 import os
 import pickle
 import random
@@ -123,6 +124,7 @@ class AbstractSimulator(ABC):
             self._batch_size = task_information.get('task').get('batch_size')
             self._network = get_model(task_information)
             self._optimizer = optim.Adam(self._network.parameters(), lr=self._learning_rate)
+            self.best_models = {x: (math.inf, None) for x in [0, 1, 2, 5]}
             self._initialized = True
         else:
             self.set_seed()
@@ -211,6 +213,7 @@ class AbstractSimulator(ABC):
                 A single result that scores the input, potentially per sample
 
         """
+        self._network.eval()
         trajectory_loss = list()
         test_loader = self.fetch_data(ds_loader, is_training=False)
         for i, batch in enumerate(tqdm(test_loader, desc='Validation', leave=True, position=0)):
@@ -267,6 +270,7 @@ class AbstractSimulator(ABC):
         -------
 
         """
+        self._network.eval()
         # Take n_traj trajectories from valid set for n_step loss calculation
         means = list()
         lasts = list()
@@ -311,6 +315,7 @@ class AbstractSimulator(ABC):
                 A single result that scores the input, potentially per sample
 
         """
+        self._network.eval()
         trajectories = []
         mse_losses = []
         for i, trajectory in enumerate(tqdm(ds_loader, desc='Rollouts', leave=True, position=0)):
@@ -331,6 +336,9 @@ class AbstractSimulator(ABC):
         }
 
         self.save_rollouts(trajectories, task_name, freq)
+        current_mean = torch.mean(torch.tensor(rollout_losses['mse_loss']), dim=0)
+        prior_mean = self.best_models[freq][0]
+        self.best_models[freq] = (current_mean, self._network) if current_mean < prior_mean else self.best_models[freq]
 
         return {
             f'rollout error/mean_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_loss']), dim=0),

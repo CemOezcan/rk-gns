@@ -248,6 +248,8 @@ class AlternatingSimulator(AbstractSimulator):
                 A single result that scores the input, potentially per sample
 
         """
+        self.global_model.eval()
+        self._network.eval()
         trajectory_loss = list()
         if self.recurrence:
             trajectory_loss = list()
@@ -371,6 +373,10 @@ class AlternatingSimulator(AbstractSimulator):
 
         self.save_rollouts(trajectories, task_name, freq)
 
+        current_mean = torch.mean(torch.tensor(rollout_losses['mse_loss']), dim=0)
+        prior_mean = self.best_models[freq][0]
+        self.best_models[freq] = (current_mean, self._network) if current_mean < prior_mean else self.best_models[freq]
+
         return {f'rollout error/mean_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_loss']), dim=0),
                 f'rollout error/std_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_std']), dim=0),
                 f'rollout error/last_k={freq}': rollout_losses['mse_loss'][-1],
@@ -405,6 +411,8 @@ class AlternatingSimulator(AbstractSimulator):
         -------
 
         """
+        self.global_model.eval()
+        self._network.eval()
         # Take n_traj trajectories from valid set for n_step loss calculation
         means = list()
         lasts = list()
