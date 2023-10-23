@@ -12,6 +12,20 @@ from src.util.types import *
 from src.util.util import device
 import torch_geometric.transforms as T
 
+def gaussian_nll(target, predicted_mean, predicted_var):
+    """Gaussian Negative Log Likelihood (assuming diagonal covariance)"""
+    predicted_var += 1e-5
+    mahal = torch.square(target - predicted_mean) / predicted_var
+    element_wise_nll = 0.5 * (torch.log(predicted_var) + np.log(2 * np.pi) + mahal)
+    sample_wise_error = torch.sum(element_wise_nll, dim=-1)
+    #loss_fn = torch.nn.MSELoss()
+
+    return torch.mean(sample_wise_error) #+ loss_fn(target, predicted_mean)
+
+def mse(target, predicted_mean, predicted_var):
+    loss_fn = torch.nn.MSELoss()
+
+    return loss_fn(target, predicted_mean)
 
 class AbstractSystemModel(ABC, nn.Module):
     """
@@ -27,7 +41,7 @@ class AbstractSystemModel(ABC, nn.Module):
         self.rnn_type = params.get('task').get('recurrence') if self.recurrence else False
         self.use_global = params.get('task').get('poisson_ratio') or params.get('task').get('model').lower() == 'self-supervised'
         self._params = params.get('model')
-        self.loss_fn = torch.nn.MSELoss()
+        self.loss_fn = mse if params.get('task').get('recurrence').lower() != 'rkn' else gaussian_nll
 
         self._output_normalizer = Normalizer(name='output_normalizer')
         self._mesh_edge_normalizer = Normalizer(name='mesh_edge_normalizer')
@@ -148,6 +162,7 @@ class AbstractSystemModel(ABC, nn.Module):
         hetero_data.u = data.u
         hetero_data.poisson = data.poisson
         hetero_data.h = data.h
+        hetero_data.c = data.c
         hetero_data.y = data.y
         hetero_data.cpu()
 

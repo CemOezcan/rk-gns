@@ -1,5 +1,7 @@
+import copy
 import os
 import pickle
+import random
 import time
 from typing import List, Union, Dict, Optional
 
@@ -61,21 +63,28 @@ class LSTMSimulator(AbstractSimulator):
         for i, sequence in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
             target_list = list()
             pred_list = list()
+            pred_var_list = list()
 
             for j, graph in enumerate(sequence):
                 graph.to(device)
                 if j != 0:
                     graph.h = h
-                pred_velocity, h = self._network(graph, True)
+                    graph.c = c
+                (pred_velocity, pred_var), (h, c) = self._network(graph, True)
                 target_velocity = self._network.get_target(graph, True)
 
                 target_list.append(target_velocity)
                 pred_list.append(pred_velocity)
+                pred_var_list.append(pred_var)
 
             target = torch.stack(target_list, dim=1)
-            pred = torch.stack(pred_list, dim=1)
+            pred_mean = torch.stack(pred_list, dim=1)
+            if pred_var_list[0] is not None:
+                pred_var = torch.stack(pred_var_list, dim=1)
+            else:
+                pred_var = None
 
-            loss = self._network.loss_fn(target, pred)
+            loss = self._network.loss_fn(target, pred_mean, pred_var)
             loss.backward()
 
             gradients = self.log_gradients(self._network)
@@ -84,7 +93,8 @@ class LSTMSimulator(AbstractSimulator):
             self._optimizer.zero_grad()
 
             end_instance = time.time()
-            wandb.log({**gradients, 'training/loss': loss.detach(), 'training/sequence_time': end_instance - start_instance})
+            wandb.log({**gradients, 'training/loss': loss.detach(), 'training/sequence_time': end_instance - start_instance,
+                       'training/predictions': torch.mean(pred_mean.abs()), 'training/predictions_var': torch.mean(pred_var)})
             start_instance = time.time()
 
             total_loss += loss.detach()
@@ -118,6 +128,7 @@ class LSTMSimulator(AbstractSimulator):
 
         """
         trajectory_loss = list()
+        loss_fn = torch.nn.MSELoss()
         self._network.eval()
         test_loader = self.fetch_data(ds_loader, is_training=False)
         for i, sequence in enumerate(tqdm(test_loader, desc='Batches', leave=True, position=0)):
@@ -126,16 +137,17 @@ class LSTMSimulator(AbstractSimulator):
                 graph.to(device)
                 if j != 0:
                     graph.h = h
+                    graph.c = c
 
-                pred_velocity, h = self._network(graph, False)
+                (pred_velocity, pred_var), (h, c) = self._network(graph, False)
                 target_velocity = self._network.get_target(graph, False)
-                error = self._network.loss_fn(target_velocity, pred_velocity).cpu()
+                error = self._network.loss_fn(target_velocity, pred_velocity, pred_var).cpu()
 
                 pred_position, _, _ = self._network.update(graph, pred_velocity)
                 if self.mode == 'poisson':
-                    pos_error = self._network.loss_fn(pred_position, graph.poisson).cpu()
+                    pos_error = loss_fn(pred_position, graph.poisson).cpu()
                 else:
-                    pos_error = self._network.loss_fn(pred_position, graph.y).cpu()
+                    pos_error = loss_fn(pred_position, graph.y).cpu()
                 trajectory_loss.append([(error, pos_error)])
 
         mean = np.mean(trajectory_loss, axis=0)

@@ -79,26 +79,30 @@ class PoissonModel(AbstractSystemModel):
         """Rolls out a model trajectory."""
         num_steps = len(trajectory) if num_steps is None else num_steps
         hidden = trajectory[0]['h']
+        cell = trajectory[0]['c']
         cur_pos = trajectory[0]['u']
         point_index = trajectory[0]['point_index']
 
         pred_trajectory = []
+        pred_var = list()
         for step in range(num_steps):
-            cur_pos, hidden = self._step_fn(hidden, cur_pos, trajectory[step], step, freq)
+            cur_pos, v, (hidden, cell) = self._step_fn((hidden, cell), cur_pos, trajectory[step], step, freq)
             pred_trajectory.append(cur_pos)
+            pred_var.append(v)
 
         prediction = torch.stack([t['pos'][:point_index] for t in trajectory][:num_steps]).cpu()
         gt_pos = torch.stack([t['pos'][:point_index] for t in trajectory][:num_steps]).cpu()
 
         u_pred = torch.stack([t for t in pred_trajectory][:num_steps]).cpu()
+        u_var = torch.stack([t for t in pred_var][:num_steps]).cpu()
         u_gt = torch.stack([t['poisson'] for t in trajectory][:num_steps]).cpu()
 
         traj_ops = {
             'cells': trajectory[0]['cells'],
             'cell_type': trajectory[0]['cell_type'],
             'node_type': trajectory[0]['node_type'],
-            'gt_pos': gt_pos,
-            'pred_pos': prediction
+            'gt_pos': u_gt,
+            'pred_pos': u_pred
         }
 
         mse_loss_fn = torch.nn.MSELoss(reduction='none')
@@ -106,11 +110,13 @@ class PoissonModel(AbstractSystemModel):
         mse_loss = mse_loss_fn(u_pred, u_gt).cpu()
         mse_loss = torch.mean(torch.mean(mse_loss, dim=-1), dim=-1).detach()
 
-        return traj_ops, mse_loss
+        return traj_ops, mse_loss, u_var, u_pred
 
     @torch.no_grad()
     def _step_fn(self, hidden, cur_pos, ground_truth, step, freq):
-        input = {**ground_truth, 'h': hidden}
+        hidden, cell = hidden
+        cell = hidden if cell is None else cell
+        input = {**ground_truth, 'h': hidden, 'c': cell}
 
         keep_pc = step % freq == 0
         index = 0 if keep_pc else 1
@@ -121,22 +127,27 @@ class PoissonModel(AbstractSystemModel):
             data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True, self.reduced, mgn=not keep_pc)[index]
             graph = Batch.from_data_list([self.build_graph(data, is_training=False)]).to(device)
 
-            output, hidden = self(graph, False)
+            (output, v), hidden = self(graph, False)
             prediction, _, _ = self.update(graph.to(device), output)
 
-        return prediction, hidden
+        return prediction, v, hidden
 
     @torch.no_grad()
     def n_step_computation(self, trajectory: List[Dict[str, Tensor]], n_step: int, num_timesteps=None, freq: int = 1) -> Tuple[Tensor, Tensor]:
         mse_losses = list()
         last_losses = list()
+        last_var = list()
+        var = list()
         num_timesteps = len(trajectory) if num_timesteps is None else num_timesteps
         for step in range(num_timesteps // n_step):
             start = step * n_step
             if start < num_timesteps:
                 eval_traj = trajectory[start: start + n_step]
-                prediction_trajectory, mse_loss = self.rollout(eval_traj, n_step, freq)
+                traj_ops, mse_loss, u_var, u_pred = self.rollout(eval_traj, n_step, freq)
+                var.append(torch.mean(u_var).cpu())
+                last_var.append(u_var.cpu()[-1])
                 mse_losses.append(torch.mean(mse_loss).cpu())
                 last_losses.append(mse_loss.cpu()[-1])
 
-        return torch.mean(torch.stack(mse_losses)), torch.mean(torch.stack(last_losses))
+        return torch.mean(torch.stack(mse_losses)), torch.mean(torch.stack(last_losses)), \
+            torch.mean(torch.stack(var)), torch.mean(torch.stack(last_var))

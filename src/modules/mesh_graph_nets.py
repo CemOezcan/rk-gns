@@ -69,10 +69,10 @@ class LazyMLP(nn.Module):
                                       str(index)] = nn.LazyLinear(output_size)
             #if index < (num_layers - 1):
             #    self._layers_ordered_dict["leakyrelu_" + str(index)] = nn.LeakyReLU()
-            self._layers_ordered_dict["leakyrelu_" + str(index)] = nn.LeakyReLU()
+            if layer_norm:
+                self._layers_ordered_dict['layernorm_0'] = nn.LayerNorm(normalized_shape=output_sizes[-1])
 
-        if layer_norm:
-            self._layers_ordered_dict['layernorm_0'] = nn.LayerNorm(normalized_shape=output_sizes[-1])
+            self._layers_ordered_dict["leakyrelu_" + str(index)] = nn.LeakyReLU()
 
         self.layers = nn.Sequential(self._layers_ordered_dict)
 

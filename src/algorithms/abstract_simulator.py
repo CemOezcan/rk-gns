@@ -276,19 +276,27 @@ class AbstractSimulator(ABC):
         # Take n_traj trajectories from valid set for n_step loss calculation
         means = list()
         lasts = list()
+        vars = list()
+        lst_vars = list()
         for i, trajectory in enumerate(tqdm(ds_loader, desc='N-Step', leave=True, position=0)):
             if i >= n_traj:
                 break
-            mean_loss, last_loss = self._network.n_step_computation(trajectory, n_steps, self._time_steps, freq=freq)
+            mean_loss, last_loss, mean_var, last_var = self._network.n_step_computation(trajectory, n_steps, self._time_steps, freq=freq)
+            vars.append(mean_var)
+            lst_vars.append(last_var)
             means.append(mean_loss)
             lasts.append(last_loss)
 
+        vars = torch.mean(torch.stack(vars))
+        lst_vars = torch.mean(torch.stack(lst_vars))
         means = torch.mean(torch.stack(means))
         lasts = torch.mean(torch.stack(lasts))
 
         return {
             f'{n_steps}-step error/mean_k={freq}': torch.mean(torch.tensor(means), dim=0),
-            f'{n_steps}-step error/last_k={freq}': torch.mean(torch.tensor(lasts), dim=0)
+            f'{n_steps}-step error/last_k={freq}': torch.mean(torch.tensor(lasts), dim=0),
+            f'{n_steps}-step error/mean_var_k={freq}': torch.mean(torch.tensor(vars), dim=0),
+            f'{n_steps}-step error/last_var_k={freq}': torch.mean(torch.tensor(lst_vars), dim=0)
         }
 
     @torch.no_grad()
@@ -320,15 +328,22 @@ class AbstractSimulator(ABC):
         self._network.eval()
         trajectories = []
         mse_losses = []
+        vars = []
+        pred = list()
         for i, trajectory in enumerate(tqdm(ds_loader, desc='Rollouts', leave=True, position=0)):
             if i >= rollouts:
                 break
-            prediction_trajectory, mse_loss = self._network.rollout(trajectory, num_steps=self._time_steps, freq=freq)
+            prediction_trajectory, mse_loss, var, p = self._network.rollout(trajectory, num_steps=self._time_steps, freq=freq)
             trajectories.append(prediction_trajectory)
+            pred.append(p.cpu())
             mse_losses.append(mse_loss.cpu())
+            vars.append(var.cpu())
 
         rollout_hist = wandb.Histogram([x for x in torch.mean(torch.stack(mse_losses), dim=1)], num_bins=20)
 
+        var_means = torch.mean(torch.stack(vars), dim=0)
+        pred_max = torch.max(torch.stack(pred), dim=0).values
+        pred_min = torch.min(torch.stack(pred), dim=0).values
         mse_means = torch.mean(torch.stack(mse_losses), dim=0)
         mse_stds = torch.std(torch.stack(mse_losses), dim=0)
 
@@ -346,6 +361,15 @@ class AbstractSimulator(ABC):
             f'rollout error/mean_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_loss']), dim=0),
             f'rollout error/std_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_std']), dim=0),
             f'rollout error/last_k={freq}': rollout_losses['mse_loss'][-1],
+            f'rollout error/fst_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_loss'][:10]), dim=0),
+            f'rollout error/lst_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_loss'][-10:]), dim=0),
+            f'rollout_error/var_fst_k={freq}': torch.mean(var_means[:10], dim=0),
+            f'rollout_error/var_lst_k={freq}': torch.mean(var_means[-10:], dim=0),
+            f'rollout_error/var_k={freq}': torch.mean(var_means, dim=0),
+            f'rollout_error/pred_max_fst_k={freq}': torch.mean(pred_max[:10], dim=0),
+            f'rollout_error/pred_max_lst_k={freq}': torch.mean(pred_max[-10:], dim=0),
+            f'rollout_error/pred_min_fst_k={freq}': torch.mean(pred_min[:10], dim=0),
+            f'rollout_error/pred_min_lst_k={freq}': torch.mean(pred_min[-10:], dim=0),
             f'rollout error/histogram_k={freq}': rollout_hist
         }
 
@@ -418,7 +442,19 @@ class AbstractSimulator(ABC):
         grad_first_layer = self.calculate_gradients(model, 0)
         grad_last_layer = self.calculate_gradients(model, -1)
         grad_enc = torch.cat([param.grad.view(-1) for param in model.learned_model.encoder.parameters()]).abs().mean()
-        grad_dec = torch.cat([param.grad.view(-1) for param in model.learned_model.decoder.parameters()]).abs().mean()
+        grad_proc = torch.cat([param.grad.view(-1) for param in model.learned_model.processor.parameters()]).abs().mean()
+        #print([(name, param) for name, param in model.learned_model.decoder.named_parameters()])
+        grad_dec = torch.cat([param.grad.view(-1) for param in model.learned_model.decoder.parameters() if param.grad is not None]).abs().mean()
+
+        param_rkn = torch.cat([param.view(-1) for param in model.learned_model.decoder.rnn.parameters()]).abs().mean()
+        param_rkn_enc = torch.cat([param.view(-1) for param in model.learned_model.decoder.rnn.mean_encoder.parameters()]).abs().mean()
+        param_rkn_enc_var = torch.cat([param.view(-1) for param in model.learned_model.decoder.rnn.mean_encoder.parameters()]).abs().mean()
+
+        param_enc = torch.cat([param.view(-1) for param in model.learned_model.encoder.parameters()]).abs().mean()
+        param_proc = torch.cat(
+            [param.view(-1) for param in model.learned_model.processor.parameters()]).abs().mean()
+        param_dec = torch.cat(
+            [param.view(-1) for param in model.learned_model.decoder.parameters()]).abs().mean()
 
         grad = []
         for param in model.parameters():
@@ -429,7 +465,10 @@ class AbstractSimulator(ABC):
                 "gradients/last_layer": grad_last_layer,
                 "gradients/encoder": grad_enc,
                 "gradients/decoder": grad_dec,
-                "gradients/all_layers": grad}
+                "gradients/processor": grad_proc,
+                "gradients/all_layers": grad, 'gradients/param_rkn': param_rkn,
+                'gradients/param_rkn_enc': param_rkn_enc, 'gradients/param_rkn_enc_var': param_rkn_enc_var,
+                'gradients/param_enc': param_enc, 'gradients/param_proc': param_proc, 'gradients/param_dec': param_dec}
 
     def calculate_gradients(self, model, layer):
         """
