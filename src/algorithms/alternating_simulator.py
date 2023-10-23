@@ -51,6 +51,7 @@ class AlternatingSimulator(AbstractSimulator):
 
     def initialize(self, task_information: ConfigDict) -> None:
         if not self._initialized:
+            # TODO: remove
             self.global_model = get_model(task_information, poisson=True)
             self.global_optimizer = optim.Adam(self.global_model.parameters(), lr=1e-4)
 
@@ -69,6 +70,7 @@ class AlternatingSimulator(AbstractSimulator):
         -------
 
         """
+        # TODO: remove
         for _ in range(self.pretraining_epochs):
             if self.recurrence:
                 self.fit_lstm_poisson(train_dataloader)

@@ -75,6 +75,7 @@ class AbstractSimulator(ABC):
 
         self.loss_function = F.mse_loss
         self._learning_rate = config.get('task').get('learning_rate')
+        self._weight_decay = config.get('task').get('weight_decay')
 
     def initialize(self, task_information: ConfigDict) -> None:
         """
@@ -124,7 +125,7 @@ class AbstractSimulator(ABC):
         if not self._initialized:
             self._batch_size = task_information.get('task').get('batch_size')
             self._network = get_model(task_information)
-            self._optimizer = optim.Adam(self._network.parameters(), lr=self._learning_rate)
+            self._optimizer = optim.Adam(self._network.parameters(), lr=self._learning_rate, weight_decay=self._weight_decay)
             self.best_models = {x: (math.inf, None) for x in [0, 1, 2, 5]}
             self._initialized = True
         else:

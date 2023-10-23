@@ -33,6 +33,7 @@ def main(config_name='trapez'):
         params_copy['task']['task'] = 'poisson'
         params_copy['task']['model'] = 'mgn'
         params_copy['task']['learning_rate'] = params_copy['poisson']['learning_rate']
+        params_copy['task']['weight_decay'] = params_copy['poisson']['weight_decay']
         params_copy['task']['epochs'] = params_copy['poisson']['epochs']
         # TODO get best.
         task = get_task(params_copy)
