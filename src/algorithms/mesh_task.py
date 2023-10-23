@@ -69,6 +69,7 @@ class MeshTask(AbstractTask):
         aggr = get_from_nested_dict(config, ['model', 'aggregation'])
         self.task_type = get_from_nested_dict(config, ['task', 'task'])
         lr = get_from_nested_dict(config, ['task', 'learning_rate'])
+        wd = get_from_nested_dict(config, ['task', 'weight_decay'])
         feature_norm = get_from_nested_dict(config, ['model', 'feature_norm'])
         layer_norm = get_from_nested_dict(config, ['model', 'layer_norm'])
         layers = get_from_nested_dict(config, ['model', 'layers'])
@@ -77,8 +78,10 @@ class MeshTask(AbstractTask):
         self.model_type = get_from_nested_dict(config, ['task', 'model'])
         seq = get_from_nested_dict(config, ['task', 'sequence'])
         batch_size = config.get('task').get('batch_size')
+        rnn_type = config.get('task').get('recurrence')
         reduced = config.get('task').get('reduced')
-        self._task_name = f'm:{self.task_type}_l:{layers}_fn:{feature_norm}_ln:{layer_norm}_b:{batch_size}_t:{self.model_type}_a:{aggr}_lr:{lr}_seq:{seq}_ggns:{ggns}_red:{reduced}_poisson:{poisson}_mp:{self._mp}_epoch:'
+        #self._task_name = f'm:{self.task_type}_l:{layers}_fn:{feature_norm}_ln:{layer_norm}_b:{batch_size}_t:{self.model_type}_a:{aggr}_lr:{lr}_seq:{seq}_ggns:{ggns}_red:{reduced}_poisson:{poisson}_mp:{self._mp}_epoch:'
+        self._task_name = f'm:{self.task_type}_b:{batch_size}_t:{self.model_type}_lr:{lr}_wd:{wd}_seq:{seq}_ggns:{ggns}_red:{reduced}_p:{poisson}_r:{rnn_type}_mp:{self._mp}_epoch:'
 
         self.frequency_list = [0] if self.task_type != 'poisson' and not ggns and self.model_type == 'mgn' else get_from_nested_dict(config, ['task', 'imputation'])
 
