@@ -155,7 +155,7 @@ class AlternatingSimulator(AbstractSimulator):
         self._network.train()
         self.global_model.eval()
         # TODO: check mode --> sequence dataset only differentiates between mode == mgn and mode != mgn
-        data = self.fetch_data(train_dataloader, True, mode='poisson', seq=True, seq_len=5)
+        data = self.fetch_data(train_dataloader, True, mode='poisson', seq=True, seq_len=self._seq_len)
         total_loss = 0
         size = 0
 
