@@ -9,30 +9,35 @@ directory: deformable_plate
 task:
   task: trapez # trapez/poisson
   model: supervised # mgn/supervised/self-supervised
-  ggns: True # T/F
-  recurrence: False # None/name now T/F
-  sequence: 1
+  ggns: False # T/F
+  recurrence: gru # False/name
+  sequence: 5
   poisson_ratio: False # Link to use global with model
-  learning_rate: 5.0e-4
+  learning_rate: 1.0e-4
+  weight_decay: 0
   batch_size: 32
-  trajectories: 5
+  trajectories: 100
   n_timesteps: 50
-  epochs: 200
-  pretraining: 10
+  epochs: 5
+  pretraining: 100
+  reduced: True
+  imputation: [1, 2, 5]
 
   test:
-    trajectories: 10 # Number of trajectories that are going to be used to compute the validation loss during evaluation
-    rollouts: 10 # Number of trajectories that are going to be used to compute the rollout loss during evaluation
-    n_step_rollouts: 1 # Number of trajectories that are going to be used to compute the n_step_loss during evaluation
+    trajectories: 50 # Number of trajectories that are going to be used to compute the validation loss during evaluation
+    rollouts: 50 # Number of trajectories that are going to be used to compute the rollout loss during evaluation
+    n_step_rollouts: 50 # Number of trajectories that are going to be used to compute the n_step_loss during evaluation
     n_steps: 10
+    n_viz: 5
 
   validation:
-    interval: 10
-    trajectories: 135 # Number of trajectories that are going to be used to compute the validation loss during training
-    rollouts: 135 # Number of trajectories that are going to be used to compute the rollout loss during training
+    interval: 1
+    trajectories: 50 # Number of trajectories that are going to be used to compute the validation loss during training
+    rollouts: 50 # Number of trajectories that are going to be used to compute the rollout loss during training
     n_steps: 10
-    n_step_rollouts: 20
-    n_viz: 5
+    n_step_rollouts: 50
+    viz_interval: 500
+    n_viz: 0
 
 model:
   feature_norm: False
@@ -41,5 +46,10 @@ model:
   noise: 0.01
   pc_noise: 0.0
   aggregation: mean
-  message_passing_steps: 5
+  message_passing_steps: 3
   heterogeneous: False
+
+poisson:
+  learning_rate: 1.0e-3
+  weight_decay: 1.0e-5
+  epochs: 5
