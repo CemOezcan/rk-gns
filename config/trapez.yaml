@@ -52,4 +52,4 @@ model:
 poisson:
   learning_rate: 5.0e-4
   weight_decay: 1.0e-5
-  epochs: 100
+  epochs: 150
