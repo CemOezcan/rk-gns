@@ -165,7 +165,7 @@ class MeshTask(AbstractTask):
         self._test_loader = get_data(config=self._config, split='test')
 
         old_model = copy.deepcopy(self._algorithm._network)
-        self._algorithm._network = self._algorithm.best_models[0][1] if 0 in self.frequency_list else self._algorithm.best_models[2][1]
+        self._algorithm._network = self._algorithm.best_models[0][1] if 0 in self.frequency_list else self._algorithm.best_models[5][1]
         one_step = self._algorithm.one_step_evaluator(self._test_loader, self._num_test_trajectories, task_name)
 
         n_step = list()
