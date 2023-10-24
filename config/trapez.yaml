@@ -21,7 +21,7 @@ task:
   epochs: 200
   pretraining: 100
   reduced: False
-  imputation: [1, 2, 5]
+  imputation: [2, 5]
 
   test:
     trajectories: 135 # Number of trajectories that are going to be used to compute the validation loss during evaluation
@@ -50,6 +50,6 @@ model:
   heterogeneous: False
 
 poisson:
-  learning_rate: 1.0e-4
+  learning_rate: 5.0e-4
   weight_decay: 1.0e-5
-  epochs: 100
+  epochs: 150

@@ -338,10 +338,10 @@ class AbstractSimulator(ABC):
         }
 
         self.save_rollouts(trajectories, task_name, freq)
-        current_mean = torch.mean(torch.tensor(rollout_losses['mse_loss']), dim=0)
-        prior_mean = self.best_models[freq][0]
-        if current_mean < prior_mean:
-            self.best_models[freq] = (current_mean, copy.deepcopy(self._network))
+        current_last = rollout_losses['mse_loss'][-1]
+        prior_last = self.best_models[freq][0]
+        if current_last < prior_last:
+            self.best_models[freq] = (current_last, copy.deepcopy(self._network))
         return {
             f'rollout error/mean_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_loss']), dim=0),
             f'rollout error/std_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_std']), dim=0),

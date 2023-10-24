@@ -138,10 +138,10 @@ class MeshTask(AbstractTask):
             self._current_epoch = e + 1
 
     def get_model(self):
-        if self._algorithm.best_models[2][1] is None:
+        if self._algorithm.best_models[5][1] is None:
             return self._algorithm._network
 
-        return self._algorithm.best_models[2][1]
+        return self._algorithm.best_models[5][1]
 
     def set_model(self, model):
         if model is not None:
