@@ -70,7 +70,7 @@ class AlternatingSimulator(AbstractSimulator):
         -------
 
         """
-        # TODO: remove
+        return self.transform_data(train_dataloader)
         for _ in range(self.pretraining_epochs):
             if self.recurrence:
                 self.fit_lstm_poisson(train_dataloader)
@@ -473,8 +473,6 @@ class AlternatingSimulator(AbstractSimulator):
                                  prefetch_factor=2, worker_init_fn=self.seed_worker)
 
         else:
-            if is_training:
-                trajectory = self.transform_data(trajectory)
             dataset = RegularDataset(trajectory, partial(self._network.build_graph, is_training=is_training), mode)
 
             batches = DataLoader(dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True, num_workers=8,
@@ -494,7 +492,7 @@ class AlternatingSimulator(AbstractSimulator):
             for j, instance in enumerate(trajectory):
                 data = copy.deepcopy(instance[0])
 
-                graph = Batch.from_data_list([self._network.build_graph(data, is_training=True)])
+                graph = Batch.from_data_list([self._network.build_graph(data, is_training=False)])
 
                 graph.to(device)
                 if j != 0:
