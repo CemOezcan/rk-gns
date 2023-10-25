@@ -70,30 +70,8 @@ class AlternatingSimulator(AbstractSimulator):
         -------
 
         """
-        dataset = PreprocessingDataset(train_dataloader, partial(self._network.build_graph, is_training=False))
 
-        batches = DataLoader(dataset, batch_size=1, shuffle=False, pin_memory=True, num_workers=8,
-                             prefetch_factor=2, worker_init_fn=self.seed_worker)
-        self.global_model.eval()
-        new_trajectories = list()
-        for i, sequence in enumerate(tqdm(batches, desc='PP', leave=True, position=0)):
-            new_trajectory = list()
-            for j, (graph, instance) in enumerate(sequence):
-                graph.to(device)
-                if j != 0:
-                    graph.h = h
-                with torch.no_grad():
-                    output, h = self.global_model(graph, False)
-                    poisson, _, _ = self.global_model.update(graph, output)
-                    poisson = poisson.cpu()
-
-                instance[0].u = poisson
-                instance[1].u = poisson
-                new_trajectory.append((instance[0], instance[1]))
-
-            new_trajectories.append(new_trajectory)
-
-        return new_trajectories
+        return self.transform_data(train_dataloader)
 
     def fit_iteration(self, train_dataloader: List[Union[List[Data], Data]]) -> float:
         """
