@@ -60,7 +60,7 @@ class RKNCell(nn.Module):
             'trans_covar':0.1,
             'learn_initial_state_covar':False,
             'initial_state_covar':1,
-            'never_invalid':True}
+            'never_invalid':False}
         return config
 
     def __init__(self, latent_obs_dim: int, config: ConfigDict, dtype: torch.dtype = torch.float32):

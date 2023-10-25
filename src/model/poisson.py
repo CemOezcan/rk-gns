@@ -120,11 +120,13 @@ class PoissonModel(AbstractSystemModel):
 
         keep_pc = step % freq == 0
         index = 0 if keep_pc else 1
+        informed = 1 if keep_pc else 0
 
         if not keep_pc and not self.recurrence:
             prediction = cur_pos
         else:
             data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), True, self.reduced, mgn=not keep_pc)[index]
+            data.valid = torch.tensor(informed, dtype=torch.int)
             graph = Batch.from_data_list([self.build_graph(data, is_training=False)]).to(device)
 
             (output, v), hidden = self(graph, False)

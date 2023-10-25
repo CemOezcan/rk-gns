@@ -70,31 +70,7 @@ class AlternatingSimulator(AbstractSimulator):
         -------
 
         """
-        dataset = PreprocessingDataset(train_dataloader, partial(self._network.build_graph, is_training=False))
-
-        batches = DataLoader(dataset, batch_size=1, shuffle=False, pin_memory=True, num_workers=8,
-                             prefetch_factor=2, worker_init_fn=self.seed_worker)
-        self.global_model.eval()
-        new_trajectories = list()
-        for i, sequence in enumerate(tqdm(batches, desc='PP', leave=True, position=0)):
-            new_trajectory = list()
-            for j, (graph, instance) in enumerate(sequence):
-                graph.to(device)
-                if j != 0:
-                    graph.h = h
-                    graph.c = c
-                with torch.no_grad():
-                    (output, var), (h, c) = self.global_model(graph, False)
-                    poisson, _, _ = self.global_model.update(graph, output)
-                    poisson = poisson.cpu()
-
-                instance[0].u = poisson
-                instance[1].u = poisson
-                new_trajectory.append((instance[0], instance[1]))
-
-            new_trajectories.append(new_trajectory)
-
-        return new_trajectories
+        return self.transform_data(train_dataloader)
 
     def fit_iteration(self, train_dataloader: List[Union[List[Data], Data]]) -> float:
         """
@@ -220,6 +196,7 @@ class AlternatingSimulator(AbstractSimulator):
 
         """
         self._network.train()
+
         data = self.fetch_data(train_dataloader, True, mode=self.mode)
         total_loss = 0
 
@@ -227,10 +204,10 @@ class AlternatingSimulator(AbstractSimulator):
             start_instance = time.time()
             batch.to(device)
 
-            prediction, _ = self._network(batch, True)
+            (prediction, _), _ = self._network(batch, True)
             target = self._network.get_target(batch, True)
 
-            loss = self._network.loss_fn(target, prediction)
+            loss = self._network.loss_fn(target, prediction, None)
             loss.backward()
 
             gradients = self.log_gradients(self._network)
@@ -511,20 +488,22 @@ class AlternatingSimulator(AbstractSimulator):
             new_trajectory = list()
             for j, instance in enumerate(trajectory):
                 data = copy.deepcopy(instance[0])
-
+                data.valid = torch.tensor(1, dtype=torch.int)
                 graph = Batch.from_data_list([self._network.build_graph(data, is_training=False)])
 
                 graph.to(device)
                 if j != 0:
                     graph.h = h
+                    graph.c = c
                 with torch.no_grad():
-
-                    output, h = self.global_model(graph, False)
+                    (output, var), (h, c) = self.global_model(graph, False)
                     poisson, _, _ = self.global_model.update(graph, output)
                     poisson = poisson.cpu()
+                    var = var.cpu()
+                    u = torch.cat([poisson, var], dim=-1)
 
-                instance[0].u = poisson
-                instance[1].u = poisson
+                instance[0].u = u
+                instance[1].u = u
                 new_trajectory.append((instance[0], instance[1]))
 
             new_trajectories.append(new_trajectory)

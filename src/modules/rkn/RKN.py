@@ -46,7 +46,9 @@ class RKN(nn.Module):
 
         # w = nn.functional.normalize(w, p=2, dim=-1, eps=1e-8)
         # TODO: Validity indices
-        obs_valid = None #if obs_valid is not None else None
+        obs_valid = graph.valid.bool()# None #if obs_valid is not None else None
+        print(graph)
+        print(obs_valid)
 
         # TODO: Use priors for recurrence, but posteriors for predictions
         post_means, post_covs, prior_means, prior_cov = self._cell(prior_mean, prior_cov, w, w_var, obs_valid)

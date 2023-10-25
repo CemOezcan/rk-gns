@@ -50,6 +50,8 @@ class SequenceNoReturnDataset(Dataset):
         for x in data_list:
             i = 1 if self.mode == 'mgn' else randint(0, 1)
             data = deepcopy(x[i])
+            informed = 0 if i == 1 else 1
+            data.valid = torch.tensor(informed, dtype=torch.int)
             copy.append(self.preprocessing(data))
 
         return copy
@@ -69,7 +71,10 @@ class RegularDataset(Dataset):
 
         for trajectory in trajectory_list:
             for index, data in enumerate(trajectory):
-                    data_list.append(data)
+                x_1, x_2 = data
+                x_1.valid = torch.tensor(1, dtype=torch.int)
+                x_2.valid = torch.tensor(0, dtype=torch.int)
+                data_list.append(data)
 
         trajectory_list = data_list
 
@@ -157,6 +162,7 @@ class PreprocessingDataset(Dataset):
         copy = list()
         for x in data_list:
             data = deepcopy(x[0])
+            data.valid = torch.tensor(1, dtype=torch.int)
             copy.append((self.preprocessing(data), x))
 
         return copy

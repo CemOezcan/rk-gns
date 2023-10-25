@@ -164,6 +164,7 @@ class AbstractSystemModel(ABC, nn.Module):
         hetero_data.h = data.h
         hetero_data.c = data.c
         hetero_data.y = data.y
+        hetero_data.valid = data.valid
         hetero_data.cpu()
 
         return hetero_data
