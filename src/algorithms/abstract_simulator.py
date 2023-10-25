@@ -168,7 +168,7 @@ class AbstractSimulator(ABC):
         -------
 
         """
-        return
+        return train_dataloader
 
     @abstractmethod
     def fit_iteration(self, train_dataloader: List) -> float:

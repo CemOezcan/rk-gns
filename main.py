@@ -38,7 +38,7 @@ def main(config_name='trapez'):
         # TODO get best.
         task = get_task(params_copy)
         task.run_iterations()
-        task.get_scalars()
+        #task.get_scalars()
         task.finish()
         global_model = task.get_model()
 
