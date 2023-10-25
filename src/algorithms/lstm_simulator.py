@@ -179,13 +179,13 @@ class LSTMSimulator(AbstractSimulator):
                 Collection of batched graphs.
         """
         seq = self._seq_len if is_training else 50
-        trajectories = [list() for _ in range(len(trajectory) // self._time_steps)]
+        #trajectories = [list() for _ in range(len(trajectory) // self._time_steps)]
 
-        for i, graph in enumerate(trajectory):
-            index = i // self._time_steps
-            trajectories[index].append(graph)
+        #for i, graph in enumerate(trajectory):
+        #    index = i // self._time_steps
+        #    trajectories[index].append(graph)
 
-        dataset = SequenceNoReturnDataset(trajectories, seq, partial(self._network.build_graph, is_training=is_training), self.mode)
+        dataset = SequenceNoReturnDataset(trajectory, seq, partial(self._network.build_graph, is_training=is_training), self.mode)
         batches = DataLoader(dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True, num_workers=8,
                              prefetch_factor=2, worker_init_fn=self.seed_worker)
 

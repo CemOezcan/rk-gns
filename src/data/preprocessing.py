@@ -87,7 +87,7 @@ class Preprocessing:
 
             trajectory_list.append(data_list)
 
-        trajectory_list = trajectory_list if self.raw else self.split_data(trajectory_list)
+        trajectory_list = trajectory_list #if self.raw else self.split_data(trajectory_list)
 
         return trajectory_list
 
@@ -262,25 +262,6 @@ class Preprocessing:
         for typ in range(len(num_per_type)):
             features[sum(num_per_type[0:typ]): sum(num_per_type[0:typ + 1])] = typ
         return features
-
-    @staticmethod
-    def split_data(trajectory_list: list, start_index=0) -> list:
-        """
-        Converts a list of trajectories (list of time step data) to a single sequential list of all time steps
-        Args:
-            trajectory_list: List of trajectories
-            start_index: Where to start a trajectory default: 0, at the beginning
-        Returns:
-            data_list: One list of all time steps
-        """
-        data_list = []
-        random.shuffle(trajectory_list)
-        for trajectory in trajectory_list:
-            for index, data in enumerate(trajectory):
-                if index >= start_index:
-                    data_list.append(data)
-
-        return data_list
 
     @staticmethod
     def add_relative_mesh_positions(edge_attr: Tensor, edge_type: Tensor, input_mesh_edge_index: Tensor,

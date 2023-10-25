@@ -13,7 +13,7 @@ from functools import partial
 
 from torch import optim
 from torch.nn import LSTM, GRU
-from torch_geometric.data import Data
+from torch_geometric.data import Data, Batch
 from tqdm import tqdm
 from torch_geometric.loader import DataLoader
 
@@ -94,6 +94,7 @@ class AlternatingSimulator(AbstractSimulator):
 
         """
         #self.fit_poisson(train_dataloader)
+        return self.fit_gnn(train_dataloader)
         if self.recurrence:
             return self.fit_lstm(train_dataloader)
         else:
@@ -200,7 +201,6 @@ class AlternatingSimulator(AbstractSimulator):
 
         """
         self._network.train()
-        self.global_model.eval()
         data = self.fetch_data(train_dataloader, True, mode=self.mode)
         total_loss = 0
 
@@ -208,7 +208,10 @@ class AlternatingSimulator(AbstractSimulator):
             start_instance = time.time()
             batch.to(device)
 
-            loss = self._network.training_step(batch, self.global_model)
+            prediction, _ = self._network(batch, True)
+            target = self._network.get_target(batch, True)
+
+            loss = self._network.loss_fn(target, prediction)
             loss.backward()
 
             gradients = self.log_gradients(self._network)
@@ -459,21 +462,53 @@ class AlternatingSimulator(AbstractSimulator):
                 Collection of batched graphs.
         """
         if seq:
-            trajectories = [list() for _ in range(len(trajectory) // self._time_steps)]
-            for i, graph in enumerate(trajectory):
-                index = i // self._time_steps
-                trajectories[index].append(graph)
+            #trajectories = [list() for _ in range(len(trajectory) // self._time_steps)]
+            #for i, graph in enumerate(trajectory):
+            #    index = i // self._time_steps
+            #    trajectories[index].append(graph)
 
-            dataset = SequenceNoReturnDataset(trajectories, seq_len, partial(self._network.build_graph, is_training=is_training), mode)
+            dataset = SequenceNoReturnDataset(trajectory, seq_len, partial(self._network.build_graph, is_training=is_training), mode)
 
             batches = DataLoader(dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True, num_workers=8,
                                  prefetch_factor=2, worker_init_fn=self.seed_worker)
 
         else:
-
+            if is_training:
+                trajectory = self.transform_data(trajectory)
             dataset = RegularDataset(trajectory, partial(self._network.build_graph, is_training=is_training), mode)
 
             batches = DataLoader(dataset, batch_size=self._batch_size, shuffle=True, pin_memory=True, num_workers=8,
                                  prefetch_factor=2, worker_init_fn=self.seed_worker)
 
         return batches
+
+
+    def transform_data(self, trajectories):
+        # TODO: Use a random bit sequence to determine, whether point clouds are kept or not.
+        #  Compute the poisson ratios once with this sequence and once with the inverted sequence.
+        #  Return the joint data and train with 'mgn' mode dataset.
+        self.global_model.eval()
+        new_trajectories = list()
+        for i, trajectory in enumerate(trajectories):
+            new_trajectory = list()
+            for j, instance in enumerate(trajectory):
+                data = copy.deepcopy(instance[0])
+
+                graph = Batch.from_data_list([self._network.build_graph(data, is_training=True)])
+
+                graph.to(device)
+                if j != 0:
+                    graph.h = h
+                with torch.no_grad():
+
+                    output, h = self.global_model(graph, False)
+                    poisson, _, _ = self.global_model.update(graph, output)
+                    poisson = poisson.cpu()
+
+                instance[0].u = poisson
+                instance[1].u = poisson
+                new_trajectory.append((instance[0], instance[1]))
+
+            new_trajectories.append(new_trajectory)
+
+        return new_trajectories

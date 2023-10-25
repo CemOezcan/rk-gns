@@ -65,6 +65,14 @@ class RegularDataset(Dataset):
             trajectory_list: List of lists of (PyG) data objects
             sequence_length: Length of the drawn sequence from a trajectory
         """
+        data_list = []
+
+        for trajectory in trajectory_list:
+            for index, data in enumerate(trajectory):
+                    data_list.append(data)
+
+        trajectory_list = data_list
+
         if mode == 'mgn':
             self.trajectory_list = [x[1] for x in trajectory_list]
         elif mode == 'poisson':
