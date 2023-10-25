@@ -70,7 +70,6 @@ class AlternatingSimulator(AbstractSimulator):
         -------
 
         """
-
         return self.transform_data(train_dataloader)
 
     def fit_iteration(self, train_dataloader: List[Union[List[Data], Data]]) -> float:
