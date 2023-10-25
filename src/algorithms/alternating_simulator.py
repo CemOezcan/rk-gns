@@ -74,6 +74,7 @@ class AlternatingSimulator(AbstractSimulator):
 
         batches = DataLoader(dataset, batch_size=1, shuffle=False, pin_memory=True, num_workers=8,
                              prefetch_factor=2, worker_init_fn=self.seed_worker)
+        self.global_model.eval()
         new_trajectories = list()
         for i, sequence in enumerate(tqdm(batches, desc='PP', leave=True, position=0)):
             new_trajectory = list()
@@ -81,8 +82,9 @@ class AlternatingSimulator(AbstractSimulator):
                 graph.to(device)
                 if j != 0:
                     graph.h = h
+                    graph.c = c
                 with torch.no_grad():
-                    output, h = self.global_model(graph, False)
+                    (output, var), (h, c) = self.global_model(graph, False)
                     poisson, _, _ = self.global_model.update(graph, output)
                     poisson = poisson.cpu()
 
