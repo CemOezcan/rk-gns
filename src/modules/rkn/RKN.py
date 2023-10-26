@@ -29,7 +29,7 @@ class RKN(nn.Module):
         self._ics = torch.zeros(1, self._lod).to(device)
 
         self.mean_encoder = nn.LazyLinear(latent_obs_dim) # nn.Sequential(nn.LazyLinear(latent_obs_dim), nn.LayerNorm(normalized_shape=latent_obs_dim))
-        self.log_var_encoder = nn.Sequential(nn.LazyLinear(latent_obs_dim), ScaledShiftedSigmoidActivation())
+        self.var_encoder = nn.Sequential(nn.LazyLinear(latent_obs_dim), ScaledShiftedSigmoidActivation())
 
         #TODO: dtype?
         self._cell = RKNCell(latent_obs_dim, RKNCell.get_default_config(), dtype=torch.float32)
@@ -42,7 +42,7 @@ class RKN(nn.Module):
             prior_mean, prior_cov = self._initial_mean, [var_activation(self._log_icu), var_activation(self._log_icl),
                                                          self._ics]
 
-        w, w_var = self.mean_encoder(batch), self.log_var_encoder(batch)
+        w, w_var = self.mean_encoder(batch), self.var_encoder(batch)
 
         # w = nn.functional.normalize(w, p=2, dim=-1, eps=1e-8)
         # TODO: Validity indices

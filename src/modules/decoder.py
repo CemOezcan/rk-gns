@@ -28,7 +28,7 @@ class Decoder(nn.Module):
             if self.self_sup:
                 output_size = 1
                 self.mean_model = nn.Sequential(nn.LazyLinear(latent_size), nn.LeakyReLU(), nn.LazyLinear(output_size))
-            self.log_var_model = nn.Sequential(nn.LazyLinear(latent_size), nn.LeakyReLU(), nn.LazyLinear(output_size), ScaledShiftedSigmoidActivation())
+            self.var_model = nn.Sequential(nn.LazyLinear(latent_size), nn.LeakyReLU(), nn.LazyLinear(output_size), ScaledShiftedSigmoidActivation())
     def forward(self, graph: Batch) -> Tuple[Tensor, Union[None, Tensor]]:
         if self.recurrence:
             graph.u, post_var, h, c = self.rnn(graph)
@@ -36,7 +36,7 @@ class Decoder(nn.Module):
             post_var, h, c = None, None, None
 
         if post_var is not None:
-            var = self.log_var_model(torch.cat(post_var, dim=-1))
+            var = self.var_model(torch.cat(post_var, dim=-1))
             c = torch.stack(c, dim=0)
         else:
             var = None
@@ -58,7 +58,9 @@ class Decoder(nn.Module):
         if self.self_sup:
             batch = graph[self.node_type].batch
             mean = self.mean_model(graph.u)
-            samples = torch.normal(mean=mean, std=var)
+
+            eps = torch.randn_like(mean)
+            samples = mean + eps * torch.sqrt(var) # TODO: sqrt necessary?
 
             features = [node_features, graph.u[batch][mask]] if var is None else [node_features, samples[batch][mask]]
             # TODO: integrate cov
