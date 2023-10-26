@@ -25,8 +25,10 @@ class Decoder(nn.Module):
 
         if self.recurrence:
             self.rnn = get_RNN(rnn_type, self.latent_size)
+            if self.self_sup:
+                output_size = 1
+                self.mean_model = nn.Sequential(nn.LazyLinear(latent_size), nn.LeakyReLU(), nn.LazyLinear(output_size))
             self.log_var_model = nn.Sequential(nn.LazyLinear(latent_size), nn.LeakyReLU(), nn.LazyLinear(output_size), ScaledShiftedSigmoidActivation())
-
     def forward(self, graph: Batch) -> Tuple[Tensor, Union[None, Tensor]]:
         if self.recurrence:
             graph.u, post_var, h, c = self.rnn(graph)
@@ -55,7 +57,10 @@ class Decoder(nn.Module):
 
         if self.self_sup:
             batch = graph[self.node_type].batch
-            features = [node_features, graph.u[batch][mask]] if var is None else [node_features, graph.u[batch][mask], var[batch][mask]]
+            mean = self.mean_model(graph.u)
+            samples = torch.normal(mean=mean, std=var)
+
+            features = [node_features, graph.u[batch][mask]] if var is None else [node_features, samples[batch][mask]]
             # TODO: integrate cov
             return torch.cat(features, dim=-1)
 
