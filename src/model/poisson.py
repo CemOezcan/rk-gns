@@ -37,7 +37,7 @@ class PoissonModel(AbstractSystemModel):
         ).to(device)
 
     def forward(self, graph: Batch, is_training: bool) -> Tuple[Tensor, Tensor]:
-        _, graph = self.split_graphs(graph)
+        _, graph = self.split_graphs(graph, subsampling=self.subsampling)
         if self.feature_norm:
             graph[('mesh', '0', 'mesh')].edge_attr = self._mesh_edge_normalizer(graph[('mesh', '0', 'mesh')].edge_attr, is_training)
             graph['mesh'].x = self._feature_normalizer(graph['mesh'].x, is_training)
