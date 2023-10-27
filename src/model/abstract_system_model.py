@@ -311,9 +311,9 @@ class AbstractSystemModel(ABC, nn.Module):
         return out_data
 
     @staticmethod
-    def split_graphs(graph, ggns=False):
+    def split_graphs(graph, ggns=False, subsampling=NodeType.SHAPE):
         pc_mask = torch.where(graph['mesh'].node_type == NodeType.POINT)[0]
-        shape_mask = torch.where(graph['mesh'].node_type == NodeType.SHAPE)[0]
+        shape_mask = torch.where(graph['mesh'].node_type == subsampling)[0]
         obst_mask = torch.where(graph['mesh'].node_type == NodeType.COLLIDER)[0]
         mesh_mask = torch.where(graph['mesh'].node_type == NodeType.MESH)[0]
 
