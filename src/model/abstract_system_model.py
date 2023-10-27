@@ -27,6 +27,14 @@ class AbstractSystemModel(ABC, nn.Module):
         self.rnn_type = params.get('task').get('recurrence') if self.recurrence else False
         self.use_global = params.get('task').get('poisson_ratio') or params.get('task').get('model').lower() == 'self-supervised'
         self._params = params.get('model')
+        if params.get('task').get('subsampling') == 'ifp':
+            self.subsampling = NodeType.SHAPE
+        elif params.get('task').get('subsampling') == 'mesh':
+            self.subsampling = NodeType.MESH
+        elif params.get('task').get('subsampling') == 'voxel':
+            self.subsampling = NodeType.POINT
+        else:
+            raise NotImplementedError('Subsampling does not exist!')
         self.loss_fn = torch.nn.MSELoss()
 
         self._output_normalizer = Normalizer(name='output_normalizer')
@@ -295,9 +303,9 @@ class AbstractSystemModel(ABC, nn.Module):
         return out_data
 
     @staticmethod
-    def split_graphs(graph, ggns=False):
+    def split_graphs(graph, ggns=False, subsampling=NodeType.SHAPE):
         pc_mask = torch.where(graph['mesh'].node_type == NodeType.POINT)[0]
-        shape_mask = torch.where(graph['mesh'].node_type == NodeType.SHAPE)[0]
+        shape_mask = torch.where(graph['mesh'].node_type == subsampling)[0]
         obst_mask = torch.where(graph['mesh'].node_type == NodeType.COLLIDER)[0]
         mesh_mask = torch.where(graph['mesh'].node_type == NodeType.MESH)[0]
 
