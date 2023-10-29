@@ -10,17 +10,18 @@ task:
   task: trapez # trapez/poisson
   model: mgn # mgn/supervised/self-supervised
   ggns: False # T/F
-  recurrence: False # False/name
-  sequence: 1
-  poisson_ratio: True # Link to use global with model
-  learning_rate: 5.0e-4
-  weight_decay: 0
+  recurrence: rkn # False/name
+  sequence: 5
+  poisson_ratio: False # Link to use global with model
+  learning_rate: 1.0e-3
+  weight_decay: 5.0e-4
   batch_size: 32
   trajectories: 675
   n_timesteps: 50
   epochs: 100
   pretraining: 100
   reduced: False
+  subsampling: ifp # if voxel, reduced must be False. Non-recurrent only!
   imputation: [5]
 
   test:
@@ -50,6 +51,6 @@ model:
   heterogeneous: False
 
 poisson:
-  learning_rate: 5.0e-4
-  weight_decay: 1.0e-5
+  learning_rate: 1.0e-3
+  weight_decay: 5.0e-4
   epochs: 150
