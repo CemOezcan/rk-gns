@@ -7,7 +7,7 @@ wandb_mode: online
 directory: deformable_plate
 
 task:
-  task: trapez # trapez/poisson
+  task: poisson # trapez/poisson
   model: mgn # mgn/supervised/self-supervised
   ggns: False # T/F
   recurrence: rkn # False/name
