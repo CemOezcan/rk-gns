@@ -301,21 +301,23 @@ class AbstractSimulator(ABC):
         lasts = torch.mean(torch.stack(lasts))
 
         n_step_stats = {'n_step': [n_steps] * n_steps, 'mean': means, 'lasts': lasts}
-        data_frame = pd.DataFrame.from_dict(n_step_stats)
-        table = wandb.Table(dataframe=data_frame)
 
         scalars = {
             f'{n_steps}-step error/mean_k={freq}': torch.mean(torch.tensor(means), dim=0),
-            f'{n_steps}-step error/last_k={freq}': torch.mean(torch.tensor(lasts), dim=0),
-            f'{n_steps}-step error/table_k={freq}': table
+            f'{n_steps}-step error/last_k={freq}': torch.mean(torch.tensor(lasts), dim=0)
         }
 
         if track_var:
             vars = torch.mean(torch.stack(vars))
             lst_vars = torch.mean(torch.stack(lst_vars))
+            n_step_stats = {**n_step_stats, 'var': vars}
 
             scalars[f'{n_steps}-step error/mean_var_k={freq}'] = torch.mean(torch.tensor(vars), dim=0)
             scalars[f'{n_steps}-step error/last_var_k={freq}'] = torch.mean(torch.tensor(lst_vars), dim=0)
+
+        data_frame = pd.DataFrame.from_dict(n_step_stats)
+        table = wandb.Table(dataframe=data_frame)
+        scalars = {**scalars, f'{n_steps}-step error/table_k={freq}': table}
 
         return scalars
 
@@ -371,9 +373,6 @@ class AbstractSimulator(ABC):
             'mse_std': [mse.item() for mse in mse_stds]
         }
 
-        data_frame = pd.DataFrame.from_dict(rollout_losses)
-        table = wandb.Table(dataframe=data_frame)
-
         self.save_rollouts(trajectories, task_name, freq)
         current_last = rollout_losses['mse_loss'][-1]
         prior_last = self.best_models[freq][0]
@@ -385,12 +384,12 @@ class AbstractSimulator(ABC):
             f'rollout error/last_k={freq}': rollout_losses['mse_loss'][-1],
             f'rollout error/fst_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_loss'][:10]), dim=0),
             f'rollout error/lst_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_loss'][-10:]), dim=0),
-            f'rollout error/histogram_k={freq}': rollout_hist,
-            f'rollout error/table_k={freq}': table
+            f'rollout error/histogram_k={freq}': rollout_hist
         }
 
         if track_var:
             var_means = torch.mean(torch.stack(vars), dim=0)
+            rollout_losses = {**rollout_losses, 'var': [v.item() for v in var_means]}
             pred_max = torch.max(torch.stack(pred), dim=0).values
             pred_min = torch.min(torch.stack(pred), dim=0).values
 
@@ -401,6 +400,10 @@ class AbstractSimulator(ABC):
                        f'rollout_error/pred_max_lst_k={freq}': torch.mean(pred_max[-10:], dim=0),
                        f'rollout_error/pred_min_fst_k={freq}': torch.mean(pred_min[:10], dim=0),
                        f'rollout_error/pred_min_lst_k={freq}': torch.mean(pred_min[-10:], dim=0)}
+
+        data_frame = pd.DataFrame.from_dict(rollout_losses)
+        table = wandb.Table(dataframe=data_frame)
+        scalars = {**scalars, f'rollout error/table_k={freq}': table}
 
         return scalars
 
