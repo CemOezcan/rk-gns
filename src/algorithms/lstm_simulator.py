@@ -6,6 +6,7 @@ import time
 from typing import List, Union, Dict, Optional
 
 import numpy as np
+import pandas as pd
 import torch
 import wandb
 
@@ -153,6 +154,13 @@ class LSTMSimulator(AbstractSimulator):
         mean = np.mean(trajectory_loss, axis=0)
         std = np.std(trajectory_loss, axis=0)
 
+        data_frame = pd.DataFrame.from_dict(
+            {'mean_loss': [x[0] for x in mean], 'std_loss': [x[0] for x in std],
+             'mean_pos_error': [x[1] for x in mean], 'std_pos_error': [x[1] for x in std]
+             }
+        )
+        table = wandb.Table(dataframe=data_frame)
+
         val_loss, pos_loss = zip(*mean)
         val_std, pos_std = zip(*std)
 
@@ -170,7 +178,8 @@ class LSTMSimulator(AbstractSimulator):
             'single-step error/velocity_error': np.mean(val_loss),
             'single-step error/position_error': np.mean(pos_loss),
             'single-step error/velocity_std': np.mean(val_std),
-            'single-step error/position_std': np.mean(pos_std)
+            'single-step error/position_std': np.mean(pos_std),
+            'single-step error/table': table
         }
         return log_dict
 

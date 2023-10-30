@@ -7,8 +7,8 @@ wandb_mode: online
 directory: deformable_plate
 
 task:
-  task: poisson # trapez/poisson
-  model: mgn # mgn/supervised/self-supervised
+  task: trapez # trapez/poisson
+  model: supervised # mgn/supervised/self-supervised
   ggns: False # T/F
   recurrence: rkn # False/name
   sequence: 5
@@ -21,7 +21,7 @@ task:
   epochs: 100
   pretraining: 100
   reduced: False
-  subsampling: ifp # if voxel, reduced must be False. Non-recurrent only!
+  subsampling: voxel # if voxel, reduced must be False. Non-recurrent only!
   imputation: [5]
 
   test:

@@ -289,6 +289,13 @@ class AlternatingSimulator(AbstractSimulator):
         mean = np.mean(trajectory_loss, axis=0)
         std = np.std(trajectory_loss, axis=0)
 
+        data_frame = pd.DataFrame.from_dict(
+            {'mean_loss': [x[0] for x in mean], 'std_loss': [x[0] for x in std],
+             'mean_pos_error': [x[1] for x in mean], 'std_pos_error': [x[1] for x in std]
+             }
+        )
+        table = wandb.Table(dataframe=data_frame)
+
         val_loss, pos_loss, u_error, poisson_error = zip(*mean)
         val_std, pos_std, u_std, poisson_std = zip(*std)
         log_dict = {
@@ -319,7 +326,8 @@ class AlternatingSimulator(AbstractSimulator):
             'single-step error/velocity_std': np.mean(val_std),
             'single-step error/position_std': np.mean(pos_std),
             'single-step error/material_std': np.mean(u_std),
-            'single-step error/poisson_std': np.mean(poisson_std)
+            'single-step error/poisson_std': np.mean(poisson_std),
+            'single-step error/table': table
         }
         return log_dict
 
@@ -373,6 +381,9 @@ class AlternatingSimulator(AbstractSimulator):
             'mse_std': [mse.item() for mse in mse_stds]
         }
 
+        data_frame = pd.DataFrame.from_dict(rollout_losses)
+        table = wandb.Table(dataframe=data_frame)
+
         self.save_rollouts(trajectories, task_name, freq)
 
         current_last = rollout_losses['mse_loss'][-1]
@@ -387,7 +398,9 @@ class AlternatingSimulator(AbstractSimulator):
 
                 f'rollout error/material_mean_k={freq}': torch.mean(torch.tensor(u_means), dim=0),
                 f'rollout error/material_middle_k={freq}': u_means[int(len(u_means) / 2)],
-                f'rollout error/material_last_k={freq}': u_means[-1]}
+                f'rollout error/material_last_k={freq}': u_means[-1],
+                f'rollout error/table_k={freq}': table
+                }
 
     @torch.no_grad()
     def n_step_evaluator(self, ds_loader: List, task_name: str, n_steps: int, n_traj: int, logging: bool = True, freq=1) -> \
@@ -435,11 +448,17 @@ class AlternatingSimulator(AbstractSimulator):
         u_means = torch.mean(torch.stack(u_means))
         u_lasts = torch.mean(torch.stack(u_lasts))
 
+        n_step_stats = {'n_step': [n_steps] * n_steps, 'mean': means, 'lasts': lasts}
+        data_frame = pd.DataFrame.from_dict(n_step_stats)
+        table = wandb.Table(dataframe=data_frame)
+
+
         return {
             f'{n_steps}-step error/mean_k={freq}': torch.mean(torch.tensor(means), dim=0),
             f'{n_steps}-step error/last_k={freq}': torch.mean(torch.tensor(lasts), dim=0),
             f'{n_steps}-step error/material_mean_k={freq}': torch.mean(torch.tensor(u_means), dim=0),
-            f'{n_steps}-step error/material_last_k={freq}': torch.mean(torch.tensor(u_lasts), dim=0)
+            f'{n_steps}-step error/material_last_k={freq}': torch.mean(torch.tensor(u_lasts), dim=0),
+            f'{n_steps}-step error/table_k={freq}': table
         }
 
     def fetch_data(self, trajectory: List[Union[List[Data], Data]], is_training: bool, mode=None, seq=False, seq_len=49) -> DataLoader:
