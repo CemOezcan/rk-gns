@@ -107,8 +107,10 @@ class TrapezModel(AbstractSystemModel):
 
         keep_pc = False if freq == 0 else step % freq == 0
         index = 0 if keep_pc else 1
+        informed = 1 if keep_pc else 0
 
         data = Preprocessing.postprocessing(Data.from_dict(input).cpu(), self.self_sup, self.reduced, mgn=not keep_pc)[index]
+        data.valid = torch.tensor(informed, dtype=torch.int)
         graph = Batch.from_data_list([self.build_graph(data, is_training=False)]).to(device)
 
         (output, _), hidden = self(graph, False)
