@@ -14,7 +14,7 @@ task:
   sequence: 5
   poisson_ratio: False # Link to use global with model
   learning_rate: 5.0e-4
-  weight_decay: 2.0e-4
+  weight_decay: 1.0e-4
   batch_size: 32
   trajectories: 675
   n_timesteps: 50
@@ -52,5 +52,5 @@ model:
 
 poisson:
   learning_rate: 5.0e-4
-  weight_decay: 2.0e-4
+  weight_decay: 1.0e-4
   epochs: 150
