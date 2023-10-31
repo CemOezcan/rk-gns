@@ -57,6 +57,10 @@ def visualize_graph(data):
             fst = gt_pos[x]
             snd = gt_pos[y]
             color = colors[int(subgraph[('mesh', '0', 'mesh')].edge_type[i])]
+            #type = int(subgraph[('mesh', '0', 'mesh')].edge_type[i])
+            #one_hot = int(((subgraph[('mesh', '0', 'mesh')].edge_attr[i][:-6]) == 1.0).nonzero(as_tuple=True)[0])
+
+            #assert type == one_hot
             ax.add_line(Line2D([fst[0], snd[0]], [fst[1], snd[1]], alpha=0.1, color=color))
 
 

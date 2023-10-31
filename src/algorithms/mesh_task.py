@@ -83,8 +83,12 @@ class MeshTask(AbstractTask):
         subsampling = config.get('task').get('subsampling')
         random_seed = config.get('random_seed')
         pc_noise = config.get('model').get('pc_noise')
-        #self._task_name = f'm:{self.task_type}_l:{layers}_fn:{feature_norm}_ln:{layer_norm}_b:{batch_size}_t:{self.model_type}_a:{aggr}_lr:{lr}_seq:{seq}_ggns:{ggns}_red:{reduced}_poisson:{poisson}_mp:{self._mp}_epoch:'
-        self._task_name = f'm:{self.task_type}_b:{batch_size}_t:{self.model_type}_lr:{lr}_wd:{wd}_seq:{seq}_ggns:{ggns}_red:{reduced}_p:{poisson}_r:{rnn_type}_mp:{self._mp}_s:{subsampling}_rand:{random_seed}_n{pc_noise}_epoch:'
+        if self.task_type == 'poisson':
+            suffix = '_epoch:'
+        else:
+            suffix = f'_ggns:{ggns}_red:{reduced}_epoch:'
+        prefix = f'm:{self.task_type}_b:{batch_size}_t:{self.model_type}_lr:{lr}_wd:{wd}_seq:{seq}_p:{poisson}_r:{rnn_type}_mp:{self._mp}_s:{subsampling}_rand:{random_seed}_n{pc_noise}'
+        self._task_name = prefix + suffix
 
         self.frequency_list = [0] if self.task_type != 'poisson' and not ggns and self.model_type == 'mgn' else get_from_nested_dict(config, ['task', 'imputation'])
 

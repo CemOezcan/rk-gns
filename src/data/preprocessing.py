@@ -355,17 +355,22 @@ class Preprocessing:
         shape_index = len(point_mask) + point_index
 
         collision_edges = torch_cluster.radius(data.pos[mask], data.pos[obst_mask], r=0.3, max_num_neighbors=100)
-        edge_radius_dict = {'cm': (collision_edges, 0, len(mask))}
+        edge_radius_dict = {'cm': (collision_edges, 0, len(mask), [1, 2]),
+                            'cp': (None, None, None, [3, 4]),
+                            'pm': (None, None, None, [5, 6]),
+                            'pp': (None, None, None, [7, 7]),
+                            'ss': (None, None, None, [8, 8]),
+                            'cs': (None, None, None, [9, 10])}
 
         if not mgn:
             collision_point_edges = torch_cluster.radius(data.pos[point_mask], data.pos[obst_mask], r=0.08, max_num_neighbors=100)
             grounding_edges = torch_cluster.radius(data.pos[mask], data.pos[point_mask], r=0.08, max_num_neighbors=100)
-            edge_radius_dict['cp'] = (collision_point_edges, point_index, len(mask))
-            edge_radius_dict['pm'] = (grounding_edges, 0, point_index)
+            edge_radius_dict['cp'] = (collision_point_edges, point_index, len(mask), [3, 4])
+            edge_radius_dict['pm'] = (grounding_edges, 0, point_index, [5, 6])
 
             if not reduced:
                 point_edges = torch_cluster.radius_graph(data.pos[point_mask], r=0.1, max_num_neighbors=100)
-                edge_radius_dict['pp'] = (point_edges, point_index, point_index)
+                edge_radius_dict['pp'] = (point_edges, point_index, point_index, [7, 7])
 
             if triangulate:
                 triangles = scipy.spatial.Delaunay(data.pos[shape_mask])
@@ -388,41 +393,34 @@ class Preprocessing:
                 shape_edges = zip(*list(shape_edges))
 
                 shape_edges = torch.tensor(list(shape_edges), dtype=torch.long)
-                edge_radius_dict['ss'] = (shape_edges, shape_index, shape_index)
+                edge_radius_dict['ss'] = (shape_edges, shape_index, shape_index, [8, 8])
 
                 collision_shape_edges = torch_cluster.radius(data.pos[shape_mask], data.pos[obst_mask], r=0.3, max_num_neighbors=100)
-                edge_radius_dict['cs'] = (collision_shape_edges, shape_index, len(mask))
+                edge_radius_dict['cs'] = (collision_shape_edges, shape_index, len(mask), [9, 10])
 
         index_list = [[data.edge_index[0]], [data.edge_index[1]]]
         edge_type_list = [data.edge_type]
-        num = int(max(data.edge_type.tolist())) + 1
+        num = int(max(data.edge_type.tolist()))
 
-        for key, (edges, index_1, index_2) in edge_radius_dict.items():
-            indices, num_edges = Preprocessing.shift_indices(edges, (index_2, index_1))
-            index_list[0].append(indices[0])
-            index_list[1].append(indices[1])
-            edge_type_list.append(torch.tensor([num] * num_edges).long())
-            num += 1
-            if key != 'pp' and key != 'ss':
-                index_list[0].append(indices[1])
-                index_list[1].append(indices[0])
-                edge_type_list.append(torch.tensor([num] * num_edges).long())
-                num += 1
-
-        if mgn:
-            num += 4
-            if not reduced:
-                num += 1
-            if triangulate:
-                num += 3
+        for key, (edges, index_1, index_2, t) in edge_radius_dict.items():
+            if edges is not None:
+                indices, num_edges = Preprocessing.shift_indices(edges, (index_2, index_1))
+                index_list[0].append(indices[0])
+                index_list[1].append(indices[1])
+                edge_type_list.append(torch.tensor([num + t[0]] * num_edges).long())
+                if key != 'pp' and key != 'ss':
+                    index_list[0].append(indices[1])
+                    index_list[1].append(indices[0])
+                    edge_type_list.append(torch.tensor([num + t[1]] * num_edges).long())
 
         data.edge_index = torch.stack([torch.cat(index_list[0], dim=0), torch.cat(index_list[1], dim=0)], dim=0)
         data.edge_type = torch.cat(edge_type_list, dim=0)
+        new_num = num + 11
 
         transform = T.Compose([T.remove_isolated_nodes.RemoveIsolatedNodes()])
         data = transform(data)
 
-        return data, num
+        return data, new_num
 
     @staticmethod
     def shift_indices(edges, index_shift):
