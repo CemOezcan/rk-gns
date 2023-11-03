@@ -1,0 +1,56 @@
+name: "DEFAULT"   # MUST BE DEFAULT
+import_path: "default.yaml"
+
+random_seed: 115
+retrain: False # Start training a new model if True. Continue training the most recent version of the model if False.
+wandb_mode: online
+directory: deformable_plate
+
+task:
+  task: poisson # trapez/poisson
+  model: mgn # mgn/supervised/self-supervised
+  ggns: False # T/F
+  recurrence: False # False/name
+  sequence: 1
+  poisson_ratio: False # Link to use global with model
+  learning_rate: 1.0e-4
+  weight_decay: 0
+  batch_size: 32
+  trajectories: 675
+  n_timesteps: 50
+  epochs: 200
+  pretraining: 100
+  reduced: False
+  subsampling: mesh # if voxel, reduced must be False. Non-recurrent only!
+  imputation: [1, 2, 5]
+
+  test:
+    trajectories: 135 # Number of trajectories that are going to be used to compute the validation loss during evaluation
+    rollouts: 135 # Number of trajectories that are going to be used to compute the rollout loss during evaluation
+    n_step_rollouts: 135 # Number of trajectories that are going to be used to compute the n_step_loss during evaluation
+    n_steps: 10
+    n_viz: 5
+
+  validation:
+    interval: 10
+    trajectories: 135 # Number of trajectories that are going to be used to compute the validation loss during training
+    rollouts: 135 # Number of trajectories that are going to be used to compute the rollout loss during training
+    n_steps: 10
+    n_step_rollouts: 135
+    viz_interval: 500
+    n_viz: 0
+
+model:
+  feature_norm: False
+  layer_norm: False
+  layers: 1
+  noise: 0.01
+  pc_noise: 0.0
+  aggregation: mean
+  message_passing_steps: 5
+  heterogeneous: False
+
+poisson:
+  learning_rate: 1.0e-4
+  weight_decay: 0
+  epochs: 200
