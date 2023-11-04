@@ -1,7 +1,7 @@
 name: "DEFAULT"   # MUST BE DEFAULT
 import_path: "default.yaml"
 
-random_seed: 9
+random_seed: 115
 retrain: False # Start training a new model if True. Continue training the most recent version of the model if False.
 wandb_mode: online
 directory: deformable_plate
@@ -21,7 +21,7 @@ task:
   epochs: 200
   pretraining: 100
   reduced: False
-  subsampling: ifp # if voxel, reduced must be False. Non-recurrent only!
+  subsampling: voxel # if voxel, reduced must be False. Non-recurrent only!
   imputation: [1, 2, 5]
 
   test:
@@ -45,7 +45,7 @@ model:
   layer_norm: False
   layers: 1
   noise: 0.01
-  pc_noise: 0.01
+  pc_noise: 0.0
   aggregation: mean
   message_passing_steps: 5
   heterogeneous: False
