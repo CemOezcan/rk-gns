@@ -18,11 +18,11 @@ task:
   batch_size: 32
   trajectories: 675
   n_timesteps: 50
-  epochs: 150
+  epochs: 200
   pretraining: 100
   reduced: False
   subsampling: ifp # if voxel, reduced must be False. Non-recurrent only!
-  imputation: [5]
+  imputation: [1, 2, 5]
 
   test:
     trajectories: 135 # Number of trajectories that are going to be used to compute the validation loss during evaluation
@@ -53,4 +53,4 @@ model:
 poisson:
   learning_rate: 3.0e-4
   weight_decay: 1.0e-5
-  epochs: 150
+  epochs: 200
