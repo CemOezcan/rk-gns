@@ -10,7 +10,7 @@ task:
   task: poisson # trapez/poisson
   model: mgn # mgn/supervised/self-supervised
   ggns: False # T/F
-  recurrence: gru # False/name
+  recurrence: rkn # False/name
   sequence: 5
   poisson_ratio: False # Link to use global with model
   learning_rate: 3.0e-4
@@ -45,7 +45,7 @@ model:
   layer_norm: False
   layers: 1
   noise: 0.01
-  pc_noise: 0.0
+  pc_noise: 0.01
   aggregation: mean
   message_passing_steps: 5
   heterogeneous: False
