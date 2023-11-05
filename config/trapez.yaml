@@ -18,7 +18,7 @@ task:
   batch_size: 32
   trajectories: 675
   n_timesteps: 50
-  epochs: 1
+  epochs: 200
   pretraining: 100
   reduced: False
   subsampling: ifp # if voxel, reduced must be False. Non-recurrent only!
@@ -32,19 +32,19 @@ task:
     n_viz: 5
 
   validation:
-    interval: 1
+    interval: 10
     trajectories: 135 # Number of trajectories that are going to be used to compute the validation loss during training
     rollouts: 135 # Number of trajectories that are going to be used to compute the rollout loss during training
     n_steps: 10
     n_step_rollouts: 135
-    viz_interval: 1
+    viz_interval: 200
     n_viz: 5
 
 model:
   feature_norm: False
   layer_norm: False
   layers: 1
-  noise: 0.0
+  noise: 0.01
   pc_noise: 0.0
   aggregation: mean
   message_passing_steps: 5
