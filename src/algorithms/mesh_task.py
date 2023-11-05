@@ -127,11 +127,8 @@ class MeshTask(AbstractTask):
 
             if (e + 1) % self._validation_interval == 0:
                 one_step = self._algorithm.one_step_evaluator(self._valid_loader, self._num_val_trajectories, task_name)
-                if self.task_type != 'poisson':
-                    n_steps = [self._algorithm.n_step_evaluator(self._rollout_loader, task_name, n_steps=self._val_n_steps, n_traj=self._num_val_n_step_rollouts, freq=freq)
-                               for freq in self.frequency_list]
-                else:
-                    n_steps = []
+                # n_steps = [self._algorithm.n_step_evaluator(self._rollout_loader, task_name, n_steps=self._val_n_steps, n_traj=self._num_val_n_step_rollouts, freq=freq) for freq in self.frequency_list]
+                n_steps = []
 
                 rollouts = [self._algorithm.rollout_evaluator(self._rollout_loader, self._num_val_rollouts, task_name, freq=freq)
                             for freq in self.frequency_list]
