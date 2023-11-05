@@ -179,13 +179,18 @@ class MeshTask(AbstractTask):
 
         n_step = list()
         rollout = list()
-        for freq in self.frequency_list:
+        f_list = self.frequency_list
+        if self.task_type != 'poisson' and 0 not in self.frequency_list:
+            f_list = [1, 2, 5, 7, 10]
+            self._algorithm.best_models[7] = (0, self._algorithm.best_models[5][1])
+            self._algorithm.best_models[10] = (0, self._algorithm.best_models[5][1])
+        for freq in f_list:
             self._algorithm._network = self._algorithm.best_models[freq][1]
             n_step.append(self._algorithm.n_step_evaluator(self._test_rollout_loader, task_name, n_steps=self._n_steps, n_traj=self._num_n_step_rollouts, freq=freq))
             rollout.append(self._algorithm.rollout_evaluator(self._test_rollout_loader, self._num_test_rollouts, task_name, freq=freq))
 
         self._algorithm._network = old_model
-        dir_dict = self.select_plotting(task_name, self.frequency_list, self.test_viz)
+        dir_dict = self.select_plotting(task_name, f_list, self.test_viz)
         animation = {f"video_{key}": wandb.Video(value, fps=10, format="gif") for key, value in dir_dict.items()}
 
         evaluation_data = [one_step] + rollout + n_step + [animation]
