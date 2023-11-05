@@ -8,7 +8,7 @@ directory: deformable_plate
 
 task:
   task: trapez # trapez/poisson
-  model: mgn # mgn/supervised/self-supervised
+  model: supervised # mgn/supervised/self-supervised
   ggns: False # T/F
   recurrence: gru # False/name
   sequence: 5
