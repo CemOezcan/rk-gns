@@ -179,6 +179,8 @@ class MeshTask(AbstractTask):
         f_list = self.frequency_list
         if self.task_type != 'poisson' and 0 not in self.frequency_list:
             f_list = [1, 2, 5, 7, 10]
+            self._algorithm.best_models[1] = (0, self._algorithm.best_models[5][1])
+            self._algorithm.best_models[2] = (0, self._algorithm.best_models[5][1])
             self._algorithm.best_models[7] = (0, self._algorithm.best_models[5][1])
             self._algorithm.best_models[10] = (0, self._algorithm.best_models[5][1])
         for freq in f_list:
