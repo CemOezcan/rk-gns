@@ -1,20 +1,20 @@
 name: "DEFAULT"   # MUST BE DEFAULT
 import_path: "default.yaml"
 
-random_seed: 115
+random_seed: 777
 retrain: False # Start training a new model if True. Continue training the most recent version of the model if False.
 wandb_mode: online
 directory: deformable_plate
 
 task:
-  task: poisson # trapez/poisson
-  model: mgn # mgn/supervised/self-supervised
-  ggns: False # T/F
+  task: trapez # trapez/poisson
+  model: supervised # mgn/supervised/self-supervised
+  ggns: True # T/F
   recurrence: rkn # False/name
   sequence: 5
   poisson_ratio: False # Link to use global with model
   learning_rate: 5.0e-4
-  weight_decay: 2.0e-4
+  weight_decay: 0
   batch_size: 32
   trajectories: 675
   n_timesteps: 50
@@ -22,7 +22,7 @@ task:
   pretraining: 100
   reduced: False
   subsampling: ifp # if voxel, reduced must be False. Non-recurrent only!
-  imputation: [1, 2, 5]
+  imputation: [5]
 
   test:
     trajectories: 135 # Number of trajectories that are going to be used to compute the validation loss during evaluation
@@ -37,8 +37,8 @@ task:
     rollouts: 135 # Number of trajectories that are going to be used to compute the rollout loss during training
     n_steps: 10
     n_step_rollouts: 135
-    viz_interval: 500
-    n_viz: 0
+    viz_interval: 200
+    n_viz: 5
 
 model:
   feature_norm: False
