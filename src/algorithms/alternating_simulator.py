@@ -299,26 +299,26 @@ class AlternatingSimulator(AbstractSimulator):
         val_loss, pos_loss, u_error, poisson_error = zip(*mean)
         val_std, pos_std, u_std, poisson_std = zip(*std)
         log_dict = {
-            'single-step error/velocity_historgram':
-                wandb.Histogram(
-                    [x for x in val_loss],
-                    num_bins=20
-                ),
-            'single-step error/material_historgram':
-                wandb.Histogram(
-                    [x for x in val_loss],
-                    num_bins=20
-                ),
-            'single-step error/poisson_historgram':
-                wandb.Histogram(
-                    [x for x in pos_loss],
-                    num_bins=20
-                ),
-            'single-step error/position_historgram':
-                wandb.Histogram(
-                    [x for x in pos_loss],
-                    num_bins=20
-                ),
+            # 'single-step error/velocity_historgram':
+            #     wandb.Histogram(
+            #         [x for x in val_loss],
+            #         num_bins=20
+            #     ),
+            # 'single-step error/material_historgram':
+            #     wandb.Histogram(
+            #         [x for x in val_loss],
+            #         num_bins=20
+            #     ),
+            # 'single-step error/poisson_historgram':
+            #     wandb.Histogram(
+            #         [x for x in pos_loss],
+            #         num_bins=20
+            #     ),
+            # 'single-step error/position_historgram':
+            #     wandb.Histogram(
+            #         [x for x in pos_loss],
+            #         num_bins=20
+            #     ),
             'single-step error/material_error': np.mean(u_error),
             'single-step error/poisson_error': np.mean(poisson_error),
             'single-step error/velocity_error': np.mean(val_loss),
@@ -370,7 +370,7 @@ class AlternatingSimulator(AbstractSimulator):
             mse_losses.append(mse_loss.cpu())
             u_losses.append(u_loss.cpu())
 
-        rollout_hist = wandb.Histogram([x for x in torch.mean(torch.stack(mse_losses), dim=1)], num_bins=20)
+        #rollout_hist = wandb.Histogram([x for x in torch.mean(torch.stack(mse_losses), dim=1)], num_bins=20)
 
         mse_means = torch.mean(torch.stack(mse_losses), dim=0)
         u_means = [x.item() for x in torch.mean(torch.stack(u_losses), dim=0)]
@@ -394,7 +394,7 @@ class AlternatingSimulator(AbstractSimulator):
         return {f'rollout error/mean_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_loss']), dim=0),
                 f'rollout error/std_k={freq}': torch.mean(torch.tensor(rollout_losses['mse_std']), dim=0),
                 f'rollout error/last_k={freq}': rollout_losses['mse_loss'][-1],
-                f'rollout error/histogram_k={freq}': rollout_hist,
+                #f'rollout error/histogram_k={freq}': rollout_hist,
 
                 f'rollout error/material_mean_k={freq}': torch.mean(torch.tensor(u_means), dim=0),
                 f'rollout error/material_middle_k={freq}': u_means[int(len(u_means) / 2)],
