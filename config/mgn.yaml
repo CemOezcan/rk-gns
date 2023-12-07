@@ -8,12 +8,12 @@ directory: deformable_plate
 
 task:
   task: trapez # trapez/poisson
-  model: supervised # mgn/supervised/self-supervised
-  ggns: True # T/F
+  model: self-supervised # mgn/supervised/self-supervised
+  ggns: False # T/F
   recurrence: rkn # False/name
   sequence: 5
   poisson_ratio: False # Link to use global with model
-  learning_rate: 5.0e-4
+  learning_rate: 1.0e-4
   weight_decay: 0
   batch_size: 32
   trajectories: 675
@@ -22,7 +22,7 @@ task:
   pretraining: 100
   reduced: False
   subsampling: ifp # if voxel, reduced must be False. Non-recurrent only!
-  imputation: [5]
+  imputation: [1, 5]
 
   test:
     trajectories: 135 # Number of trajectories that are going to be used to compute the validation loss during evaluation
@@ -37,8 +37,8 @@ task:
     rollouts: 135 # Number of trajectories that are going to be used to compute the rollout loss during training
     n_steps: 10
     n_step_rollouts: 135
-    viz_interval: 200
-    n_viz: 5
+    viz_interval: 500
+    n_viz: 0
 
 model:
   feature_norm: False
