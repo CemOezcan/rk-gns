@@ -26,7 +26,7 @@ class Decoder(nn.Module):
         if self.recurrence:
             self.rnn = get_RNN(rnn_type, self.latent_size)
             if self.self_sup:
-                output_size = 1 # TODO: latent space dimension
+                output_size = 64 # TODO: latent space dimension
                 self.mean_model = nn.Sequential(nn.LazyLinear(latent_size), nn.LeakyReLU(), nn.LazyLinear(output_size))
             self.var_model = nn.Sequential(nn.LazyLinear(latent_size), nn.LeakyReLU(), nn.LazyLinear(output_size), ScaledShiftedSigmoidActivation())
     def forward(self, graph: Batch) -> Tuple[Tensor, Union[None, Tensor]]:
