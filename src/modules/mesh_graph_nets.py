@@ -28,6 +28,7 @@ class MeshGraphNets(nn.Module):
         self._num_layers = num_layers
         self._message_passing_steps = message_passing_steps
         self._message_passing_aggregator = message_passing_aggregator
+        self.self_sup = self_sup
         graphnet_block = SSGraphNet if self_sup else GraphNet
 
         self.encoder = Encoder(make_mlp=nn.LazyLinear,
@@ -49,6 +50,10 @@ class MeshGraphNets(nn.Module):
         """Encodes and processes a multigraph, and returns node features."""
         latent_graph = self.encoder(graph)
         latent_graph = self.processor(latent_graph)
+        if self.self_sup:
+            mesh, pc = latent_graph
+            mesh.u = pc.u
+            latent_graph = mesh
         return self.decoder(latent_graph)
 
     def _make_mlp(self, output_size: int, layer_norm=False) -> nn.Module:
