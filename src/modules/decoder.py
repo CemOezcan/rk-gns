@@ -26,7 +26,7 @@ class Decoder(nn.Module):
         if self.recurrence:
             self.rnn = get_RNN(rnn_type, self.latent_size)
             if self.self_sup:
-                output_size = 1
+                output_size = 1 # TODO: latent space dimension
                 self.mean_model = nn.Sequential(nn.LazyLinear(latent_size), nn.LeakyReLU(), nn.LazyLinear(output_size))
             self.var_model = nn.Sequential(nn.LazyLinear(latent_size), nn.LeakyReLU(), nn.LazyLinear(output_size), ScaledShiftedSigmoidActivation())
     def forward(self, graph: Batch) -> Tuple[Tensor, Union[None, Tensor]]:
@@ -41,16 +41,16 @@ class Decoder(nn.Module):
         else:
             var = None
 
-        x_hat = self.transform_nodes(graph, var)
+        x_hat, m = self.transform_nodes(graph, var)
         mean = self.model(x_hat)
 
-        y_hat = (mean, var)
+        y_hat = (mean, var) if m is None else (mean, (var, m))
 
         return y_hat, (h, c)
 
     def transform_nodes(self, graph, var):
         if self.use_u:
-            return graph.u
+            return graph.u, None
 
         mask = torch.where(graph[self.node_type].node_type == NodeType.MESH)[0]
         node_features = graph[self.node_type].x[mask]
@@ -59,14 +59,19 @@ class Decoder(nn.Module):
             batch = graph[self.node_type].batch
             mean = self.mean_model(graph.u)
 
-            eps = torch.randn_like(mean)
-            samples = mean + eps * torch.sqrt(var) # TODO: sqrt necessary?
+            if self.training:
+                eps = torch.randn_like(mean)
+                samples = mean + eps * torch.sqrt(var)
+            else:
+                samples = mean
 
             features = [node_features, graph.u[batch][mask]] if var is None else [node_features, samples[batch][mask]]
-            # TODO: integrate cov
-            return torch.cat(features, dim=-1)
+            if self.training:
+                return torch.cat(features, dim=-1), mean
+            else:
+                return torch.cat(features, dim=-1), None
 
-        return node_features
+        return node_features, None
 
 def get_RNN(rnn_type, latent_size):
     if str(rnn_type).lower() == 'gru':

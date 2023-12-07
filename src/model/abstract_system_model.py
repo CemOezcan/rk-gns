@@ -27,6 +27,18 @@ def mse(target, predicted_mean, predicted_var):
 
     return loss_fn(target, predicted_mean)
 
+def vae_loss(target, predicted_mean, predicted_var):
+    loss_fn = torch.nn.MSELoss()
+    mu, var = predicted_var
+    var += 1e-5
+
+    kl = - 0.5 * torch.sum(1 + torch.log(var) - torch.square(mu) - var, dim=-1)
+    kl = torch.mean(kl)
+    mse = loss_fn(target, predicted_mean)
+
+    # TODO: Parameterize lambda
+    return mse + 0.1 * kl
+
 class AbstractSystemModel(ABC, nn.Module):
     """
     Superclass for neural system model estimators
@@ -49,7 +61,12 @@ class AbstractSystemModel(ABC, nn.Module):
             self.subsampling = NodeType.POINT
         else:
             raise NotImplementedError('Subsampling does not exist!')
-        self.loss_fn = gaussian_nll if params.get('task').get('recurrence').lower() == 'rkn' and params.get('task').get('task') == 'poisson' else mse
+        if params.get('task').get('recurrence').lower() == 'rkn' and params.get('task').get('task') == 'poisson':
+            self.loss_fn = gaussian_nll
+        elif params.get('task').get('recurrence').lower() == 'rkn' and params.get('task').get('task') == 'trapez' and self.self_sup:
+            self.loss_fn = vae_loss
+        else:
+            self.loss_fn = mse
 
         self._output_normalizer = Normalizer(name='output_normalizer')
         self._mesh_edge_normalizer = Normalizer(name='mesh_edge_normalizer')

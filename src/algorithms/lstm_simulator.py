@@ -65,6 +65,7 @@ class LSTMSimulator(AbstractSimulator):
             target_list = list()
             pred_list = list()
             pred_var_list = list()
+            latent_mean_list = list()
 
             for j, graph in enumerate(sequence):
                 graph.to(device)
@@ -74,9 +75,14 @@ class LSTMSimulator(AbstractSimulator):
                 (pred_velocity, pred_var), (h, c) = self._network(graph, True)
                 target_velocity = self._network.get_target(graph, True)
 
+                if self.mode == 'self-supervised' and pred_var is not None:
+                    latent_mean_list.append(pred_var[1])
+                    pred_var_list.append(pred_var[0])
+                else:
+                    pred_var_list.append(pred_var)
+
                 target_list.append(target_velocity)
                 pred_list.append(pred_velocity)
-                pred_var_list.append(pred_var)
 
             target = torch.stack(target_list, dim=1)
             pred_mean = torch.stack(pred_list, dim=1)
@@ -85,7 +91,11 @@ class LSTMSimulator(AbstractSimulator):
             else:
                 pred_var = None
 
-            loss = self._network.loss_fn(target, pred_mean, pred_var)
+            if self.mode == 'self-supervised':
+                latent_mean = torch.stack(latent_mean_list, dim=1)
+                loss = self._network.loss_fn(target, pred_mean, (latent_mean, pred_var))
+            else:
+                loss = self._network.loss_fn(target, pred_mean, pred_var)
             loss.backward()
 
             gradients = self.log_gradients(self._network)
@@ -142,7 +152,10 @@ class LSTMSimulator(AbstractSimulator):
 
                 (pred_velocity, pred_var), (h, c) = self._network(graph, False)
                 target_velocity = self._network.get_target(graph, False)
-                error = self._network.loss_fn(target_velocity, pred_velocity, pred_var).cpu()
+                if self.mode != 'self-supervised':
+                    error = self._network.loss_fn(target_velocity, pred_velocity, pred_var).cpu()
+                else:
+                    error = loss_fn(target_velocity, pred_velocity).cpu()
 
                 pred_position, _, _ = self._network.update(graph, pred_velocity)
                 if self.mode == 'poisson':
