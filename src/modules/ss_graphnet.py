@@ -91,9 +91,10 @@ class SSGraphNet(GraphNet):
         pc_mask = torch.where(graph['mesh'].node_type == NodeType.SHAPE)[0]
         obst_mask = torch.where(graph['mesh'].node_type == NodeType.COLLIDER)[0]
         mesh_mask = torch.where(graph['mesh'].node_type == NodeType.MESH)[0]
+        point_mask = torch.where(graph['mesh'].node_type == NodeType.POINT)[0]
 
         poisson_mask = torch.cat([pc_mask, obst_mask], dim=0)
-        mesh_mask = torch.cat([mesh_mask, obst_mask], dim=0)
+        mesh_mask = torch.cat([mesh_mask, point_mask, obst_mask], dim=0)
         mesh = graph.subgraph({'mesh': mesh_mask})
         pc = graph.subgraph({'mesh': poisson_mask})
 
