@@ -95,6 +95,7 @@ class LSTMSimulator(AbstractSimulator):
                 latent_mean = torch.stack(latent_mean_list, dim=1)
                 loss = self._network.loss_fn(target, pred_mean, (latent_mean, pred_var))
             else:
+                latent_mean = pred_var
                 loss = self._network.loss_fn(target, pred_mean, pred_var)
             loss.backward()
 
@@ -105,7 +106,8 @@ class LSTMSimulator(AbstractSimulator):
 
             end_instance = time.time()
             wandb.log({**gradients, 'training/loss': loss.detach(), 'training/sequence_time': end_instance - start_instance,
-                       'training/predictions': torch.mean(pred_mean.abs()), 'training/predictions_var': torch.mean(pred_var)})
+                       'training/predictions': torch.mean(pred_mean.abs()),
+                       'training/predictions_mean': torch.mean(latent_mean.abs()), 'training/predictions_var': torch.mean(pred_var)})
             start_instance = time.time()
 
             total_loss += loss.detach()
