@@ -36,8 +36,8 @@ def vae_loss(target, predicted_mean, predicted_var):
     kl = torch.mean(kl)
     mse = loss_fn(target, predicted_mean)
 
-    # TODO: Parameterize lambda
-    return mse + 0.0001 * kl
+    # TODO: Parameterize beta
+    return mse + 0.00001 * kl
 
 class AbstractSystemModel(ABC, nn.Module):
     """
