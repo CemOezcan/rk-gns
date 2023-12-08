@@ -26,9 +26,10 @@ class Decoder(nn.Module):
         if self.recurrence:
             self.rnn = get_RNN(rnn_type, self.latent_size)
             if self.self_sup:
-                output_size = latent_size # TODO: latent space dimension
-                self.mean_model = nn.Sequential(nn.LazyLinear(latent_size), nn.LeakyReLU(), nn.LazyLinear(output_size))
-            self.var_model = nn.Sequential(nn.LazyLinear(latent_size), nn.LeakyReLU(), nn.LazyLinear(output_size), ScaledShiftedSigmoidActivation())
+                output_size = int(latent_size / 2)
+                self.mean_model = nn.Sequential(nn.LazyLinear(output_size), nn.LeakyReLU(), nn.LazyLinear(output_size))
+            # TODO: change for Supervised
+            self.var_model = nn.Sequential(nn.LazyLinear(output_size), nn.LeakyReLU(), nn.LazyLinear(output_size), ScaledShiftedSigmoidActivation())
     def forward(self, graph: Batch) -> Tuple[Tensor, Union[None, Tensor]]:
         if self.recurrence:
             graph.u, post_var, h, c = self.rnn(graph)
@@ -77,6 +78,6 @@ def get_RNN(rnn_type, latent_size):
     if str(rnn_type).lower() == 'gru':
         return GRU(latent_size)
     elif str(rnn_type).lower() == 'rkn':
-        return RKN(int(latent_size))
+        return RKN(int(latent_size / 2))
     else:
         raise NotImplementedError("Implement your RNN cells here!")
