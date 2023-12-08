@@ -37,7 +37,7 @@ def vae_loss(target, predicted_mean, predicted_var):
     mse = loss_fn(target, predicted_mean)
 
     # TODO: Parameterize lambda
-    return mse + 10 * kl
+    return mse + 0.0001 * kl
 
 class AbstractSystemModel(ABC, nn.Module):
     """
