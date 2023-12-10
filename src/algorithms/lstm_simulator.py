@@ -59,7 +59,7 @@ class LSTMSimulator(AbstractSimulator):
         self._network.train()
         data = self.fetch_data(train_dataloader, True)
         total_loss = 0
-        beta = 0.00001
+        beta = 0 #.00001
         #beta = 0.0001
 
         start_instance = time.time()
