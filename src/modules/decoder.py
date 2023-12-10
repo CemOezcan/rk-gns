@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from torch.nn.utils import spectral_norm
 
 from torch_geometric.data import Batch
 from typing import Callable, Union, Tuple
@@ -27,9 +28,9 @@ class Decoder(nn.Module):
             self.rnn = get_RNN(rnn_type, self.latent_size)
             if self.self_sup:
                 output_size = int(latent_size / 2)
-                #self.mean_model = nn.Sequential(nn.LazyLinear(output_size), nn.LeakyReLU(), nn.LazyLinear(output_size))
+                self.mean_model = spectral_norm(nn.Linear(latent_size, latent_size))
             # TODO: change for Supervised
-            self.var_model = nn.Sequential(nn.LazyLinear(latent_size), SoftPlus())
+            self.var_model = nn.Sequential(spectral_norm(nn.Linear(output_size * 3, latent_size)), SoftPlus())
             #self.var_model = nn.Sequential(nn.LazyLinear(output_size), nn.LeakyReLU(), nn.LazyLinear(output_size), SoftPlus())
     def forward(self, graph: Batch) -> Tuple[Tensor, Union[None, Tensor]]:
         if self.recurrence:
@@ -59,7 +60,7 @@ class Decoder(nn.Module):
 
         if self.self_sup:
             batch = graph[self.node_type].batch
-            mean = graph.u #self.mean_model(graph.u)
+            mean = self.mean_model(graph.u)
 
             if self.training:
                 eps = torch.randn_like(mean)
