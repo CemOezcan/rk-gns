@@ -6,7 +6,7 @@ from typing import Callable, Union, Tuple
 from torch import nn, Tensor
 
 from src.modules.gru.GRU import GRU
-from src.modules.rkn.RKN import RKN, ScaledShiftedSigmoidActivation
+from src.modules.rkn.RKN import RKN, SoftPlus
 from src.util.types import NodeType
 
 
@@ -29,7 +29,7 @@ class Decoder(nn.Module):
                 output_size = int(latent_size / 2)
                 self.mean_model = nn.Sequential(nn.LazyLinear(output_size), nn.LeakyReLU(), nn.LazyLinear(output_size))
             # TODO: change for Supervised
-            self.var_model = nn.Sequential(nn.LazyLinear(output_size), nn.LeakyReLU(), nn.LazyLinear(output_size), ScaledShiftedSigmoidActivation())
+            self.var_model = nn.Sequential(nn.LazyLinear(output_size), nn.LeakyReLU(), nn.LazyLinear(output_size), SoftPlus())
     def forward(self, graph: Batch) -> Tuple[Tensor, Union[None, Tensor]]:
         if self.recurrence:
             graph.u, post_var, h, c = self.rnn(graph)

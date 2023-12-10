@@ -29,7 +29,7 @@ class RKN(nn.Module):
         self._ics = torch.zeros(1, self._lod).to(device)
 
         self.mean_encoder = nn.LazyLinear(latent_obs_dim) # nn.Sequential(nn.LazyLinear(latent_obs_dim), nn.LayerNorm(normalized_shape=latent_obs_dim))
-        self.var_encoder = nn.Sequential(nn.LazyLinear(latent_obs_dim), ScaledShiftedSigmoidActivation())
+        self.var_encoder = nn.Sequential(nn.LazyLinear(latent_obs_dim), SoftPlus())
 
         #TODO: dtype?
         self._cell = RKNCell(latent_obs_dim, RKNCell.get_default_config(), dtype=torch.float32)
@@ -61,6 +61,15 @@ def var_activation(x: torch.Tensor) -> torch.Tensor:
     :return: exp(x) if x < 0 else x + 1
     """
     return torch.log(torch.exp(x) + 1.0)
+
+
+class SoftPlus(nn.Module):
+
+    def __init__(self) -> None:
+        super(SoftPlus, self).__init__()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.exp(x).where(x < 0.0, x + 1.0)
 
 
 class ScaledShiftedSigmoidActivation(nn.Module):

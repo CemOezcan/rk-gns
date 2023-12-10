@@ -30,7 +30,7 @@ def mse(target, predicted_mean, predicted_var):
 def vae_loss(target, predicted_mean, predicted_var):
     loss_fn = torch.nn.MSELoss()
     mu, var = predicted_var
-    var += 1e-5
+    var += 1e-8
 
     kl = - 0.5 * torch.sum(1 + torch.log(var) - torch.square(mu) - var, dim=-1)
     kl = torch.mean(kl)
