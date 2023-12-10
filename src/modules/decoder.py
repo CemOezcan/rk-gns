@@ -29,7 +29,7 @@ class Decoder(nn.Module):
                 output_size = int(latent_size / 2)
                 #self.mean_model = nn.Sequential(nn.LazyLinear(output_size), nn.LeakyReLU(), nn.LazyLinear(output_size))
             # TODO: change for Supervised
-            self.var_model = nn.Sequential(nn.LazyLinear(output_size), SoftPlus())
+            self.var_model = nn.Sequential(nn.LazyLinear(latent_size), SoftPlus())
             #self.var_model = nn.Sequential(nn.LazyLinear(output_size), nn.LeakyReLU(), nn.LazyLinear(output_size), SoftPlus())
     def forward(self, graph: Batch) -> Tuple[Tensor, Union[None, Tensor]]:
         if self.recurrence:
