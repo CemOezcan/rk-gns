@@ -29,7 +29,7 @@ class RKN(nn.Module):
         self._ics = torch.zeros(1, self._lod).to(device)
 
         self.mean_encoder = nn.LazyLinear(latent_obs_dim) # nn.Sequential(nn.LazyLinear(latent_obs_dim), nn.LayerNorm(normalized_shape=latent_obs_dim))
-        self.var_encoder = nn.Sequential(nn.LazyLinear(latent_obs_dim), SoftPlus())
+        self.var_encoder = nn.Sequential(nn.LazyLinear(latent_obs_dim), ScaledShiftedSigmoidActivation())
 
         #TODO: dtype?
         self._cell = RKNCell(latent_obs_dim, RKNCell.get_default_config(), dtype=torch.float32)
