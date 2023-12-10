@@ -29,15 +29,15 @@ def mse(target, predicted_mean, predicted_var):
 
 def vae_loss(target, predicted_mean, predicted_var, beta=0):
     loss_fn = torch.nn.MSELoss()
-    #mu, var = predicted_var
-    #var += 1e-8
+    mu, var = predicted_var
+    var += 1e-8
 
-    #kl = - 0.5 * torch.sum(1 + torch.log(var * 0.25) - torch.square(mu * 0.5) - (var * 0.25), dim=-1)
-    #kl = torch.mean(kl)
+    kl = - 0.5 * torch.sum(1 + torch.log(var * 0.25) - torch.square(mu * 0.5) - (var * 0.25), dim=-1)
+    kl = torch.mean(kl)
     mse = loss_fn(target, predicted_mean)
 
     # TODO: Parameterize beta
-    return mse #+ beta * kl
+    return mse + beta * kl
 
 class AbstractSystemModel(ABC, nn.Module):
     """
