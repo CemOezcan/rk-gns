@@ -27,9 +27,10 @@ class Decoder(nn.Module):
             self.rnn = get_RNN(rnn_type, self.latent_size)
             if self.self_sup:
                 output_size = int(latent_size / 2)
-                self.mean_model = nn.Sequential(nn.LazyLinear(output_size), nn.LeakyReLU(), nn.LazyLinear(output_size))
+                #self.mean_model = nn.Sequential(nn.LazyLinear(output_size), nn.LeakyReLU(), nn.LazyLinear(output_size))
             # TODO: change for Supervised
-            self.var_model = nn.Sequential(nn.LazyLinear(output_size), nn.LeakyReLU(), nn.LazyLinear(output_size), SoftPlus())
+            self.var_model = nn.Sequential(nn.LazyLinear(output_size), SoftPlus())
+            #self.var_model = nn.Sequential(nn.LazyLinear(output_size), nn.LeakyReLU(), nn.LazyLinear(output_size), SoftPlus())
     def forward(self, graph: Batch) -> Tuple[Tensor, Union[None, Tensor]]:
         if self.recurrence:
             graph.u, post_var, h, c = self.rnn(graph)
@@ -58,7 +59,7 @@ class Decoder(nn.Module):
 
         if self.self_sup:
             batch = graph[self.node_type].batch
-            mean = self.mean_model(graph.u)
+            mean = graph.u #self.mean_model(graph.u)
 
             if self.training:
                 eps = torch.randn_like(mean)

@@ -1,7 +1,7 @@
 name: "DEFAULT"   # MUST BE DEFAULT
 import_path: "default.yaml"
 
-random_seed: 9
+random_seed: 9999
 retrain: False # Start training a new model if True. Continue training the most recent version of the model if False.
 wandb_mode: online
 directory: deformable_plate
