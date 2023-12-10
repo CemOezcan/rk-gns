@@ -122,7 +122,7 @@ class MeshTask(AbstractTask):
         self.train_loader = self._algorithm.pretraining(train_dataloader=self.train_loader)
         for e in trange(start_epoch, self._epochs, desc='Epochs', leave=True):
             task_name = f'{self._task_name}{e + 1}'
-            epoch_loss = self._algorithm.fit_iteration(train_dataloader=self.train_loader)
+            epoch_loss = self._algorithm.fit_iteration(train_dataloader=self.train_loader, e=(e + 1))
             evaluation_data = [{'training/epoch_loss': epoch_loss}]
 
             if (e + 1) % self._validation_interval == 0:

@@ -31,7 +31,7 @@ class MeshSimulator(AbstractSimulator):
         """
         super().__init__(config=config)
 
-    def fit_iteration(self, train_dataloader: List[Data]) -> float:
+    def fit_iteration(self, train_dataloader: List[Data], e=0) -> float:
         """
         Perform a training epoch, followed by a validation iteration to assess the model performance.
         Document relevant metrics with wandb.

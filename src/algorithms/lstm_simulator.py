@@ -40,7 +40,7 @@ class LSTMSimulator(AbstractSimulator):
         """
         super().__init__(config=config)
 
-    def fit_iteration(self, train_dataloader: List[List[Data]]) -> float:
+    def fit_iteration(self, train_dataloader: List[List[Data]], e=0) -> float:
         """
         Perform a training epoch, followed by a validation iteration to assess the model performance.
         Document relevant metrics with wandb.
@@ -59,6 +59,12 @@ class LSTMSimulator(AbstractSimulator):
         self._network.train()
         data = self.fetch_data(train_dataloader, True)
         total_loss = 0
+        if e < 10:
+            beta = 0
+        elif e < 60:
+            beta = 0.00001
+        else:
+            beta = 0.0001
 
         start_instance = time.time()
         for i, sequence in enumerate(tqdm(data, desc='Batches', leave=True, position=0)):
@@ -93,7 +99,7 @@ class LSTMSimulator(AbstractSimulator):
 
             if self.mode == 'self-supervised':
                 latent_mean = torch.stack(latent_mean_list, dim=1)
-                loss = self._network.loss_fn(target, pred_mean, (latent_mean, pred_var))
+                loss = self._network.loss_fn(target, pred_mean, (latent_mean, pred_var), beta)
             else:
                 latent_mean = pred_var
                 loss = self._network.loss_fn(target, pred_mean, pred_var)

@@ -171,7 +171,7 @@ class AbstractSimulator(ABC):
         return train_dataloader
 
     @abstractmethod
-    def fit_iteration(self, train_dataloader: List) -> float:
+    def fit_iteration(self, train_dataloader: List, e=0) -> float:
         """
         Train your algorithm for a single iteration. This can e.g., be a single epoch of neural network training,
         a policy update step, or something more complex. Just see this as the outermost for-loop of your algorithm.
