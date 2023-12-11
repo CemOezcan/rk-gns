@@ -37,8 +37,8 @@ task:
     rollouts: 135 # Number of trajectories that are going to be used to compute the rollout loss during training
     n_steps: 10
     n_step_rollouts: 135
-    viz_interval: 500
-    n_viz: 0
+    viz_interval: 200
+    n_viz: 5
 
 model:
   feature_norm: False
