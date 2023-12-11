@@ -28,10 +28,10 @@ class Decoder(nn.Module):
             self.rnn = get_RNN(rnn_type, self.latent_size)
             if self.self_sup:
                 output_size = int(latent_size / 2)
-                self.mean_model = spectral_norm(nn.Linear(latent_size, latent_size))
+                #self.mean_model = spectral_norm(nn.Linear(latent_size, latent_size))
             # TODO: change for Supervised
-            #self.var_model = nn.Sequential(nn.LazyLinear(latent_size), ScaledShiftedSigmoidActivation())
-            self.var_model = nn.Sequential(spectral_norm(nn.Linear(output_size * 3, latent_size)), ScaledShiftedSigmoidActivation())
+            self.var_model = nn.Sequential(nn.LazyLinear(latent_size), ScaledShiftedSigmoidActivation())
+            #self.var_model = nn.Sequential(spectral_norm(nn.Linear(output_size * 3, latent_size)), SoftPlus())
     def forward(self, graph: Batch) -> Tuple[Tensor, Union[None, Tensor]]:
         if self.recurrence:
             graph.u, post_var, h, c = self.rnn(graph)
@@ -39,8 +39,7 @@ class Decoder(nn.Module):
             post_var, h, c = None, None, None
 
         if post_var is not None:
-            var = torch.cat(post_var, dim=-1)
-            var = self.var_model(var) + torch.cat(post_var[:2], dim=-1)
+            var = self.var_model(torch.cat(post_var, dim=-1))
             c = torch.stack(c, dim=0)
         else:
             var = None
@@ -61,7 +60,7 @@ class Decoder(nn.Module):
 
         if self.self_sup:
             batch = graph[self.node_type].batch
-            mean = self.mean_model(graph.u) + graph.u
+            mean = graph.u #self.mean_model(graph.u)
 
             if self.training:
                 eps = torch.randn_like(mean)
