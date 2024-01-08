@@ -1,19 +1,19 @@
 name: "DEFAULT"   # MUST BE DEFAULT
 import_path: "default.yaml"
 
-random_seed: 9
+random_seed: 115
 retrain: False # Start training a new model if True. Continue training the most recent version of the model if False.
 wandb_mode: online
 directory: deformable_plate
 
 task:
   task: trapez # trapez/poisson
-  model: supervised # mgn/supervised/self-supervised
-  ggns: True # T/F
+  model: self-supervised # mgn/supervised/self-supervised
+  ggns: False # T/F
   recurrence: gru # False/name
   sequence: 5
   poisson_ratio: False # Link to use global with model
-  learning_rate: 5.0e-4
+  learning_rate: 1.0e-4
   weight_decay: 0
   batch_size: 32
   trajectories: 675
@@ -45,12 +45,12 @@ model:
   layer_norm: False
   layers: 1
   noise: 0.01
-  pc_noise: 0.0
+  pc_noise: 0.01
   aggregation: mean
   message_passing_steps: 5
   heterogeneous: False
 
 poisson:
-  learning_rate: 3.0e-4
-  weight_decay: 1.0e-5
+  learning_rate: 5.0e-4
+  weight_decay: 2.0e-4
   epochs: 200
