@@ -20,7 +20,7 @@ task:
   n_timesteps: 50
   epochs: 200
   pretraining: 100
-  reduced: False
+  reduced: True
   subsampling: ifp # if voxel, reduced must be False. Non-recurrent only!
   imputation: [5]
 
