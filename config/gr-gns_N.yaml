@@ -47,7 +47,7 @@ model:
   layer_norm: False # Layer normalization.
   layers: 1 # Number of MLP-layers.
   noise: 0.01 # Training noise.
-  pc_noise: 0.0 # Sensor data noise.
+  pc_noise: 0.01 # Sensor data noise.
   aggregation: mean # Message-passing aggregation function. Can be mean, max, min.
   message_passing_steps: 5 # Number of message-passing blocks.
   heterogeneous: False # Ignore, does not do anything.
