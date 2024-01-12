@@ -6,22 +6,22 @@ import_path: "default.yaml"
 random_seed: 0 # Configure the random seed.
 retrain: False # If True, the training of existing models with the same configuration is not continued. Instead, a new model will be trained, overwriting the existing model.
 wandb_mode: online # If metrics should be uploaded to wandb or not (online/offline).
-group: MGN # Name of the group.
+group: GGNS_N # Name of the group.
 directory: deformable_plate # Name of the data directory and dataset.
 
 task:
   task: trapez # If poisson, the system parameter estimator will be trained. If trapez, the whole model (inkl. forward dynamics predictor) will be trained.
   model: mgn # mgn for baseline models, supervised and self-supervised for versions of RK-GNS.
-  ggns: False # If True, the update mechanism of GGNS will be used.
-  recurrence: gru # Type of recurrence. Only GRU or False are allowed.
+  ggns: True # If True, the update mechanism of GGNS will be used.
+  recurrence: False # Type of recurrence. Only GRU or False are allowed.
   sequence: 5 # Length of the sub-sequences for Truncated Backpropagation Trough Time.
   poisson_ratio: False # If True, provides ground-truth Poisson's ratio values as global a global variable.
-  learning_rate: 1.0e-4 # Learning rate.
-  weight_decay: 1.0e-5 # L2 regularization parameter.
+  learning_rate: 5.0e-4 # Learning rate.
+  weight_decay: 0 # L2 regularization parameter.
   batch_size: 32 # Batch size
   trajectories: 675 # Number of Trajectories used during training. <= 675.
   n_timesteps: 50 # Trajectory length. <= 50.
-  epochs: 100 # Number of training epochs.
+  epochs: 200 # Number of training epochs.
   pretraining: 100 # Ignore, does not do anything
   reduced: False # If True, reduced GGNS settings are going to be used.
   imputation: [5] # Set of imputation parameters the model will be evaluated for during validation. [5] to save time, does not affect test-results.
@@ -47,12 +47,12 @@ model:
   layer_norm: False # Layer normalization.
   layers: 1 # Number of MLP-layers.
   noise: 0.01 # Training noise.
-  pc_noise: 0.0 # Sensor data noise.
+  pc_noise: 0.01 # Sensor data noise.
   aggregation: mean # Message-passing aggregation function. Can be mean, max, min.
   message_passing_steps: 5 # Number of message-passing blocks.
   heterogeneous: False # Ignore, does not do anything.
 
 poisson: # If the model is a supervised version of RK-GNS, these settings are going to be used to pretrain the system parameter estimator.
   learning_rate: 5.0e-4 # Learning rate.
-  weight_decay: 1.0e-5 # L2 regularization parameter.
-  epochs: 100 # Number of training epochs.
+  weight_decay: 0 # L2 regularization parameter.
+  epochs: 200 # Number of training epochs.
