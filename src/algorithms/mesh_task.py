@@ -228,6 +228,7 @@ class MeshTask(AbstractTask):
 
         """
         rollouts = os.path.join(self._out_dir, f'{task_name}_rollouts_k={freq}.pkl')
+        wandb.save(rollouts)
         with open(rollouts, 'rb') as fp:
             rollout_data = pickle.load(fp)[:n_viz]
 

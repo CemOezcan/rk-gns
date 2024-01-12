@@ -94,7 +94,8 @@ class AbstractSimulator(ABC):
         """
         self._wandb_run = None
         self._wandb_mode = task_information.get('wandb_mode')
-        wandb.init(project='RK-GNS', config=task_information, mode=self._wandb_mode)
+        self._group = task_information.get('group')
+        wandb.init(project='RK-GNS', config=task_information, mode=self._wandb_mode, group=self._group)
         wandb.define_metric('epoch')
         wandb.define_metric('validation_loss', step_metric='epoch')
         wandb.define_metric('position_loss', step_metric='epoch')

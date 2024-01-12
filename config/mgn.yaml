@@ -4,6 +4,7 @@ import_path: "default.yaml"
 random_seed: 777
 retrain: False # Start training a new model if True. Continue training the most recent version of the model if False.
 wandb_mode: online
+group: x
 directory: deformable_plate
 
 task:
