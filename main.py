@@ -46,6 +46,11 @@ def main(config_name='trapez'):
     task.set_model(global_model)
     task.run_iterations()
 
+    random.seed(random_seed)
+    np.random.seed(seed=random_seed)
+    torch.manual_seed(seed=random_seed)
+    torch.cuda.manual_seed_all(seed=random_seed)
+    torch.cuda.manual_seed(seed=random_seed)
     task.get_scalars()
 
 
