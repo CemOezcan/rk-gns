@@ -16,7 +16,7 @@ task:
   recurrence: gru # Type of recurrence. Only GRU or False are allowed.
   sequence: 5 # Length of the sub-sequences for Truncated Backpropagation Trough Time.
   poisson_ratio: False # If True, provides ground-truth Poisson's ratio values as global a global variable.
-  learning_rate: 5.0e-4 # Learning rate.
+  learning_rate: 1.0e-4 # Learning rate.
   weight_decay: 0 # L2 regularization parameter.
   batch_size: 32 # Batch size
   trajectories: 675 # Number of Trajectories used during training. <= 675.
