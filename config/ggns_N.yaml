@@ -14,7 +14,7 @@ task:
   model: mgn # mgn for baseline models, supervised and self-supervised for versions of RK-GNS.
   ggns: True # If True, the update mechanism of GGNS will be used.
   recurrence: False # Type of recurrence. Only GRU or False are allowed.
-  sequence: 5 # Length of the sub-sequences for Truncated Backpropagation Trough Time.
+  sequence: 1 # Length of the sub-sequences for Truncated Backpropagation Trough Time.
   poisson_ratio: False # If True, provides ground-truth Poisson's ratio values as global a global variable.
   learning_rate: 5.0e-4 # Learning rate.
   weight_decay: 0 # L2 regularization parameter.
