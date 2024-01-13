@@ -1,4 +1,4 @@
 #!/bin/bash
 
 source ./venv/bin/activate
-srun python main.py "mgn_M"
+srun python main.py "mlp"
