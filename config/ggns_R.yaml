@@ -1,0 +1,34 @@
+name: "DEFAULT"   # MUST BE DEFAULT
+import_path: "default.yaml"
+
+# Use this file to run the GGNS (R)-bseline experiments.
+
+random_seed: 0 # Configure the random seed.
+retrain: False # If True, the training of existing models with the same configuration is not continued. Instead, a new model will be trained, overwriting the existing model.
+wandb_mode: online # If metrics should be uploaded to wandb or not (online/offline).
+group: GGNS_R # Name of the group.
+directory: deformable_plate # Name of the data directory and dataset.
+
+task:
+  task: trapez # If poisson, the system parameter estimator will be trained. If trapez, the whole model (inkl. forward dynamics predictor) will be trained.
+  model: mgn # mgn for baseline models, supervised and self-supervised for versions of RK-GNS.
+  ggns: True # If True, the update mechanism of GGNS will be used.
+  recurrence: False # Type of recurrence. Only GRU or False are allowed.
+  sequence: 5 # Length of the sub-sequences for Truncated Backpropagation Trough Time.
+  poisson_ratio: False # If True, provides ground-truth Poisson's ratio values as global a global variable.
+  learning_rate: 5.0e-4 # Learning rate.
+  weight_decay: 0 # L2 regularization parameter.
+  batch_size: 32 # Batch size
+  trajectories: 675 # Number of Trajectories used during training. <= 675.
+  n_timesteps: 50 # Trajectory length. <= 50.
+  epochs: 200 # Number of training epochs.
+  pretraining: 100 # Ignore, does not do anything
+  reduced: True # If True, reduced GGNS settings are going to be used.
+  imputation: [5] # Set of imputation parameters the model will be evaluated for during validation. [5] to save time, does not affect test-results.
+
+  test:
+    trajectories: 135 # Number of trajectories that are going to be used to compute the one-step error during evaluation.
+    rollouts: 135 # Number of trajectories that are going to be used to compute the rollout error during evaluation.
+    n_step_rollouts: 135 # Number of trajectories that are going to be used to compute the n-step error during evaluation.
+    n_steps: 10 # The n in n-step error.
+    n_viz: 5 # Number of trajectories that are visualized during evaluation.
