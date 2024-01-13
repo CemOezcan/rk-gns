@@ -1,18 +1,18 @@
 name: "DEFAULT"   # MUST BE DEFAULT
 import_path: "default.yaml"
 
-# Use this file to run the SS_RK-GGNS experiments.
+# Use this file to run the SS_RK-GGNS (N) experiments.
 
 random_seed: 0 # Configure the random seed.
 retrain: False # If True, the training of existing models with the same configuration is not continued. Instead, a new model will be trained, overwriting the existing model.
 wandb_mode: online # If metrics should be uploaded to wandb or not (online/offline).
-group: SS_RK-GGNS # Name of the group.
+group: SS_RK-GGNS_N # Name of the group.
 directory: deformable_plate # Name of the data directory and dataset.
 
 task:
   task: trapez # If poisson, the system parameter estimator will be trained. If trapez, the whole model (inkl. forward dynamics predictor) will be trained.
   model: self-supervised # mgn for baseline models, supervised and self-supervised for versions of RK-GNS.
-  ggns: True # If True, the update mechanism of GGNS will be used.
+  ggns: False # If True, the update mechanism of GGNS will be used.
   recurrence: rkn # Type of recurrence. Only rkn or False are allowed.
   sequence: 5 # Length of the sub-sequences for Truncated Backpropagation Trough Time.
   poisson_ratio: False # If True, provides ground-truth Poisson's ratio values as global a global variable.
@@ -47,7 +47,7 @@ model:
   layer_norm: False # Layer normalization.
   layers: 1 # Number of MLP-layers.
   noise: 0.01 # Training noise.
-  pc_noise: 0.0 # Sensor data noise.
+  pc_noise: 0.01 # Sensor data noise.
   aggregation: mean # Message-passing aggregation function. Can be mean, max, min.
   message_passing_steps: 5 # Number of message-passing blocks.
   heterogeneous: False # Ignore, does not do anything.
