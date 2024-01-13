@@ -24,6 +24,7 @@ task:
   epochs: 200 # Number of training epochs.
   pretraining: 100 # Ignore, does not do anything
   reduced: True # If True, reduced GGNS settings are going to be used.
+  subsampling: ifp # Subsampling method. If task == trapez, use ifp. If task == poisson, mesh and voxel are also possible.
   imputation: [5] # Set of imputation parameters the model will be evaluated for during validation. [5] to save time, does not affect test-results.
 
   test:
