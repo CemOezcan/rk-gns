@@ -32,3 +32,27 @@ task:
     n_step_rollouts: 135 # Number of trajectories that are going to be used to compute the n-step error during evaluation.
     n_steps: 10 # The n in n-step error.
     n_viz: 5 # Number of trajectories that are visualized during evaluation.
+
+  validation:
+    interval: 10 # Validation interval in epochs.
+    trajectories: 135 # Number of trajectories that are going to be used to compute the one-step loss during validation.
+    rollouts: 135 # Number of trajectories that are going to be used to compute the rollout loss during validation.
+    n_steps: 10 # The n in n-step error.
+    n_step_rollouts: 135 # Number of trajectories that are going to be used to compute the n-step error during validation.
+    viz_interval: 500 # Visualization interval in epochs.
+    n_viz: 0 # Number of trajectories that are visualized during validation.
+
+model:
+  feature_norm: False # Feature normalization.
+  layer_norm: False # Layer normalization.
+  layers: 1 # Number of MLP-layers.
+  noise: 0.01 # Training noise.
+  pc_noise: 0.01 # Sensor data noise.
+  aggregation: mean # Message-passing aggregation function. Can be mean, max, min.
+  message_passing_steps: 5 # Number of message-passing blocks.
+  heterogeneous: False # Ignore, does not do anything.
+
+poisson: # If the model is a supervised version of RK-GNS, these settings are going to be used to pretrain the system parameter estimator.
+  learning_rate: 5.0e-4 # Learning rate.
+  weight_decay: 0 # L2 regularization parameter.
+  epochs: 200 # Number of training epochs.
