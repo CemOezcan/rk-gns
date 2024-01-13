@@ -1,4 +1,4 @@
 #!/bin/bash
 
 source ./venv/bin/activate
-srun python main.py "gr-ggns"
+srun python main.py "ss_gr-gns"

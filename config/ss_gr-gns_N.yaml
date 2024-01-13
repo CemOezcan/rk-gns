@@ -6,12 +6,12 @@ import_path: "default.yaml"
 random_seed: 0 # Configure the random seed.
 retrain: False # If True, the training of existing models with the same configuration is not continued. Instead, a new model will be trained, overwriting the existing model.
 wandb_mode: online # If metrics should be uploaded to wandb or not (online/offline).
-group: GR-GNS_N # Name of the group.
+group: SS_GR-GNS_N # Name of the group.
 directory: deformable_plate # Name of the data directory and dataset.
 
 task:
   task: trapez # If poisson, the system parameter estimator will be trained. If trapez, the whole model (inkl. forward dynamics predictor) will be trained.
-  model: supervised # mgn for baseline models, supervised and self-supervised for versions of RK-GNS.
+  model: self-supervised # mgn for baseline models, supervised and self-supervised for versions of RK-GNS.
   ggns: False # If True, the update mechanism of GGNS will be used.
   recurrence: gru # Type of recurrence. Only GRU or False are allowed.
   sequence: 5 # Length of the sub-sequences for Truncated Backpropagation Trough Time.
