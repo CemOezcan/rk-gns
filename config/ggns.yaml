@@ -1,57 +1,58 @@
 name: "DEFAULT"   # MUST BE DEFAULT
 import_path: "default.yaml"
 
-random_seed: 9
-retrain: False # Start training a new model if True. Continue training the most recent version of the model if False.
-wandb_mode: online
-group: x
-directory: deformable_plate
+# Use this file to run the SS_RK-GGNS experiments.
+
+random_seed: 0 # Configure the random seed.
+retrain: False # If True, the training of existing models with the same configuration is not continued. Instead, a new model will be trained, overwriting the existing model.
+wandb_mode: online # If metrics should be uploaded to wandb or not (online/offline).
+group: SS_RK-GGNS # Name of the group.
+directory: deformable_plate # Name of the data directory and dataset.
 
 task:
-  task: trapez # trapez/poisson
-  model: self-supervised # mgn/supervised/self-supervised
-  ggns: True # T/F
-  recurrence: rkn # False/name
-  sequence: 5
-  poisson_ratio: False # Link to use global with model
-  learning_rate: 1.0e-4
-  weight_decay: 0
-  batch_size: 32
-  trajectories: 675
-  n_timesteps: 50
-  epochs: 200
-  pretraining: 100
-  reduced: False
-  subsampling: ifp # if voxel, reduced must be False. Non-recurrent only!
-  imputation: [5]
+  task: trapez # If poisson, the system parameter estimator will be trained. If trapez, the whole model (inkl. forward dynamics predictor) will be trained.
+  model: self-supervised # mgn for baseline models, supervised and self-supervised for versions of RK-GNS.
+  ggns: True # If True, the update mechanism of GGNS will be used.
+  recurrence: rkn # Type of recurrence. Only rkn or False are allowed.
+  sequence: 5 # Length of the sub-sequences for Truncated Backpropagation Trough Time.
+  poisson_ratio: False # If True, provides ground-truth Poisson's ratio values as global a global variable.
+  learning_rate: 1.0e-4 # Learning rate.
+  weight_decay: 0 # L2 regularization parameter.
+  batch_size: 32 # Batch size
+  trajectories: 675 # Number of Trajectories used during training. <= 675.
+  n_timesteps: 50 # Trajectory length. <= 50.
+  epochs: 200 # Number of training epochs.
+  pretraining: 100 # Ignore, does not do anything
+  reduced: False # If True, reduced GGNS settings are going to be used.
+  imputation: [5] # Set of imputation parameters the model will be evaluated for during validation. [5] to save time, does not affect test-results.
 
   test:
-    trajectories: 135 # Number of trajectories that are going to be used to compute the validation loss during evaluation
-    rollouts: 135 # Number of trajectories that are going to be used to compute the rollout loss during evaluation
-    n_step_rollouts: 135 # Number of trajectories that are going to be used to compute the n_step_loss during evaluation
-    n_steps: 10
-    n_viz: 5
+    trajectories: 135 # Number of trajectories that are going to be used to compute the one-step error during evaluation.
+    rollouts: 135 # Number of trajectories that are going to be used to compute the rollout error during evaluation.
+    n_step_rollouts: 135 # Number of trajectories that are going to be used to compute the n-step error during evaluation.
+    n_steps: 10 # The n in n-step error.
+    n_viz: 5 # Number of trajectories that are visualized during evaluation.
 
   validation:
-    interval: 10
-    trajectories: 135 # Number of trajectories that are going to be used to compute the validation loss during training
-    rollouts: 135 # Number of trajectories that are going to be used to compute the rollout loss during training
-    n_steps: 10
-    n_step_rollouts: 135
-    viz_interval: 200
-    n_viz: 5
+    interval: 10 # Validation interval in epochs.
+    trajectories: 135 # Number of trajectories that are going to be used to compute the one-step loss during validation.
+    rollouts: 135 # Number of trajectories that are going to be used to compute the rollout loss during validation.
+    n_steps: 10 # The n in n-step error.
+    n_step_rollouts: 135 # Number of trajectories that are going to be used to compute the n-step error during validation.
+    viz_interval: 500 # Visualization interval in epochs.
+    n_viz: 0 # Number of trajectories that are visualized during validation.
 
 model:
-  feature_norm: False
-  layer_norm: False
-  layers: 1
-  noise: 0.01
-  pc_noise: 0.01
-  aggregation: mean
-  message_passing_steps: 5
-  heterogeneous: False
+  feature_norm: False # Feature normalization.
+  layer_norm: False # Layer normalization.
+  layers: 1 # Number of MLP-layers.
+  noise: 0.01 # Training noise.
+  pc_noise: 0.0 # Sensor data noise.
+  aggregation: mean # Message-passing aggregation function. Can be mean, max, min.
+  message_passing_steps: 5 # Number of message-passing blocks.
+  heterogeneous: False # Ignore, does not do anything.
 
-poisson:
-  learning_rate: 5.0e-4
-  weight_decay: 2.0e-4
-  epochs: 200
+poisson: # If the model is a supervised version of RK-GNS, these settings are going to be used to pretrain the system parameter estimator.
+  learning_rate: 5.0e-4 # Learning rate.
+  weight_decay: 2.0e-4 # L2 regularization parameter.
+  epochs: 200 # Number of training epochs.
