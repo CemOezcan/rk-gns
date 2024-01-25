@@ -11,9 +11,9 @@ directory: deformable_plate # Name of the data directory and dataset.
 
 task:
   task: trapez # If poisson, the system parameter estimator will be trained. If trapez, the whole model (inkl. forward dynamics predictor) will be trained.
-  model: mgn # mgn for baseline models, supervised and self-supervised for versions of RK-GNS.
-  ggns: False # If True, the update mechanism of GGNS will be used.
-  recurrence: False # Type of recurrence. Only GRU or False are allowed.
+  model: supervised # mgn for baseline models, supervised and self-supervised for versions of RK-GNS.
+  ggns: True # If True, the update mechanism of GGNS will be used.
+  recurrence: gru # Type of recurrence. Only GRU or False are allowed.
   sequence: 5 # Length of the sub-sequences for Truncated Backpropagation Trough Time.
   poisson_ratio: False # If True, provides ground-truth Poisson's ratio values as global a global variable.
   learning_rate: 5.0e-4 # Learning rate.
@@ -35,7 +35,7 @@ task:
     n_viz: 5 # Number of trajectories that are visualized during evaluation.
 
   validation:
-    interval: 10 # Validation interval in epochs.
+    interval: 1 # Validation interval in epochs.
     trajectories: 135 # Number of trajectories that are going to be used to compute the one-step loss during validation.
     rollouts: 135 # Number of trajectories that are going to be used to compute the rollout loss during validation.
     n_steps: 10 # The n in n-step error.
@@ -56,4 +56,4 @@ model:
 poisson: # If the model is a supervised version of RK-GNS, these settings are going to be used to pretrain the system parameter estimator.
   learning_rate: 5.0e-4 # Learning rate.
   weight_decay: 0 # L2 regularization parameter.
-  epochs: 200 # Number of training epochs.
+  epochs: 1 # Number of training epochs.
