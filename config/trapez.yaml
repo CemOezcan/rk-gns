@@ -3,7 +3,7 @@ import_path: "default.yaml"
 
 # Default config file for your own experiments.
 
-random_seed: 123 # Configure the random seed.
+random_seed: 1234 # Configure the random seed.
 retrain: False # If True, the training of existing models with the same configuration is not continued. Instead, a new model will be trained, overwriting the existing model.
 wandb_mode: online # If metrics should be uploaded to wandb or not (online/offline).
 group: X # Name of the group.
@@ -11,9 +11,9 @@ directory: deformable_plate # Name of the data directory and dataset.
 
 task:
   task: trapez # If poisson, the system parameter estimator will be trained. If trapez, the whole model (inkl. forward dynamics predictor) will be trained.
-  model: mgn # mgn for baseline models, supervised and self-supervised for versions of RK-GNS.
+  model: supervised # mgn for baseline models, supervised and self-supervised for versions of RK-GNS.
   ggns: True # If True, the update mechanism of GGNS will be used.
-  recurrence: False # Type of recurrence. Only GRU or False are allowed.
+  recurrence: gru # Type of recurrence. Only GRU or False are allowed.
   sequence: 5 # Length of the sub-sequences for Truncated Backpropagation Trough Time.
   poisson_ratio: False # If True, provides ground-truth Poisson's ratio values as global a global variable.
   learning_rate: 5.0e-4 # Learning rate.
