@@ -3,7 +3,7 @@ import_path: "default.yaml"
 
 # Default config file for your own experiments.
 
-random_seed: 0 # Configure the random seed.
+random_seed: 123 # Configure the random seed.
 retrain: False # If True, the training of existing models with the same configuration is not continued. Instead, a new model will be trained, overwriting the existing model.
 wandb_mode: online # If metrics should be uploaded to wandb or not (online/offline).
 group: X # Name of the group.
