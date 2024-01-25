@@ -11,9 +11,9 @@ directory: deformable_plate # Name of the data directory and dataset.
 
 task:
   task: trapez # If poisson, the system parameter estimator will be trained. If trapez, the whole model (inkl. forward dynamics predictor) will be trained.
-  model: supervised # mgn for baseline models, supervised and self-supervised for versions of RK-GNS.
+  model: mgn # mgn for baseline models, supervised and self-supervised for versions of RK-GNS.
   ggns: True # If True, the update mechanism of GGNS will be used.
-  recurrence: gru # Type of recurrence. Only GRU or False are allowed.
+  recurrence: False # Type of recurrence. Only GRU or False are allowed.
   sequence: 5 # Length of the sub-sequences for Truncated Backpropagation Trough Time.
   poisson_ratio: False # If True, provides ground-truth Poisson's ratio values as global a global variable.
   learning_rate: 5.0e-4 # Learning rate.
