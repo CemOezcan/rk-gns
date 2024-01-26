@@ -3,7 +3,7 @@ import_path: "default.yaml"
 
 # Default config file for your own experiments.
 
-random_seed: 1234 # Configure the random seed.
+random_seed: 55 # Configure the random seed.
 retrain: False # If True, the training of existing models with the same configuration is not continued. Instead, a new model will be trained, overwriting the existing model.
 wandb_mode: online # If metrics should be uploaded to wandb or not (online/offline).
 group: X # Name of the group.
@@ -22,8 +22,8 @@ task:
   trajectories: 675 # Number of Trajectories used during training. <= 675.
   n_timesteps: 50 # Trajectory length. <= 50.
   epochs: 1 # Number of training epochs.
-  pretraining: 100 # Ignore, does not do anything
-  reduced: False # If True, reduced GGNS settings are going to be used.
+  pretraining: 1 # Ignore, does not do anything
+  reduced: True # If True, reduced GGNS settings are going to be used.
   subsampling: ifp # Subsampling method. If task == trapez, use ifp. If task == poisson, mesh and voxel are also possible.
   imputation: [5] # Set of imputation parameters the model will be evaluated for during validation. [5] to save time, does not affect test-results.
 
