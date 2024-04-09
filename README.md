@@ -2,6 +2,7 @@
 This repository contains the implementation of Recurrent Kalman Graph Network Simulators (RK-GNS), 
 a novel Graph Neural Networks-based physics simulator capable of inferring a task-specific forward dynamics model 
 by estimating crucial system parameters from sensor observations. 
+![](./demo/RK-GNS.png)
 
 ## Evaluation Results
 Here, we provide the results of our [Self-Supervised](https://api.wandb.ai/links/cem_oezcan/pdk22ejv), 
